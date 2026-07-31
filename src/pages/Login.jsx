@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -42,6 +43,12 @@ const Login = () => {
 
   const { login, googleLogin, completeGoogleRegistration, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (searchParams.get('suspended') === 'true') {
+      setError('⛔ Access Denied: Your account or organization has been suspended by a System Administrator.');
+    }
+  }, [searchParams]);
 
   // Redirect if already logged in
   useEffect(() => {

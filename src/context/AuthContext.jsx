@@ -11,8 +11,10 @@ export const AuthProvider = ({ children }) => {
 
 
   useEffect(() => {
+    let intervalId;
+
     const checkAuth = async () => {
-      const storedToken = localStorage.getItem('terramarine_token');
+      const storedToken = localStorage.getItem('terramarine_token') || token;
       if (storedToken) {
         try {
           const res = await fetch(`${API_URL}/auth/profile`, {
@@ -22,11 +24,20 @@ export const AuthProvider = ({ children }) => {
           });
           if (res.ok) {
             const data = await res.json();
-            setUser(data.user);
-            setToken(storedToken);
+            if (data.user?.status === 'Suspended' || data.user?.license_status === 'Suspended') {
+              logout();
+              window.location.href = '/login?suspended=true';
+            } else {
+              setUser(data.user);
+              setToken(storedToken);
+            }
           } else {
-            // Token expired or invalid
+            // Token expired, invalid or account suspended
+            const errorData = await res.json().catch(() => ({}));
             logout();
+            if (res.status === 403 || errorData.isSuspended) {
+              window.location.href = '/login?suspended=true';
+            }
           }
         } catch (err) {
           console.error('Auth verification failed:', err);
@@ -36,7 +47,15 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkAuth();
-  }, []);
+
+    if (token) {
+      intervalId = setInterval(checkAuth, 4000); // Check every 4s for instant security enforcement
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [token]);
 
   const parseResponse = async (res) => {
     const contentType = res.headers.get('content-type');
@@ -153,6 +172,20 @@ export const AuthProvider = ({ children }) => {
     };
 
     const res = await fetch(`${API_URL}${endpoint}`, fetchOptions);
+
+    if (res.status === 401 || res.status === 403) {
+      try {
+        const clonedRes = res.clone();
+        const data = await clonedRes.json();
+        if (data.isSuspended || (data.error && data.error.toLowerCase().includes('suspend'))) {
+          logout();
+          window.location.href = '/login?suspended=true';
+        }
+      } catch (e) {
+        // Ignored
+      }
+    }
+
     return res;
   };
 

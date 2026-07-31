@@ -348,73 +348,50 @@ const UserApproval = () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1350px', margin: '0 auto' }}>
-      {/* Header Banner */}
-      <div style={{
-        background: isAdmin ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-        color: '#ffffff',
-        padding: '28px',
-        borderRadius: '16px',
-        marginBottom: '28px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {isAdmin ? <Building2 size={32} color="#38bdf8" /> : <ShieldCheck size={32} color="#38bdf8" />}
-              <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: '700' }}>
-                {isAdmin ? 'TerraMarine System Administrator Control Center' : 'District Operational User Management'}
-              </h1>
-            </div>
-            <p style={{ margin: '8px 0 0 0', color: '#94a3b8', fontSize: '0.95rem' }}>
-              {isAdmin 
-                ? 'Product Provider Control Panel — Full suite for client onboarding, security policies, backup recovery, and platform health.'
-                : `Municipal Authority Workspace — Manage local volunteers, researchers, NGOs, and citizens within ${user?.district || 'your jurisdiction'}.`}
-            </p>
-          </div>
-          {isAdmin && (
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={handleTriggerBackup}
-                style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                <HardDriveDownload size={18} />
-                Quick Backup Snapshot
-              </button>
+      {/* Top Action Buttons Header */}
+      {isAdmin && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <button
+            onClick={handleTriggerBackup}
+            style={{
+              background: '#ffffff',
+              color: '#0f172a',
+              border: '1px solid #cbd5e1',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            <HardDriveDownload size={18} color="#0284c7" />
+            Quick Backup Snapshot
+          </button>
 
-              <button
-                onClick={() => setShowOrgModal(true)}
-                style={{
-                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 18px',
-                  borderRadius: '8px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
-                }}
-              >
-                <PlusCircle size={18} />
-                Onboard Organization
-              </button>
-            </div>
-          )}
+          <button
+            onClick={() => setShowOrgModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
+            }}
+          >
+            <PlusCircle size={18} />
+            Onboard Organization
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Alert Notifications */}
       {error && (
@@ -439,64 +416,98 @@ const UserApproval = () => {
 
           {/* TAB 1: CLIENT ORGANIZATIONS (Functionality #1, #2, #5) */}
           {activeAdminTab === 'organizations' && (
-            <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-              <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '700' }}>Municipal Authorities & Client Organizations</h3>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Functionalities #1, #2, #5 — Onboard, License Keys & Account Statuses</span>
-                </div>
-                <button onClick={handleExportSubscriptionCSV} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Download size={14} /> Export CSV
+            <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.02)', overflow: 'hidden' }}>
+              <div style={{ padding: '20px 28px', borderBottom: '1px solid #e2e8f0', background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <button 
+                  onClick={handleExportSubscriptionCSV} 
+                  style={{ 
+                    position: 'absolute', 
+                    right: '24px', 
+                    top: '50%',
+                    transform: 'translateY(-50%)', 
+                    background: '#ffffff', 
+                    border: '1px solid #cbd5e1', 
+                    color: '#334155', 
+                    padding: '8px 14px', 
+                    borderRadius: '8px', 
+                    fontSize: '0.8rem', 
+                    fontWeight: '600', 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '6px', 
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Download size={14} color="#0284c7" /> Export CSV
                 </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
+                  <Building2 size={24} style={{ color: '#0284c7' }} />
+                  <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800', fontSize: '1.35rem', letterSpacing: '-0.02em' }}>Authority / Organization</h3>
+                </div>
               </div>
 
               {organizations.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                  <Building2 size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                  <p>No Municipal Authorities found. Click "Onboard Organization" to register a client organization.</p>
+                <div style={{ padding: '50px 24px', textAlign: 'center', color: '#64748b' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto' }}>
+                    <Building2 size={32} style={{ color: '#0284c7' }} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px 0', color: '#1e293b', fontSize: '1.1rem', fontWeight: '700' }}>No Authorities or Organizations Registered</h4>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b' }}>Click "Onboard Organization" above to register a new client organization.</p>
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
                     <thead>
-                      <tr style={{ background: '#f1f5f9', color: '#475569', borderBottom: '1px solid #e2e8f0' }}>
-                        <th style={{ padding: '14px 18px' }}>Organization Name</th>
-                        <th style={{ padding: '14px 18px' }}>Admin Account</th>
-                        <th style={{ padding: '14px 18px' }}>Jurisdiction</th>
-                        <th style={{ padding: '14px 18px' }}>License Status</th>
-                        <th style={{ padding: '14px 18px' }}>Actions</th>
+                      <tr style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>Organization Name</th>
+                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>Admin Account</th>
+                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>Jurisdiction</th>
+                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>License Status</th>
+                        <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {organizations.map((org) => (
-                        <tr key={org.user_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '14px 18px', fontWeight: '600', color: '#0f172a' }}>
-                            {org.organization_name || 'Municipal Authority'}
+                        <tr key={org.user_id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.15s ease' }}>
+                          <td style={{ padding: '16px 20px', fontWeight: '600', color: '#0f172a' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Building2 size={16} color="#0284c7" />
+                              <span>{org.organization_name || 'Municipal Authority'}</span>
+                            </div>
                           </td>
-                          <td style={{ padding: '14px 18px' }}>
-                            <div>{org.full_name}</div>
+                          <td style={{ padding: '16px 20px' }}>
+                            <div style={{ fontWeight: '600', color: '#1e293b' }}>{org.full_name}</div>
                             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{org.email}</div>
                           </td>
-                          <td style={{ padding: '14px 18px', color: '#334155' }}>
+                          <td style={{ padding: '16px 20px', color: '#334155' }}>
                             {org.district}, {org.state}
                           </td>
-                          <td style={{ padding: '14px 18px' }}>
+                          <td style={{ padding: '16px 20px' }}>
                             <span style={{
-                              padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600',
-                              background: org.license_status === 'Active' ? '#dcfce7' : '#fee2e2',
-                              color: org.license_status === 'Active' ? '#166534' : '#991b1b'
+                              padding: '5px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '600',
+                              background: org.license_status === 'Active' ? '#dcfce7' : '#ffe4e6',
+                              color: org.license_status === 'Active' ? '#15803d' : '#be123c',
+                              border: `1px solid ${org.license_status === 'Active' ? '#bbf7d0' : '#fecdd3'}`,
+                              display: 'inline-flex', alignItems: 'center', gap: '6px'
                             }}>
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: org.license_status === 'Active' ? '#22c55e' : '#f43f5e' }} />
                               {org.license_status || 'Active'}
                             </span>
                           </td>
-                          <td style={{ padding: '14px 18px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                          <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                               <button
                                 onClick={() => handleUpdateSubscription(org.user_id, org.license_status === 'Active' ? 'Suspended' : 'Active')}
                                 style={{
-                                  padding: '4px 10px', borderRadius: '6px', border: 'none', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
-                                  background: org.license_status === 'Active' ? '#fef2f2' : '#f0fdf4',
-                                  color: org.license_status === 'Active' ? '#991b1b' : '#166534'
+                                  padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
+                                  background: org.license_status === 'Active' ? '#fff1f2' : '#f0fdf4',
+                                  color: org.license_status === 'Active' ? '#be123c' : '#15803d',
+                                  border: `1px solid ${org.license_status === 'Active' ? '#fecdd3' : '#bbf7d0'}`,
+                                  boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                  transition: 'all 0.2s ease'
                                 }}
                               >
                                 {org.license_status === 'Active' ? 'Suspend' : 'Activate'}
