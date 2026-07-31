@@ -55,7 +55,7 @@ const UserApproval = () => {
   const [orgForm, setOrgForm] = useState({
     full_name: 'City Municipal Administrator',
     email: '',
-    phone: '+91',
+    phone: '',
     password: '',
     organization_name: '',
     district: 'Kochi',
@@ -217,7 +217,7 @@ const UserApproval = () => {
       setSuccess(`Organization "${data.organization.organization_name}" onboarded successfully!`);
       setShowOrgModal(false);
       setOrgForm({
-        full_name: 'City Municipal Administrator', email: '', phone: '+91',
+        full_name: 'City Municipal Administrator', email: '', phone: '',
         password: '', organization_name: '', district: 'Kochi', state: 'Kerala'
       });
       await fetchOrganizations();
