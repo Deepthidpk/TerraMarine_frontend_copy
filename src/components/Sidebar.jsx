@@ -47,7 +47,6 @@ const Sidebar = () => {
     if (user.role === 'Admin') {
       return [
         { to: '/dashboard?tab=organizations', tabKey: 'organizations', label: 'Client Organizations', icon: <Building2 size={18} /> },
-        { to: '/dashboard?tab=org_admins', tabKey: 'org_admins', label: 'Org Administrators', icon: <Users size={18} /> },
         { to: '/dashboard?tab=settings', tabKey: 'settings', label: 'Platform Settings', icon: <Sliders size={18} /> },
         { to: '/dashboard?tab=security', tabKey: 'security', label: 'Security Policies', icon: <Lock size={18} /> },
         { to: '/dashboard?tab=health', tabKey: 'health', label: 'Health & Diagnostics', icon: <Activity size={18} /> },

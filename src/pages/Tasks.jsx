@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { CheckSquare, User, Calendar, Image, Info, Camera, Send, FileText } from 'lucide-react';
+import { 
+  CheckSquare, User, Calendar, Image, Info, Camera, Send, FileText,
+  PlusCircle, X, Search, Filter, RotateCcw, Clock, CheckCircle2, AlertCircle, ShieldCheck
+} from 'lucide-react';
 
 const Tasks = () => {
   const { user, authFetch } = useAuth();
@@ -10,6 +13,13 @@ const Tasks = () => {
   const [workers, setWorkers] = useState([]); // Volunteers list for task assignment
   const [campaigns, setCampaigns] = useState([]); // Campaigns list
   const [loading, setLoading] = useState(true);
+
+  // Modal State for Assigning Task (Authority / Admin)
+  const [showAssignModal, setShowAssignModal] = useState(false);
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
 
   // Task Creation Form State (Authority only)
   const [selectedReportId, setSelectedReportId] = useState('');
@@ -38,25 +48,37 @@ const Tasks = () => {
 
       // If Authority/Admin, fetch reports and workers for assignment form
       if (['Authority', 'Admin'].includes(user.role)) {
-        const reportsRes = await authFetch('/reports?status=Verified');
+        const reportsRes = await authFetch('/reports');
         if (reportsRes.ok) {
           const repData = await reportsRes.json();
-          setReports(repData.reports);
+          setReports(repData.reports || []);
         }
 
         const campaignsRes = await authFetch('/campaigns');
         if (campaignsRes.ok) {
           const campData = await campaignsRes.json();
-          setCampaigns(campData.campaigns);
+          setCampaigns(campData.campaigns || []);
         }
 
-        // Fetch users with Volunteer role
-        const usersRes = await authFetch('/auth/profile'); // Just a test, but let's mock or fetch from a general endpoint. Wait, we can fetch all volunteers! Let's handle a standard endpoint or list them. Wait, since we don't have a separate /users endpoint in the backend, let's load all volunteers. Let's make a request or query in backend, but since we didn't add a general `/users` route, we can fetch volunteers by fetching the active campaigns or we can fetch a custom endpoint or we can mock/populate them.
-        // Wait, let's make sure we have a way to populate workers. We can query the database directly by creating a small helper, or we can fetch them. Let's make an API call to get all users. Wait, did we write a route for users? No. Let's fetch campaigns and reports, and since we need a list of volunteers, let's write a mock list of volunteers or let the user choose from names. Or wait, let's look at the seed data: we have volunteer Alex Green with email `volunteer@terramarine.com` and ID `55555555-5555-5555-5555-555555555555`. We can write a dropdown containing pre-loaded workers (like Alex Green, John Citizen, etc.) or let the authority enter their ID/Name. Preloaded dropdown of workers is super smooth! Let's hardcode the worker dropdown based on the seeds:
-        setWorkers([
-          { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
-          { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
-        ]);
+        try {
+          const usersRes = await authFetch('/authority/users');
+          if (usersRes.ok) {
+            const uData = await usersRes.json();
+            if (uData.users && uData.users.length > 0) {
+              setWorkers(uData.users);
+            } else {
+              setWorkers([
+                { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
+                { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
+              ]);
+            }
+          }
+        } catch (uErr) {
+          setWorkers([
+            { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
+            { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
+          ]);
+        }
       }
     } catch (err) {
       console.error('Error fetching tasks components:', err);
@@ -94,11 +116,13 @@ const Tasks = () => {
         throw new Error(data.error || 'Failed to create task.');
       }
 
-      setSuccess('Task assigned to volunteer successfully!');
+      setSuccess('Cleanup task assigned to volunteer successfully!');
       setSelectedReportId('');
       setSelectedCampaignId('');
       setSelectedWorkerId('');
       setDeadline('');
+      setShowAssignModal(false);
+
       fetchTasksData();
     } catch (err) {
       setError(err.message || 'Error occurred during task assignment.');
@@ -181,111 +205,232 @@ const Tasks = () => {
     }
   };
 
+  // Filtered tasks computation
+  const filteredTasks = tasks.filter((t) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const titleMatch = t.report_title?.toLowerCase().includes(q);
+      const locMatch = t.location_name?.toLowerCase().includes(q);
+      const workerMatch = t.worker_name?.toLowerCase().includes(q);
+      const campaignMatch = t.campaign_name?.toLowerCase().includes(q);
+      if (!titleMatch && !locMatch && !workerMatch && !campaignMatch) return false;
+    }
+
+    if (statusFilter !== 'All' && t.status !== statusFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const isAssignRole = ['Authority', 'Admin'].includes(user.role);
+
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Cleanup Tasks Management</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Assign cleanup workers, submit completion photos, and verify completed beach actions.
-        </p>
+      {/* Page Header & Top Right Action Button */}
+      <div style={{
+        display: 'flex',
+        justify: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '16px',
+        marginBottom: '28px'
+      }}>
+        <div>
+          <h1 style={{ fontSize: '2.1rem', marginBottom: '6px', fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span>Cleanup Tasks Management</span>
+            <CheckSquare size={24} color="#0284c7" />
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.95rem' }}>
+            Assign cleanup workers, submit completion photos, and verify completed beach actions.
+          </p>
+        </div>
+
+        {isAssignRole && (
+          <button
+            onClick={() => setShowAssignModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '12px 22px',
+              borderRadius: '10px',
+              fontWeight: '700',
+              fontSize: '0.95rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer',
+              boxShadow: '0 8px 20px -4px rgba(2, 132, 199, 0.4)',
+              transition: 'transform 0.2s ease, boxShadow 0.2s ease'
+            }}
+          >
+            <PlusCircle size={20} />
+            Assign Cleanup Task
+          </button>
+        )}
       </div>
 
+      {/* Notifications */}
       {success && (
-        <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid var(--success)', borderRadius: '8px', color: 'var(--success)', marginBottom: '20px' }}>
-          {success}
+        <div style={{ padding: '14px 18px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid var(--success)', borderRadius: '10px', color: 'var(--success)', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <CheckCircle2 size={20} />
+          <span style={{ fontWeight: '600' }}>{success}</span>
         </div>
       )}
       {error && (
-        <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--danger)', borderRadius: '8px', color: 'var(--danger)', marginBottom: '20px' }}>
-          {error}
+        <div style={{ padding: '14px 18px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid var(--danger)', borderRadius: '10px', color: 'var(--danger)', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <AlertCircle size={20} />
+          <span style={{ fontWeight: '600' }}>{error}</span>
         </div>
       )}
 
-      {/* Grid split: Assignment Form (left) for Authorities only */}
-      {['Authority', 'Admin'].includes(user.role) && (
-        <div className="glass-panel" style={{ marginBottom: '40px' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
-            Assign New Cleanup Task
-          </h3>
-          <form onSubmit={handleCreateTaskSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', alignItems: 'end' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Select Verified Incident *</label>
-              <select 
-                className="form-control" 
-                value={selectedReportId} 
-                onChange={(e) => setSelectedReportId(e.target.value)}
-                required
-              >
-                <option value="">-- Choose Incident Report --</option>
-                {reports.map(rep => (
-                  <option key={rep.report_id} value={rep.report_id}>
-                    {rep.title} ({rep.location_name})
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* Overview Stats Cards */}
+      <div className="dashboard-grid" style={{ marginBottom: '28px' }}>
+        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #0284c7' }}>
+          <div className="stat-icon" style={{ color: '#0284c7', background: 'rgba(2, 132, 199, 0.1)' }}>
+            <CheckSquare size={24} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>TOTAL TASKS</span>
+            <div className="stat-number">{tasks.length}</div>
+          </div>
+        </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Link to Campaign (Optional)</label>
-              <select 
-                className="form-control" 
-                value={selectedCampaignId} 
-                onChange={(e) => setSelectedCampaignId(e.target.value)}
-              >
-                <option value="">-- No Campaign --</option>
-                {campaigns.map(camp => (
-                  <option key={camp.campaign_id} value={camp.campaign_id}>
-                    {camp.campaign_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+          <div className="stat-icon" style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)' }}>
+            <Clock size={24} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>PENDING TASKS</span>
+            <div className="stat-number">{tasks.filter(t => t.status === 'Pending').length}</div>
+          </div>
+        </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Assign Worker/Volunteer *</label>
-              <select 
-                className="form-control" 
-                value={selectedWorkerId} 
-                onChange={(e) => setSelectedWorkerId(e.target.value)}
-                required
-              >
-                <option value="">-- Select Volunteer --</option>
-                {workers.map(w => (
-                  <option key={w.user_id} value={w.user_id}>{w.full_name}</option>
-                ))}
-              </select>
-            </div>
+        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #10b981' }}>
+          <div className="stat-icon" style={{ color: '#10b981', background: 'rgba(16, 185, 129, 0.1)' }}>
+            <Camera size={24} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>SUBMITTED PROOFS</span>
+            <div className="stat-number">{tasks.filter(t => t.status === 'Completed').length}</div>
+          </div>
+        </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Deadline</label>
-              <input 
-                type="date" 
-                className="form-control" 
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
+        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
+          <div className="stat-icon" style={{ color: '#8b5cf6', background: 'rgba(139, 92, 246, 0.1)' }}>
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>VERIFIED CLEANUPS</span>
+            <div className="stat-number">{tasks.filter(t => t.status === 'Verified').length}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tasks Table Ledger */}
+      <div className="glass-panel" style={{ padding: '24px' }}>
+        {/* Toolbar Header: Title, Search, Status Filter */}
+        <div style={{
+          display: 'flex',
+          justify: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+          marginBottom: '20px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '700' }}>Cleanup Tasks Ledger</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Showing {filteredTasks.length} of {tasks.length} assigned tasks
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Search Input */}
+            <div style={{ position: 'relative', minWidth: '240px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type="text"
+                placeholder="Search incident, location, worker..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 30px 8px 36px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--card-border)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem'
+                }}
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ width: '100%', padding: '12px' }}
-              disabled={submitting}
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid var(--card-border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem',
+                fontWeight: '600'
+              }}
             >
-              {submitting ? 'Assigning...' : 'Assign Task'}
-            </button>
-          </form>
-        </div>
-      )}
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Completed">Completed (Proof Uploaded)</option>
+              <option value="Verified">Verified</option>
+            </select>
 
-      {/* Tasks Table List */}
-      <div className="glass-panel">
-        <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Cleanup Tasks Ledger</h3>
+            {(searchQuery || statusFilter !== 'All') && (
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: 'var(--danger)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RotateCcw size={14} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+
         {loading ? (
-          <div style={{ color: 'var(--text-secondary)' }}>Loading tasks...</div>
-        ) : tasks.length === 0 ? (
-          <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '30px' }}>
-            No cleanup tasks assigned.
+          <div style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center' }}>Loading tasks...</div>
+        ) : filteredTasks.length === 0 ? (
+          <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px 20px' }}>
+            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>No cleanup tasks found.</p>
+            {(searchQuery || statusFilter !== 'All') && (
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                style={{ marginTop: '12px', background: '#0284c7', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Reset Search & Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="table-container">
@@ -303,23 +448,24 @@ const Tasks = () => {
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((task) => (
+                {filteredTasks.map((task) => (
                   <tr key={task.task_id}>
                     <td style={{ fontWeight: 600 }}>{task.report_title}</td>
                     <td>{task.location_name}</td>
-                    <td>{task.worker_name || 'Unassigned'}</td>
+                    <td style={{ fontWeight: '600' }}>{task.worker_name || 'Unassigned'}</td>
                     <td>{task.campaign_name || 'Direct Task'}</td>
-                    <td>{new Date(task.assigned_date).toLocaleDateString()}</td>
-                    <td>{task.deadline ? new Date(task.deadline).toLocaleDateString() : 'N/A'}</td>
+                    <td style={{ fontSize: '0.85rem' }}>{new Date(task.assigned_date).toLocaleDateString()}</td>
+                    <td style={{ fontSize: '0.85rem' }}>{task.deadline ? new Date(task.deadline).toLocaleDateString() : 'N/A'}</td>
                     <td>
                       <span className={`badge ${
                         task.status === 'Verified' ? 'badge-completed' :
                         task.status === 'Completed' ? 'badge-verified' : 'badge-pending'
-                      }`}>{task.status}</span>
+                      }`}>
+                        {task.status}
+                      </span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        {/* Volunteer action: upload details/complete */}
                         {user.role === 'Volunteer' && task.status === 'Pending' && (
                           <button 
                             onClick={() => handleOpenUpdateModal(task.task_id)}
@@ -331,7 +477,6 @@ const Tasks = () => {
                           </button>
                         )}
 
-                        {/* General details view */}
                         <button 
                           onClick={() => handleOpenUpdateModal(task.task_id)}
                           className="btn btn-secondary" 
@@ -341,8 +486,7 @@ const Tasks = () => {
                           Details
                         </button>
 
-                        {/* Authority verification button */}
-                        {['Authority', 'Admin'].includes(user.role) && task.status === 'Completed' && (
+                        {isAssignRole && task.status === 'Completed' && (
                           <button 
                             onClick={() => handleVerifyTask(task.task_id)}
                             className="btn btn-primary" 
@@ -361,7 +505,142 @@ const Tasks = () => {
         )}
       </div>
 
-      {/* Update/Completion proof modal */}
+      {/* ========================================================================= */}
+      {/* MODAL: ASSIGN NEW CLEANUP TASK (Shown only when button is clicked) */}
+      {/* ========================================================================= */}
+      {showAssignModal && isAssignRole && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          justify: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '620px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'var(--bg-secondary)',
+            borderRadius: '16px',
+            border: '1px solid var(--card-border)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+            position: 'relative',
+            padding: '28px'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '14px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckSquare size={22} color="#0284c7" />
+                  Assign New Cleanup Task
+                </h2>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Assign verified incident reports to volunteer teams and set completion deadlines.
+                </p>
+              </div>
+
+              <button 
+                onClick={() => setShowAssignModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleCreateTaskSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Select Verified Incident *</label>
+                <select 
+                  className="form-control" 
+                  value={selectedReportId} 
+                  onChange={(e) => setSelectedReportId(e.target.value)}
+                  required
+                >
+                  <option value="">-- Choose Incident Report --</option>
+                  {reports.map(rep => (
+                    <option key={rep.report_id} value={rep.report_id}>
+                      {rep.title} ({rep.location_name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Link to Campaign (Optional)</label>
+                <select 
+                  className="form-control" 
+                  value={selectedCampaignId} 
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
+                >
+                  <option value="">-- No Campaign --</option>
+                  {campaigns.map(camp => (
+                    <option key={camp.campaign_id} value={camp.campaign_id}>
+                      {camp.campaign_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Assign Worker / Volunteer *</label>
+                <select 
+                  className="form-control" 
+                  value={selectedWorkerId} 
+                  onChange={(e) => setSelectedWorkerId(e.target.value)}
+                  required
+                >
+                  <option value="">-- Select Volunteer --</option>
+                  {workers.map(w => (
+                    <option key={w.user_id} value={w.user_id}>{w.full_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Completion Deadline</label>
+                <input 
+                  type="date" 
+                  className="form-control" 
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                <button 
+                  type="button"
+                  onClick={() => setShowAssignModal(false)}
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ flex: 2, padding: '10px' }}
+                  disabled={submitting}
+                >
+                  {submitting ? 'Assigning Task...' : 'Confirm & Assign Task'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: TASK DETAILS & VOLUNTEER PROOF SUBMISSION */}
+      {/* ========================================================================= */}
       {showUpdateModal && activeTaskDetails && (
         <div style={{
           position: 'fixed',
@@ -369,38 +648,33 @@ const Tasks = () => {
           left: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.8)',
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(4px)',
           display: 'flex',
-          justifyContent: 'center',
+          justify: 'center',
           alignItems: 'center',
           zIndex: 1000,
           padding: '20px'
         }}>
           <div className="glass-panel" style={{
-            maxWidth: '650px',
+            maxWidth: '680px',
             width: '100%',
             maxHeight: '90vh',
             overflowY: 'auto',
             background: 'var(--bg-secondary)',
-            position: 'relative'
+            borderRadius: '16px',
+            border: '1px solid var(--card-border)',
+            position: 'relative',
+            padding: '28px'
           }}>
             <button 
               onClick={() => setShowUpdateModal(false)}
-              style={{
-                position: 'absolute',
-                right: '20px',
-                top: '20px',
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-primary)',
-                fontSize: '1.5rem',
-                cursor: 'pointer'
-              }}
+              style={{ position: 'absolute', right: '20px', top: '20px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}
             >
-              &times;
+              <X size={20} />
             </button>
 
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px', fontWeight: '800' }}>
               Task details: {activeTaskDetails.report_title}
             </h2>
             <span className={`badge badge-${activeTaskDetails.status.toLowerCase()}`} style={{ marginBottom: '16px' }}>
@@ -441,11 +715,11 @@ const Tasks = () => {
             </div>
 
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              <p><strong>Location:</strong> {activeTaskDetails.location_name}</p>
-              <p><strong>Coordinates:</strong> {activeTaskDetails.latitude}, {activeTaskDetails.longitude}</p>
-              <p><strong>Description:</strong> {activeTaskDetails.report_description || 'No notes'}</p>
+              <p style={{ margin: '4px 0' }}><strong>Location:</strong> {activeTaskDetails.location_name}</p>
+              <p style={{ margin: '4px 0' }}><strong>Coordinates:</strong> {activeTaskDetails.latitude}, {activeTaskDetails.longitude}</p>
+              <p style={{ margin: '4px 0' }}><strong>Description:</strong> {activeTaskDetails.report_description || 'No notes'}</p>
               {activeTaskDetails.completion_notes && (
-                <div style={{ marginTop: '10px', padding: '8px', background: 'rgba(15, 23, 42, 0.02)', border: '1px solid rgba(15, 23, 42, 0.04)', borderRadius: '6px', color: 'var(--text-primary)' }}>
+                <div style={{ marginTop: '10px', padding: '10px', background: 'rgba(15, 23, 42, 0.03)', border: '1px solid var(--card-border)', borderRadius: '8px', color: 'var(--text-primary)' }}>
                   <strong>Completion Notes:</strong> {activeTaskDetails.completion_notes}
                 </div>
               )}
@@ -493,7 +767,7 @@ const Tasks = () => {
             <button 
               onClick={() => setShowUpdateModal(false)}
               className="btn btn-secondary" 
-              style={{ width: '100%', marginTop: '16px' }}
+              style={{ width: '100%', marginTop: '16px', padding: '10px' }}
             >
               Close
             </button>

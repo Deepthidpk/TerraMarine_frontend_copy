@@ -19,7 +19,10 @@ const UserApproval = () => {
   const [activeAdminTab, setActiveAdminTab] = useState(urlTab || 'organizations'); 
 
   useEffect(() => {
-    if (urlTab && urlTab !== activeAdminTab) {
+    if (urlTab === 'org_admins') {
+      setActiveAdminTab('organizations');
+      setSearchParams({ tab: 'organizations' }, { replace: true });
+    } else if (urlTab && urlTab !== activeAdminTab) {
       setActiveAdminTab(urlTab);
     }
   }, [urlTab]);
@@ -226,17 +229,17 @@ const UserApproval = () => {
     } catch (err) { setError(err.message); } finally { setOrgFormLoading(false); }
   };
 
-  const handleUpdateSubscription = async (orgId, licenseStatus) => {
+  const handleUpdateSubscription = async (orgId, status) => {
     setError(''); setSuccess('');
     try {
       const res = await authFetch(`/admin/organizations/${orgId}/subscription`, {
         method: 'PUT',
-        body: JSON.stringify({ license_status: licenseStatus })
+        body: JSON.stringify({ status })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update organization status.');
       setSuccess(data.message);
-      await fetchOrganizations();
+      await Promise.all([fetchOrganizations(), fetchOrgAdmins()]);
     } catch (err) { setError(err.message); }
   };
 
@@ -319,7 +322,7 @@ const UserApproval = () => {
         `"${o.email}"`,
         `"${o.district}"`,
         `"${o.state}"`,
-        `"${o.license_status}"`,
+        `"${o.status}"`,
         `"${new Date(o.created_at).toLocaleDateString()}"`
       ].join(','));
     });
@@ -328,6 +331,30 @@ const UserApproval = () => {
     const a = document.createElement('a');
     a.setAttribute('href', url);
     a.setAttribute('download', `terramarine_organizations_${new Date().toISOString().slice(0, 10)}.csv`);
+    a.click();
+  };
+
+  const handleExportPlatformReportsCSV = () => {
+    if (!subscriptionReports) return;
+    const csvRows = ['Report Section,Category / Role,Count / Value'];
+    
+    if (subscriptionReports.roleBreakdown) {
+      subscriptionReports.roleBreakdown.forEach(r => {
+        csvRows.push(`"User Role Distribution","${r.name}",${r.value}`);
+      });
+    }
+
+    if (subscriptionReports.statusBreakdown) {
+      subscriptionReports.statusBreakdown.forEach(s => {
+        csvRows.push(`"Organization Status Breakdown","${s.name}",${s.value}`);
+      });
+    }
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `terramarine_platform_reports_${new Date().toISOString().slice(0, 10)}.csv`);
     a.click();
   };
 
@@ -371,25 +398,27 @@ const UserApproval = () => {
             Quick Backup Snapshot
           </button>
 
-          <button
-            onClick={() => setShowOrgModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
-            }}
-          >
-            <PlusCircle size={18} />
-            Onboard Organization
-          </button>
+          {activeAdminTab === 'organizations' && (
+            <button
+              onClick={() => setShowOrgModal(true)}
+              style={{
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '10px 18px',
+                borderRadius: '8px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
+              }}
+            >
+              <PlusCircle size={18} />
+              Onboard Organization
+            </button>
+          )}
         </div>
       )}
 
@@ -488,29 +517,29 @@ const UserApproval = () => {
                           <td style={{ padding: '16px 20px' }}>
                             <span style={{
                               padding: '5px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '600',
-                              background: org.license_status === 'Active' ? '#dcfce7' : '#ffe4e6',
-                              color: org.license_status === 'Active' ? '#15803d' : '#be123c',
-                              border: `1px solid ${org.license_status === 'Active' ? '#bbf7d0' : '#fecdd3'}`,
+                              background: org.status === 'Active' ? '#dcfce7' : '#ffe4e6',
+                              color: org.status === 'Active' ? '#15803d' : '#be123c',
+                              border: `1px solid ${org.status === 'Active' ? '#bbf7d0' : '#fecdd3'}`,
                               display: 'inline-flex', alignItems: 'center', gap: '6px'
                             }}>
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: org.license_status === 'Active' ? '#22c55e' : '#f43f5e' }} />
-                              {org.license_status || 'Active'}
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: org.status === 'Active' ? '#22c55e' : '#f43f5e' }} />
+                              {org.status || 'Active'}
                             </span>
                           </td>
                           <td style={{ padding: '16px 20px', textAlign: 'center' }}>
                             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                               <button
-                                onClick={() => handleUpdateSubscription(org.user_id, org.license_status === 'Active' ? 'Suspended' : 'Active')}
+                                onClick={() => handleUpdateSubscription(org.user_id, org.status === 'Active' ? 'Suspended' : 'Active')}
                                 style={{
                                   padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
-                                  background: org.license_status === 'Active' ? '#fff1f2' : '#f0fdf4',
-                                  color: org.license_status === 'Active' ? '#be123c' : '#15803d',
-                                  border: `1px solid ${org.license_status === 'Active' ? '#fecdd3' : '#bbf7d0'}`,
+                                  background: org.status === 'Active' ? '#fff1f2' : '#f0fdf4',
+                                  color: org.status === 'Active' ? '#be123c' : '#15803d',
+                                  border: `1px solid ${org.status === 'Active' ? '#fecdd3' : '#bbf7d0'}`,
                                   boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                   transition: 'all 0.2s ease'
                                 }}
                               >
-                                {org.license_status === 'Active' ? 'Suspend' : 'Activate'}
+                                {org.status === 'Active' ? 'Suspend' : 'Activate'}
                               </button>
                             </div>
                           </td>
@@ -523,46 +552,7 @@ const UserApproval = () => {
             </div>
           )}
 
-          {/* TAB 2: ORGANIZATION ADMINISTRATORS (Functionality #4) */}
-          {activeAdminTab === 'org_admins' && (
-            <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: '#0f172a' }}>Organization-Level Administrators</h3>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Functionality #4 — Manage administrative accounts assigned to client Municipal Authorities.</p>
-                </div>
-              </div>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '12px' }}>Admin Name</th>
-                      <th style={{ padding: '12px' }}>Email Address</th>
-                      <th style={{ padding: '12px' }}>Organization</th>
-                      <th style={{ padding: '12px' }}>District</th>
-                      <th style={{ padding: '12px' }}>Account Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orgAdmins.map(admin => (
-                      <tr key={admin.user_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '12px', fontWeight: '600', color: '#0f172a' }}>{admin.full_name}</td>
-                        <td style={{ padding: '12px', color: '#64748b' }}>{admin.email}</td>
-                        <td style={{ padding: '12px', fontWeight: '500' }}>{admin.organization_name || 'Municipal Authority'}</td>
-                        <td style={{ padding: '12px' }}>{admin.district}</td>
-                        <td style={{ padding: '12px' }}>
-                          <span style={{ padding: '3px 8px', borderRadius: '12px', background: '#dcfce7', color: '#166534', fontSize: '0.75rem', fontWeight: '600' }}>
-                            {admin.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
           {/* TAB 3: PLATFORM SETTINGS & CONFIGURATION (Functionality #3) */}
           {activeAdminTab === 'settings' && (
@@ -801,14 +791,9 @@ const UserApproval = () => {
           {/* TAB 8: DATABASE BACKUP & DISASTER RECOVERY (Functionality #10) */}
           {activeAdminTab === 'backup' && (
             <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: '#0f172a' }}>Database Backup & Disaster Recovery Snapshots</h3>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Functionality #10 — Create recovery snapshots and review backup health.</p>
-                </div>
-                <button onClick={handleTriggerBackup} style={{ background: '#166534', color: 'white', border: 'none', padding: '10px 18px', borderRadius: '6px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <HardDriveDownload size={16} /> Create Backup Snapshot
-                </button>
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, color: '#0f172a' }}>Database Backup & Disaster Recovery Snapshots</h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Functionality #10 — Review backup health and recovery snapshots.</p>
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -845,7 +830,7 @@ const UserApproval = () => {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: 0, color: '#0f172a' }}>Platform Usage Reports</h3>
-                <button onClick={handleExportSubscriptionCSV} style={{ background: '#0284c7', color: 'white', border: 'none', padding: '10px 18px', borderRadius: '6px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button onClick={handleExportPlatformReportsCSV} style={{ background: '#0284c7', color: 'white', border: 'none', padding: '10px 18px', borderRadius: '6px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Download size={16} /> Export Reports CSV
                 </button>
               </div>
@@ -908,6 +893,123 @@ const UserApproval = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* AUTHORITY VIEW — DISTRICT USER MANAGEMENT */}
+      {/* ========================================================================= */}
+      {!isAdmin && (
+        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.05)', padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div>
+              <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800' }}>District User Approvals & Management</h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Manage operational users, volunteers, and researchers assigned to {user?.district || 'your'} district.</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setActiveAuthorityTab('pending')}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer',
+                  background: activeAuthorityTab === 'pending' ? '#0284c7' : '#f1f5f9',
+                  color: activeAuthorityTab === 'pending' ? 'white' : '#475569'
+                }}
+              >
+                Pending Approvals ({pendingUsers.length})
+              </button>
+              <button
+                onClick={() => setActiveAuthorityTab('all')}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer',
+                  background: activeAuthorityTab === 'all' ? '#0284c7' : '#f1f5f9',
+                  color: activeAuthorityTab === 'all' ? 'white' : '#475569'
+                }}
+              >
+                All District Users ({allUsers.length})
+              </button>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                  <th style={{ padding: '14px 18px' }}>User Name</th>
+                  <th style={{ padding: '14px 18px' }}>Role</th>
+                  <th style={{ padding: '14px 18px' }}>Contact Info</th>
+                  <th style={{ padding: '14px 18px' }}>Status</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(activeAuthorityTab === 'pending' ? pendingUsers : allUsers).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                      No {activeAuthorityTab === 'pending' ? 'pending user approvals' : 'registered district users'} found.
+                    </td>
+                  </tr>
+                ) : (
+                  (activeAuthorityTab === 'pending' ? pendingUsers : allUsers).map((u) => (
+                    <tr key={u.user_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '14px 18px', fontWeight: '600', color: '#0f172a' }}>{u.full_name}</td>
+                      <td style={{ padding: '14px 18px' }}>
+                        <span style={{ padding: '3px 10px', borderRadius: '12px', background: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem', fontWeight: '600' }}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '0.85rem' }}>
+                        <div>{u.email}</div>
+                        <div>{u.phone}</div>
+                      </td>
+                      <td style={{ padding: '14px 18px' }}>
+                        <span style={{
+                          padding: '4px 10px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '600',
+                          background: u.status === 'Active' ? '#dcfce7' : (u.status === 'Pending' ? '#fef3c7' : '#ffe4e6'),
+                          color: u.status === 'Active' ? '#15803d' : (u.status === 'Pending' ? '#b45309' : '#be123c'),
+                          border: `1px solid ${u.status === 'Active' ? '#bbf7d0' : (u.status === 'Pending' ? '#fde68a' : '#fecdd3')}`
+                        }}>
+                          {u.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                          {u.status === 'Pending' && (
+                            <>
+                              <button
+                                onClick={() => handleUpdateDistrictUserStatus(u.user_id, 'Active')}
+                                style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', background: '#166534', color: 'white', fontWeight: '600', cursor: 'pointer', fontSize: '0.8rem' }}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleUpdateDistrictUserStatus(u.user_id, 'Rejected')}
+                                style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#991b1b', fontWeight: '600', cursor: 'pointer', fontSize: '0.8rem' }}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {u.status !== 'Pending' && (
+                            <button
+                              onClick={() => handleUpdateDistrictUserStatus(u.user_id, u.status === 'Active' ? 'Suspended' : 'Active')}
+                              style={{
+                                padding: '5px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
+                                background: u.status === 'Active' ? '#fff1f2' : '#f0fdf4',
+                                color: u.status === 'Active' ? '#be123c' : '#15803d',
+                                border: `1px solid ${u.status === 'Active' ? '#fecdd3' : '#bbf7d0'}`
+                              }}
+                            >
+                              {u.status === 'Active' ? 'Suspend' : 'Activate'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

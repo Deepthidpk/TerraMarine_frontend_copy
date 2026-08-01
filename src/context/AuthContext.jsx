@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.user?.status === 'Suspended' || data.user?.license_status === 'Suspended') {
+            if (data.user?.status === 'Suspended') {
               logout();
               window.location.href = '/login?suspended=true';
             } else {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import LeafletMap from '../components/LeafletMap';
-import { Camera, MapPin, CheckCircle, Info, ShieldAlert } from 'lucide-react';
+import { Camera, MapPin, CheckCircle, Info, ShieldAlert, Search, Filter, X, RotateCcw } from 'lucide-react';
 
 const Reports = () => {
   const { user, authFetch, API_URL } = useAuth();
@@ -31,6 +31,55 @@ const Reports = () => {
   const [activeReportDetails, setActiveReportDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [verificationSeverity, setVerificationSeverity] = useState('Medium');
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [severityFilter, setSeverityFilter] = useState('All');
+  const [wasteTypeFilter, setWasteTypeFilter] = useState('All');
+
+  // Filtered reports computation
+  const filteredReports = reports.filter((rep) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const titleMatch = rep.title?.toLowerCase().includes(q);
+      const locMatch = rep.location_name?.toLowerCase().includes(q);
+      const reporterMatch = rep.reporter_name?.toLowerCase().includes(q);
+      const descMatch = rep.description?.toLowerCase().includes(q);
+      const wasteMatch = rep.waste_type?.toLowerCase().includes(q);
+
+      if (!titleMatch && !locMatch && !reporterMatch && !descMatch && !wasteMatch) {
+        return false;
+      }
+    }
+
+    if (statusFilter !== 'All' && rep.status !== statusFilter) {
+      return false;
+    }
+
+    if (categoryFilter !== 'All' && rep.report_category !== categoryFilter) {
+      return false;
+    }
+
+    if (severityFilter !== 'All' && rep.severity !== severityFilter) {
+      return false;
+    }
+
+    if (wasteTypeFilter !== 'All' && rep.waste_type !== wasteTypeFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('All');
+    setCategoryFilter('All');
+    setSeverityFilter('All');
+    setWasteTypeFilter('All');
+  };
 
   const handleDetectGPSLocation = () => {
     if ('geolocation' in navigator) {
@@ -511,12 +560,218 @@ const Reports = () => {
 
       {/* Reports Table List */}
       <div className="glass-panel">
-        <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Active Reports Ledger</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Active Reports Ledger</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Showing {filteredReports.length} of {reports.length} reports
+            </span>
+          </div>
+
+          {(searchQuery || statusFilter !== 'All' || categoryFilter !== 'All' || severityFilter !== 'All' || wasteTypeFilter !== 'All') && (
+            <button
+              onClick={handleResetFilters}
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: 'var(--danger)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontSize: '0.8rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <RotateCcw size={14} /> Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Filter Controls Toolbar */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '2.2fr 1fr 1fr 1fr 1fr',
+          gap: '12px',
+          alignItems: 'end',
+          marginBottom: '20px',
+          padding: '16px',
+          background: 'rgba(15, 23, 42, 0.02)',
+          border: '1px solid var(--card-border)',
+          borderRadius: '10px'
+        }}>
+          {/* Search Box */}
+          <div style={{ minWidth: 0 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Search Reports
+            </label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', color: '#94a3b8' }} />
+              <input
+                type="text"
+                placeholder="Search by title, location, waste type..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 32px 8px 36px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--card-border)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem'
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                border: '1px solid var(--card-border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem'
+              }}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Verified">Verified</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Category
+            </label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                border: '1px solid var(--card-border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem'
+              }}
+            >
+              <option value="All">All Categories</option>
+              <option value="Pollution">Pollution</option>
+              <option value="Emergency">Emergency</option>
+            </select>
+          </div>
+
+          {/* Severity Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Severity
+            </label>
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                border: '1px solid var(--card-border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem'
+              }}
+            >
+              <option value="All">All Severities</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+
+          {/* Waste Type Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Waste Type
+            </label>
+            <select
+              value={wasteTypeFilter}
+              onChange={(e) => setWasteTypeFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                border: '1px solid var(--card-border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem'
+              }}
+            >
+              <option value="All">All Waste Types</option>
+              <option value="Plastic">Plastic</option>
+              <option value="Glass">Glass</option>
+              <option value="Fishing Nets">Fishing Nets</option>
+              <option value="Oil Spill">Oil Spill</option>
+              <option value="Dead Marine Life">Dead Marine Life</option>
+              <option value="General Litter">General Litter</option>
+            </select>
+          </div>
+        </div>
+
         {loading ? (
-          <div style={{ color: 'var(--text-secondary)' }}>Fetching reports...</div>
-        ) : reports.length === 0 ? (
-          <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '30px' }}>
-            No pollution reports found.
+          <div style={{ color: 'var(--text-secondary)', padding: '20px' }}>Fetching reports...</div>
+        ) : filteredReports.length === 0 ? (
+          <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px 20px' }}>
+            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>No pollution reports found.</p>
+            {(searchQuery || statusFilter !== 'All' || categoryFilter !== 'All' || severityFilter !== 'All' || wasteTypeFilter !== 'All') && (
+              <button
+                onClick={handleResetFilters}
+                style={{
+                  marginTop: '12px',
+                  background: '#0284c7',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Search & Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="table-container">
@@ -534,7 +789,7 @@ const Reports = () => {
                 </tr>
               </thead>
               <tbody>
-                {reports.map((rep) => (
+                {filteredReports.map((rep) => (
                   <tr key={rep.report_id}>
                     <td style={{ fontWeight: 600 }}>{rep.title}</td>
                     <td>{rep.location_name || `${parseFloat(rep.latitude).toFixed(4)}, ${parseFloat(rep.longitude).toFixed(4)}`}</td>
