@@ -257,132 +257,209 @@ const Login = () => {
   };
 
   return (
-    <div className="auth-container" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="auth-container" style={{ 
+      minHeight: '100vh', 
+      width: '100vw',
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      background: 'radial-gradient(circle at 50% 40%, #071e3d 0%, #020b18 100%)',
+      position: 'relative',
+      overflow: 'hidden',
+      padding: '24px'
+    }}>
+      {/* Main Wide Auth Card with Blended Octopus Background */}
       <div className="auth-card glass-panel" style={{ 
-        boxShadow: '0 20px 40px -15px rgba(23, 28, 66, 0.35), 0 15px 30px -10px rgba(23, 28, 66, 0.15)',
-        border: '1px solid rgba(23, 28, 66, 0.12)',
-        padding: '36px 32px'
+        maxWidth: '540px',
+        width: '100%',
+        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+        border: '1px solid rgba(0, 229, 255, 0.25)',
+        borderRadius: '24px',
+        background: 'linear-gradient(135deg, rgba(8, 24, 48, 0.95) 0%, rgba(4, 15, 32, 0.98) 100%)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        position: 'relative',
+        zIndex: 2,
+        margin: 'auto',
+        overflow: 'hidden',
+        padding: '42px 40px'
       }}>
-        <div className="auth-logo" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, textAlign: 'center', marginBottom: '16px' }}>
-          🌊 TerraMarine
-        </div>
-        <h2 style={{ 
-          fontFamily: 'var(--font-display)', 
-          fontWeight: 700, 
-          textAlign: 'center', 
-          marginBottom: '28px', 
-          fontSize: '1.6rem',
-          color: '#171c42'
-        }}>
-          Sign In
-        </h2>
+        {/* Soft Blended Octopus Image inside Login Box (Matches Reference) */}
+        <img 
+          src="/images/cute_octopus_marine.png" 
+          alt="Marine Octopus Background" 
+          style={{
+            position: 'absolute',
+            top: '56%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '320px',
+            height: 'auto',
+            opacity: 0.16,
+            pointerEvents: 'none',
+            zIndex: 0,
+            filter: 'brightness(0.95) contrast(1.1)'
+          }}
+        />
 
-        {error && (
-          <div style={{ 
-            padding: '12px', 
-            background: 'rgba(239, 68, 68, 0.08)', 
-            border: '1px solid var(--danger)', 
-            borderRadius: '8px', 
-            color: 'var(--danger)',
-            fontSize: '0.85rem',
-            marginBottom: '20px',
-            fontFamily: 'var(--font-body)'
-          }}>
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.05em' }}>Email Address</label>
-            <input 
-              type="email" 
-              className="form-control" 
-              placeholder="Enter your email" 
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); validateField('email', e.target.value); }}
-              style={{ fontSize: '0.9rem', borderColor: fieldErrors.email ? 'var(--danger)' : '' }}
+        {/* Card Content Container */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Top Brand Header */}
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <img 
+              src="/images/whale_logo_icon.png" 
+              alt="TerraMarine Logo" 
+              style={{ width: '58px', height: '58px', objectFit: 'contain', background: 'transparent', filter: 'drop-shadow(0 0 14px rgba(0, 229, 255, 0.7))', marginBottom: '8px' }} 
             />
-            {fieldErrors.email && (
-              <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block', fontFamily: 'var(--font-body)' }}>
-                {fieldErrors.email}
-              </span>
-            )}
+            <h1 style={{ 
+              margin: 0, 
+              fontSize: '1.85rem', 
+              fontWeight: 800, 
+              color: '#ffffff', 
+              letterSpacing: '-0.02em', 
+              fontFamily: 'var(--font-display)' 
+            }}>
+              TerraMarine
+            </h1>
+            <p style={{ color: '#94a3b8', fontSize: '0.86rem', marginTop: '6px', margin: 0 }}>
+              Enter your credentials to access your coastal monitoring portal
+            </p>
           </div>
 
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <label className="form-label" style={{ marginBottom: 0, fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.05em' }}>Password</label>
-              <Link to="/forgot-password" style={{ color: 'var(--accent-secondary)', fontSize: '0.8rem', textDecoration: 'none', fontWeight: 500, fontFamily: 'var(--font-body)' }}>
-                Forgot Password?
-              </Link>
+          {error && (
+            <div style={{ 
+              padding: '12px 14px', 
+              background: 'rgba(239, 68, 68, 0.15)', 
+              border: '1px solid rgba(239, 68, 68, 0.4)', 
+              borderRadius: '10px', 
+              color: '#ef4444',
+              fontSize: '0.85rem',
+              marginBottom: '20px',
+              fontWeight: '600'
+            }}>
+              {error}
             </div>
-            <input 
-              type="password" 
-              className="form-control" 
-              placeholder="Enter your password" 
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); validateField('password', e.target.value); }}
-              style={{ fontSize: '0.9rem', borderColor: fieldErrors.password ? 'var(--danger)' : '' }}
-            />
-            {fieldErrors.password && (
-              <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block', fontFamily: 'var(--font-body)' }}>
-                {fieldErrors.password}
-              </span>
-            )}
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="form-group" style={{ marginBottom: '18px' }}>
+              <label className="form-label" style={{ color: '#e2e8f0', fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em' }}>
+                EMAIL ADDRESS
+              </label>
+              <input 
+                type="email" 
+                className="form-control" 
+                placeholder="e.g. user@terramarine.org" 
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); validateField('email', e.target.value); }}
+                style={{ 
+                  padding: '11px 14px', 
+                  fontSize: '0.9rem', 
+                  borderColor: fieldErrors.email ? '#ef4444' : 'rgba(0, 229, 255, 0.25)',
+                  background: 'rgba(8, 20, 42, 0.75)',
+                  color: '#ffffff'
+                }}
+              />
+              {fieldErrors.email && (
+                <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block', fontWeight: '500' }}>
+                  {fieldErrors.email}
+                </span>
+              )}
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label className="form-label" style={{ marginBottom: 0, color: '#e2e8f0', fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em' }}>
+                  PASSWORD
+                </label>
+                <Link to="/forgot-password" style={{ color: '#00e5ff', fontSize: '0.8rem', textDecoration: 'none', fontWeight: 600 }}>
+                  Forgot Password?
+                </Link>
+              </div>
+              <input 
+                type="password" 
+                className="form-control" 
+                placeholder="Enter your password" 
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); validateField('password', e.target.value); }}
+                style={{ 
+                  padding: '11px 14px', 
+                  fontSize: '0.9rem', 
+                  borderColor: fieldErrors.password ? '#ef4444' : 'rgba(0, 229, 255, 0.25)',
+                  background: 'rgba(8, 20, 42, 0.75)',
+                  color: '#ffffff'
+                }}
+              />
+              {fieldErrors.password && (
+                <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block', fontWeight: '500' }}>
+                  {fieldErrors.password}
+                </span>
+              )}
+            </div>
+
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              style={{ 
+                width: '100%', 
+                padding: '12px', 
+                fontSize: '0.95rem', 
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                boxShadow: '0 4px 18px rgba(0, 229, 255, 0.25)'
+              }}
+              disabled={loading}
+            >
+              {loading ? 'Signing In...' : 'Sign In'}
+            </button>
+          </form>
+
+          <div style={{ margin: '22px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(0, 229, 255, 0.18)' }}></div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(0, 229, 255, 0.18)' }}></div>
           </div>
 
-          <button 
-            type="submit" 
-            className="btn btn-primary" 
-            style={{ width: '100%', padding: '12px', marginTop: '12px', fontSize: '0.95rem', fontFamily: 'var(--font-body)', fontWeight: 600 }}
-            disabled={loading}
-          >
-            {loading ? 'Signing In...' : 'Sign In'}
-          </button>
-        </form>
+          {/* Google Login Button */}
+          <div>
+            <button 
+              onClick={() => triggerGoogleLogin()} 
+              className="btn btn-secondary" 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px', 
+                background: 'rgba(255, 255, 255, 0.08)', 
+                color: '#ffffff', 
+                fontWeight: 600, 
+                width: '100%', 
+                padding: '11px',
+                fontSize: '0.9rem',
+                border: '1px solid rgba(0, 229, 255, 0.3)',
+                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
+                transition: 'all 0.2s ease'
+              }}
+              disabled={loading}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+              </svg>
+              {loading ? 'Connecting...' : 'Continue with Google'}
+            </button>
+          </div>
 
-        <div style={{ margin: '24px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', letterSpacing: '0.05em' }}>OR</span>
-          <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
+          <p style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.88rem', color: '#94a3b8' }}>
+            Don't have an account?{' '}
+            <Link to="/register" style={{ color: '#00e5ff', textDecoration: 'underline', fontWeight: 600 }}>
+              Register Now
+            </Link>
+          </p>
         </div>
-
-        {/* Google Login Button */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <button 
-            onClick={() => triggerGoogleLogin()} 
-            className="btn btn-secondary" 
-            style={{ 
-              display: 'flex', 
-              gap: '10px', 
-              background: '#ffffff', 
-              color: '#1f2937', 
-              fontWeight: 600, 
-              width: '100%', 
-              fontSize: '0.9rem',
-              border: '1px solid rgba(23, 28, 66, 0.15)',
-              fontFamily: 'var(--font-body)',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-            }}
-            disabled={loading}
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-            </svg>
-            {loading ? 'Connecting...' : 'Continue with Google'}
-          </button>
-        </div>
-
-        <p style={{ textAlign: 'center', marginTop: '28px', fontSize: '0.9rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
-          Don't have an account?{' '}
-          <Link to="/register" className="register-link">
-            Register Now
-          </Link>
-        </p>
       </div>
 
       {/* Role Selection & Verification Modal for New Google Users */}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import LeafletMap from '../components/LeafletMap';
-import { Camera, MapPin, CheckCircle, Info, ShieldAlert, Search, Filter, X, RotateCcw } from 'lucide-react';
+import { Camera, MapPin, CheckCircle, Info, ShieldAlert, Search, Filter, X, RotateCcw, Clock, Layers, FileText, CheckCircle2 } from 'lucide-react';
 
 const Reports = () => {
   const { user, authFetch, API_URL } = useAuth();
@@ -11,11 +12,11 @@ const Reports = () => {
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Pollution');
+  const [category, setCategory] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [locationName, setLocationName] = useState('');
-  const [wasteType, setWasteType] = useState('Plastic');
+  const [wasteType, setWasteType] = useState('');
   const [severity, setSeverity] = useState('Medium');
   const [imageFile, setImageFile] = useState(null);
   
@@ -23,6 +24,21 @@ const Reports = () => {
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Auto-dismiss notifications after 2 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
   
   // Selected location coordinate pick state
   const [selectedCoords, setSelectedCoords] = useState(null);
@@ -30,17 +46,25 @@ const Reports = () => {
   // Selected report for Details modal
   const [activeReportDetails, setActiveReportDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [verificationSeverity, setVerificationSeverity] = useState('Medium');
 
-  // Search & Filter State
+  // Search & Filter & Tracking Tab State
+  const [reportTab, setReportTab] = useState('all'); // 'all' | 'my_complaints'
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [severityFilter, setSeverityFilter] = useState('All');
   const [wasteTypeFilter, setWasteTypeFilter] = useState('All');
 
+  // Count user's filed complaints
+  const myComplaintsCount = reports.filter(r => r.reported_by === user?.user_id).length;
+
   // Filtered reports computation
   const filteredReports = reports.filter((rep) => {
+    if (reportTab === 'my_complaints' && rep.reported_by !== user?.user_id) {
+      return false;
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = rep.title?.toLowerCase().includes(q);
@@ -103,33 +127,53 @@ const Reports = () => {
     }
   };
 
-  const validateField = (name, value) => {
-    let errorMsg = '';
+  const getFieldError = (name, value) => {
     if (name === 'title') {
-      if (!value || value.trim().length === 0) {
-        errorMsg = 'Title is required.';
-      } else if (value.trim().length < 3) {
-        errorMsg = 'Title must be at least 3 characters.';
-      }
+      const val = (value || '').trim();
+      if (!val) return 'Title is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Title must start with a letter or number.';
+      if (val.length < 3) return 'Title must be at least 3 characters.';
+      if (val.length > 100) return 'Title must not exceed 100 characters.';
+      if (!/^[A-Za-z0-9][A-Za-z0-9\s.,'-]*$/.test(val)) return 'Title can only contain letters, numbers, spaces, and basic punctuation (.,\'-).';
+    } else if (name === 'description') {
+      const val = (value || '').trim();
+      if (!val) return 'Description is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Description must start with a letter or number.';
+      if (val.length < 5) return 'Description must be at least 5 characters.';
+      if (val.length > 1000) return 'Description must not exceed 1000 characters.';
+      if (!/^[A-Za-z0-9\s.,!?'"()#&%+-]*$/.test(val)) return 'Description contains invalid characters.';
+    } else if (name === 'category') {
+      if (!value || value === '' || !['Pollution', 'Emergency'].includes(value)) return 'Category selection is required.';
+    } else if (name === 'wasteType') {
+      const validTypes = ['Plastic', 'Glass', 'Fishing Nets', 'Oil Spill', 'Dead Marine Life', 'General Litter'];
+      if (!value || value === '' || !validTypes.includes(value)) return 'Waste type selection is required.';
+    } else if (name === 'image') {
+      if (!imageFile) return 'Upload image proof is required.';
     } else if (name === 'locationName') {
-      if (!value || value.trim().length === 0) {
-        errorMsg = 'Beach / Location name is required.';
-      }
+      const val = (value || '').trim();
+      if (!val) return 'Beach / Location name is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Location name must start with a letter or number.';
+      if (val.length < 3) return 'Location name must be at least 3 characters.';
+      if (val.length > 150) return 'Location name must not exceed 150 characters.';
+      if (!/^[A-Za-z0-9][A-Za-z0-9\s.,/-]*$/.test(val)) return 'Location name can only contain letters, numbers, spaces, and basic punctuation (.,/-).';
     } else if (name === 'latitude') {
-      const latNum = parseFloat(value);
-      if (!value) {
-        errorMsg = 'Latitude is required.';
-      } else if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-        errorMsg = 'Please enter a valid latitude between -90 and 90.';
-      }
+      const val = (value || '').toString().trim();
+      const latNum = parseFloat(val);
+      if (!val) return 'Latitude is required. Drop a pin on the map or use GPS.';
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(val)) return 'Latitude must be a valid decimal number.';
+      if (isNaN(latNum) || latNum < -90 || latNum > 90) return 'Latitude must be between -90 and 90 degrees.';
     } else if (name === 'longitude') {
-      const lngNum = parseFloat(value);
-      if (!value) {
-        errorMsg = 'Longitude is required.';
-      } else if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-        errorMsg = 'Please enter a valid longitude between -180 and 180.';
-      }
+      const val = (value || '').toString().trim();
+      const lngNum = parseFloat(val);
+      if (!val) return 'Longitude is required. Drop a pin on the map or use GPS.';
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(val)) return 'Longitude must be a valid decimal number.';
+      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) return 'Longitude must be between -180 and 180 degrees.';
     }
+    return '';
+  };
+
+  const validateField = (name, value) => {
+    const errorMsg = getFieldError(name, value);
     setFieldErrors((prev) => ({ ...prev, [name]: errorMsg }));
     return errorMsg;
   };
@@ -152,7 +196,7 @@ const Reports = () => {
     fetchReports();
   }, []);
 
-  const handleMapClick = (lat, lng) => {
+  const handleMapClick = async (lat, lng) => {
     setSelectedCoords({ lat, lng });
     const latStr = lat.toFixed(7);
     const lngStr = lng.toFixed(7);
@@ -160,12 +204,29 @@ const Reports = () => {
     setLongitude(lngStr);
     validateField('latitude', latStr);
     validateField('longitude', lngStr);
+
+    try {
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        if (geoData && geoData.display_name) {
+          const simpleName = geoData.address?.amenity || geoData.address?.beach || geoData.address?.suburb || geoData.address?.road || geoData.address?.city || geoData.display_name.split(',')[0];
+          setLocationName(simpleName);
+          validateField('locationName', simpleName);
+        }
+      }
+    } catch (e) {
+      // Ignore geocode errors if offline
+    }
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     let errorMsg = '';
-    if (file) {
+    if (!file) {
+      errorMsg = 'Upload image proof is required.';
+      setImageFile(null);
+    } else {
       const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
       const fileExtension = file.name.split('.').pop().toLowerCase();
       if (!allowedExtensions.includes(fileExtension)) {
@@ -174,17 +235,14 @@ const Reports = () => {
         errorMsg = 'Image size exceeds the 10MB limit.';
       }
       
-      setFieldErrors((prev) => ({ ...prev, image: errorMsg }));
       if (!errorMsg) {
         setImageFile(file);
       } else {
         setImageFile(null);
         e.target.value = null;
       }
-    } else {
-      setFieldErrors((prev) => ({ ...prev, image: '' }));
-      setImageFile(null);
     }
+    setFieldErrors((prev) => ({ ...prev, image: errorMsg }));
   };
 
   const handleCreateReportSubmit = async (e) => {
@@ -192,63 +250,34 @@ const Reports = () => {
     setError('');
     setSuccess('');
 
-    // Validate all fields
+    // Validate all fields strictly
     const errors = {};
-    if (!title) {
-      errors.title = 'Title is required.';
-    } else if (title.trim().length < 5) {
-      errors.title = 'Title must be at least 5 characters.';
-    } else if (title.length > 100) {
-      errors.title = 'Title must be 100 characters or less.';
-    } else if (!/^[A-Za-z0-9][A-Za-z0-9\s.,'-]*$/.test(title)) {
-      errors.title = 'Title can only contain letters, numbers, spaces, and basic punctuation (.,\'-).';
-    }
+    const titleErr = getFieldError('title', title);
+    if (titleErr) errors.title = titleErr;
 
-    if (description) {
-      if (description.trim().length < 10) {
-        errors.description = 'Description must be at least 10 characters.';
-      } else if (description.length > 1000) {
-        errors.description = 'Description must be 1000 characters or less.';
-      } else if (!/^[A-Za-z0-9\s.,!?'"()#&%+-]*$/.test(description)) {
-        errors.description = 'Description contains invalid characters.';
-      }
-    }
+    const descErr = getFieldError('description', description);
+    if (descErr) errors.description = descErr;
 
-    if (!locationName) {
-      errors.locationName = 'Beach / Location name is required.';
-    } else if (locationName.trim().length < 3) {
-      errors.locationName = 'Location name must be at least 3 characters.';
-    } else if (locationName.length > 150) {
-      errors.locationName = 'Location name must be 150 characters or less.';
-    } else if (!/^[A-Za-z0-9][A-Za-z0-9\s.,/-]*$/.test(locationName)) {
-      errors.locationName = 'Location name can only contain letters, numbers, spaces, and basic punctuation (.,/-).';
-    }
+    const catErr = getFieldError('category', category);
+    if (catErr) errors.category = catErr;
 
-    const latNum = parseFloat(latitude);
-    if (!latitude) {
-      errors.latitude = 'Latitude is required.';
-    } else if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(latitude)) {
-      errors.latitude = 'Latitude must be a valid decimal number.';
-    } else if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-      errors.latitude = 'Please enter a valid latitude between -90 and 90.';
-    }
+    const wasteErr = getFieldError('wasteType', wasteType);
+    if (wasteErr) errors.wasteType = wasteErr;
 
-    const lngNum = parseFloat(longitude);
-    if (!longitude) {
-      errors.longitude = 'Longitude is required.';
-    } else if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(longitude)) {
-      errors.longitude = 'Longitude must be a valid decimal number.';
-    } else if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-      errors.longitude = 'Please enter a valid longitude between -180 and 180.';
-    }
+    const locErr = getFieldError('locationName', locationName);
+    if (locErr) errors.locationName = locErr;
 
-    const mergedErrors = { ...fieldErrors, ...errors };
-    Object.keys(mergedErrors).forEach(key => {
-      if (!mergedErrors[key]) delete mergedErrors[key];
-    });
+    const latErr = getFieldError('latitude', latitude);
+    if (latErr) errors.latitude = latErr;
 
-    if (Object.keys(mergedErrors).length > 0) {
-      setFieldErrors(mergedErrors);
+    const lngErr = getFieldError('longitude', longitude);
+    if (lngErr) errors.longitude = lngErr;
+
+    const imgErr = getFieldError('image', imageFile);
+    if (imgErr) errors.image = imgErr;
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       setError('Please correct the validation errors in the form.');
       return;
     }
@@ -280,9 +309,12 @@ const Reports = () => {
       }
 
       setSuccess('Incident reported successfully!');
+      setShowCreateModal(false);
       // Reset form
       setTitle('');
       setDescription('');
+      setCategory('');
+      setWasteType('');
       setLocationName('');
       setLatitude('');
       setLongitude('');
@@ -337,12 +369,76 @@ const Reports = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Pollution & Incident Reports</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          View ongoing cleanup progress or report coastal anomalies like plastic piles or oil leaks.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '1.85rem', color: '#ffffff', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>
+            Pollution & Incident Reports
+          </h1>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Track My Complaints Button */}
+          {['Citizen', 'Fisherman', 'Volunteer'].includes(user?.role) && (
+            <button
+              onClick={() => setReportTab(prev => prev === 'my_complaints' ? 'all' : 'my_complaints')}
+              className="btn btn-secondary"
+              style={{
+                padding: '12px 18px',
+                borderRadius: '12px',
+                border: reportTab === 'my_complaints' ? '1px solid #00e5ff' : '1px solid rgba(255, 255, 255, 0.2)',
+                background: reportTab === 'my_complaints' ? 'linear-gradient(135deg, rgba(2, 132, 199, 0.9) 0%, rgba(0, 229, 255, 0.9) 100%)' : 'rgba(12, 28, 54, 0.7)',
+                color: reportTab === 'my_complaints' ? '#041126' : '#ffffff',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: reportTab === 'my_complaints' ? '0 4px 16px rgba(0, 229, 255, 0.35)' : 'none',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Clock size={16} />
+              <span>{reportTab === 'my_complaints' ? 'Showing My Complaints' : 'Track my Complaints'}</span>
+              <span style={{ 
+                background: reportTab === 'my_complaints' ? 'rgba(4, 17, 38, 0.25)' : 'rgba(0, 229, 255, 0.2)', 
+                color: reportTab === 'my_complaints' ? '#041126' : '#00e5ff', 
+                padding: '2px 8px', 
+                borderRadius: '10px', 
+                fontSize: '0.75rem', 
+                fontWeight: '800' 
+              }}>
+                {myComplaintsCount}
+              </span>
+            </button>
+          )}
+
+          {user?.role !== 'Authority' && (
+            <button 
+              onClick={() => setShowCreateModal(true)} 
+              className="btn btn-primary"
+              style={{ 
+                padding: '12px 20px', 
+                borderRadius: '12px', 
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', 
+                color: '#ffffff', 
+                fontWeight: 700, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                boxShadow: '0 4px 20px rgba(0, 229, 255, 0.3)',
+                cursor: 'pointer',
+                border: '1px solid rgba(0, 229, 255, 0.4)'
+              }}
+            >
+              <Camera size={18} />
+              <span>+ Report Pollution Incident</span>
+            </button>
+          )}
+        </div>
       </div>
+
+
 
       {success && (
         <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid var(--success)', borderRadius: '8px', color: 'var(--success)', marginBottom: '20px' }}>
@@ -355,207 +451,276 @@ const Reports = () => {
         </div>
       )}
 
-      {/* Grid split: Form (left) / Map selector (right) for Citizens/Fishermen to submit */}
-      {['Citizen', 'Fisherman', 'Admin'].includes(user.role) && (
-        <div className="grid-2col" style={{ marginBottom: '40px' }}>
-          {/* Form */}
-          <div className="glass-panel">
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
-              Report Pollution Incident
-            </h3>
-            <form onSubmit={handleCreateReportSubmit}>
-              <div className="form-group">
-                <label className="form-label">Title *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="e.g. Bulk plastic bottles wash up" 
-                  value={title}
-                  onChange={(e) => { setTitle(e.target.value); validateField('title', e.target.value); }}
-                  style={{ borderColor: fieldErrors.title ? 'var(--danger)' : '' }}
-                />
-                {fieldErrors.title && (
-                  <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.title}
-                  </span>
-                )}
+      {/* ========================================================================= */}
+      {/* MODAL: REPORT POLLUTION INCIDENT */}
+      {/* ========================================================================= */}
+      {showCreateModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '1080px',
+            width: '100%',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            position: 'relative',
+            padding: '28px',
+            margin: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Camera size={24} color="#00e5ff" />
+                <h2 style={{ fontSize: '1.4rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                  Report Pollution Incident
+                </h2>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Description</label>
-                <textarea 
-                  className="form-control" 
-                  placeholder="Provide brief details on trash volume, source, or hazard status" 
-                  rows="3"
-                  value={description}
-                  onChange={(e) => { setDescription(e.target.value); validateField('description', e.target.value); }}
-                  style={{ borderColor: fieldErrors.description ? 'var(--danger)' : '' }}
-                />
-                {fieldErrors.description && (
-                  <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.description}
-                  </span>
-                )}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <select 
-                    className="form-control" 
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                  >
-                    <option value="Pollution">Pollution (Plastic, glass, metal)</option>
-                    <option value="Emergency">Emergency (Oil spill, toxic leaks)</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Waste Type</label>
-                  <select 
-                    className="form-control" 
-                    value={wasteType}
-                    onChange={(e) => setWasteType(e.target.value)}
-                  >
-                    <option value="Plastic">Plastic Bottles/Bags</option>
-                    <option value="Glass">Glass Bottling</option>
-                    <option value="Fishing Nets">Fishing Nets / Line</option>
-                    <option value="Oil Spill">Oil Slick / Fuel Leak</option>
-                    <option value="Dead Marine Life">Dead Marine Organisms</option>
-                    <option value="General Litter">General Trash</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Beach / Location Name *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="e.g. Fort Kochi Walkway" 
-                  value={locationName}
-                  onChange={(e) => { setLocationName(e.target.value); validateField('locationName', e.target.value); }}
-                  style={{ borderColor: fieldErrors.locationName ? 'var(--danger)' : '' }}
-                />
-                {fieldErrors.locationName && (
-                  <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.locationName}
-                  </span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label className="form-label" style={{ marginBottom: 0 }}>Location GPS Coordinates *</label>
-                <button
-                  type="button"
-                  onClick={handleDetectGPSLocation}
-                  style={{
-                    background: '#0284c7',
-                    color: 'white',
-                    border: 'none',
-                    padding: '5px 10px',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <MapPin size={12} /> Use My Current GPS Location
-                </button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Latitude *</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="Click on the map right &rarr;" 
-                    value={latitude}
-                    onChange={(e) => { setLatitude(e.target.value); validateField('latitude', e.target.value); }}
-                    style={{ borderColor: fieldErrors.latitude ? 'var(--danger)' : '' }}
-                  />
-                  {fieldErrors.latitude && (
-                    <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                      {fieldErrors.latitude}
-                    </span>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Longitude *</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="Click on the map right &rarr;" 
-                    value={longitude}
-                    onChange={(e) => { setLongitude(e.target.value); validateField('longitude', e.target.value); }}
-                    style={{ borderColor: fieldErrors.longitude ? 'var(--danger)' : '' }}
-                  />
-                  {fieldErrors.longitude && (
-                    <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                      {fieldErrors.longitude}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'center' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Upload Image proof</label>
-                  <input 
-                    type="file" 
-                    id="report-image-input"
-                    className="form-control" 
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    style={{ borderColor: fieldErrors.image ? 'var(--danger)' : '' }}
-                  />
-                  {fieldErrors.image && (
-                    <span style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                      {fieldErrors.image}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  <Camera size={18} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-                  GPS-enabled photos help cleanup teams pinpoint targets.
-                </div>
-              </div>
-
               <button 
-                type="submit" 
-                className="btn btn-primary" 
-                style={{ width: '100%', padding: '12px', marginTop: '24px' }}
-                disabled={submitting}
+                onClick={() => setShowCreateModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
               >
-                {submitting ? 'Submitting Report...' : 'Submit Report'}
+                <X size={24} />
               </button>
-            </form>
-          </div>
+            </div>
 
-          {/* Interactive Picker Map */}
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <h4 style={{ fontSize: '1rem', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <MapPin size={18} color="var(--accent-primary)" />
-              Pick Coordinates on Map
-            </h4>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
-              Click anywhere on the coastal line on the map below. Coordinates will fill into form automatically.
-            </p>
-            <div style={{ flex: 1, minHeight: '350px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--card-border)' }}>
-              <LeafletMap 
-                onLocationSelect={handleMapClick} 
-                selectedLocation={selectedCoords} 
-                reports={reports}
-              />
+            {/* Split 2 Column Layout: Form (Left) & Interactive Map Location Picker (Right) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+              {/* Form */}
+              <div>
+                <form onSubmit={handleCreateReportSubmit}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Title *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="e.g. Bulk plastic bottles wash up" 
+                      value={title}
+                      onChange={(e) => { setTitle(e.target.value); validateField('title', e.target.value); }}
+                      onBlur={(e) => validateField('title', e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.title ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                    {fieldErrors.title && (
+                      <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                        {fieldErrors.title}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Description *</label>
+                    <textarea 
+                      className="form-control" 
+                      placeholder="Provide brief details on trash volume, source, or hazard status" 
+                      rows="3"
+                      value={description}
+                      onChange={(e) => { setDescription(e.target.value); validateField('description', e.target.value); }}
+                      onBlur={(e) => validateField('description', e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.description ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                    {fieldErrors.description && (
+                      <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                        {fieldErrors.description}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Category *</label>
+                      <select 
+                        className="form-control" 
+                        value={category}
+                        onChange={(e) => { setCategory(e.target.value); validateField('category', e.target.value); }}
+                        onBlur={(e) => validateField('category', e.target.value)}
+                        style={{ color: category ? '#ffffff' : '#94a3b8', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.category ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                      >
+                        <option value="" style={{ color: '#94a3b8', background: '#08142a' }}>-- Select Category * --</option>
+                        <option value="Pollution" style={{ color: '#ffffff', background: '#08142a' }}>Pollution (Plastic, glass, metal)</option>
+                        <option value="Emergency" style={{ color: '#ffffff', background: '#08142a' }}>Emergency (Oil spill, toxic leaks)</option>
+                      </select>
+                      {fieldErrors.category && (
+                        <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                          {fieldErrors.category}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Waste Type *</label>
+                      <select 
+                        className="form-control" 
+                        value={wasteType}
+                        onChange={(e) => { setWasteType(e.target.value); validateField('wasteType', e.target.value); }}
+                        onBlur={(e) => validateField('wasteType', e.target.value)}
+                        style={{ color: wasteType ? '#ffffff' : '#94a3b8', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.wasteType ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                      >
+                        <option value="" style={{ color: '#94a3b8', background: '#08142a' }}>-- Select Waste Type * --</option>
+                        <option value="Plastic" style={{ color: '#ffffff', background: '#08142a' }}>Plastic Bottles/Bags</option>
+                        <option value="Glass" style={{ color: '#ffffff', background: '#08142a' }}>Glass Bottling</option>
+                        <option value="Fishing Nets" style={{ color: '#ffffff', background: '#08142a' }}>Fishing Nets / Line</option>
+                        <option value="Oil Spill" style={{ color: '#ffffff', background: '#08142a' }}>Oil Slick / Fuel Leak</option>
+                        <option value="Dead Marine Life" style={{ color: '#ffffff', background: '#08142a' }}>Dead Marine Organisms</option>
+                        <option value="General Litter" style={{ color: '#ffffff', background: '#08142a' }}>General Trash</option>
+                      </select>
+                      {fieldErrors.wasteType && (
+                        <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                          {fieldErrors.wasteType}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Beach / Location Name *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="e.g. Fort Kochi Walkway" 
+                      value={locationName}
+                      onChange={(e) => { setLocationName(e.target.value); validateField('locationName', e.target.value); }}
+                      onBlur={(e) => validateField('locationName', e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.locationName ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                    {fieldErrors.locationName && (
+                      <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                        {fieldErrors.locationName}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600, marginBottom: 0 }}>Location GPS Coordinates *</label>
+                    <button
+                      type="button"
+                      onClick={handleDetectGPSLocation}
+                      style={{
+                        background: '#0284c7',
+                        color: 'white',
+                        border: 'none',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <MapPin size={12} /> Use My Current GPS Location
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Latitude *</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="Click on the map right →" 
+                        value={latitude}
+                        onChange={(e) => { setLatitude(e.target.value); validateField('latitude', e.target.value); }}
+                        onBlur={(e) => validateField('latitude', e.target.value)}
+                        style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.latitude ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                      />
+                      {fieldErrors.latitude && (
+                        <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                          {fieldErrors.latitude}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Longitude *</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="Click on the map right →" 
+                        value={longitude}
+                        onChange={(e) => { setLongitude(e.target.value); validateField('longitude', e.target.value); }}
+                        onBlur={(e) => validateField('longitude', e.target.value)}
+                        style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.longitude ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                      />
+                      {fieldErrors.longitude && (
+                        <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                          {fieldErrors.longitude}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginTop: '4px' }}>
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Upload Image Proof *</label>
+                    <input 
+                      type="file" 
+                      id="report-image-input"
+                      className="form-control" 
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.image ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                    {fieldErrors.image && (
+                      <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                        {fieldErrors.image}
+                      </span>
+                    )}
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary" 
+                    style={{ width: '100%', padding: '12px', marginTop: '16px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Submitting Report...' : 'Submit Report'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Column Interactive Map Location Picker */}
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <MapPin size={18} color="#00e5ff" />
+                  <h4 style={{ margin: 0, color: '#ffffff', fontSize: '0.95rem', fontWeight: 700 }}>
+                    Pick Coordinates on Map
+                  </h4>
+                </div>
+                <p style={{ color: '#94a3b8', fontSize: '0.78rem', margin: '0 0 12px 0' }}>
+                  📍 Click anywhere on the coastal line on the map below to drop a pin. Coordinates & location name fill automatically.
+                </p>
+                <div style={{ height: '420px', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(0, 229, 255, 0.25)', position: 'relative' }}>
+                  <LeafletMap 
+                    onLocationSelect={handleMapClick} 
+                    selectedLocation={selectedCoords} 
+                    reports={reports}
+                  />
+                </div>
+                {selectedCoords && (
+                  <div style={{ marginTop: '10px', padding: '8px 12px', background: 'rgba(0, 229, 255, 0.1)', border: '1px solid rgba(0, 229, 255, 0.3)', borderRadius: '8px', fontSize: '0.78rem', color: '#00e5ff', fontWeight: '600' }}>
+                    🎯 Selected Coordinates: {selectedCoords.lat.toFixed(6)}, {selectedCoords.lng.toFixed(6)}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Reports Table List */}
@@ -593,7 +758,7 @@ const Reports = () => {
         {/* Filter Controls Toolbar */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '2.2fr 1fr 1fr 1fr 1fr',
+          gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
           gap: '12px',
           alignItems: 'end',
           marginBottom: '20px',
@@ -642,33 +807,6 @@ const Reports = () => {
                 </button>
               )}
             </div>
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Status
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                borderRadius: '6px',
-                border: '1px solid var(--card-border)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem'
-              }}
-            >
-              <option value="All">All Statuses</option>
-              <option value="Pending">Pending</option>
-              <option value="Verified">Verified</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-              <option value="Rejected">Rejected</option>
-            </select>
           </div>
 
           {/* Category Filter */}
@@ -774,52 +912,67 @@ const Reports = () => {
             )}
           </div>
         ) : (
-          <div className="table-container">
-            <table className="custom-table">
+          <div className="table-container" style={{ borderRadius: '14px', border: '1px solid rgba(0, 229, 255, 0.2)', background: 'rgba(6, 18, 38, 0.75)', overflowX: 'auto' }}>
+            <table className="custom-table" style={{ width: '100%', tableLayout: 'auto', borderCollapse: 'collapse' }}>
               <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Location</th>
-                  <th>Waste Type</th>
-                  <th>Category</th>
-                  <th>Severity</th>
-                  <th>Status</th>
-                  <th>Reported Date</th>
-                  <th>Actions</th>
+                <tr style={{ background: 'rgba(4, 14, 30, 0.95)', borderBottom: '1px solid rgba(0, 229, 255, 0.2)' }}>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>TITLE</th>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>LOCATION</th>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>WASTE TYPE</th>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>CATEGORY</th>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>REPORTED DATE</th>
+                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredReports.map((rep) => (
-                  <tr key={rep.report_id}>
-                    <td style={{ fontWeight: 600 }}>{rep.title}</td>
-                    <td>{rep.location_name || `${parseFloat(rep.latitude).toFixed(4)}, ${parseFloat(rep.longitude).toFixed(4)}`}</td>
-                    <td>{rep.waste_type || 'General'}</td>
-                    <td>
-                      <span className={`badge ${rep.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`}>
+                  <tr key={rep.report_id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background 0.2s ease' }}>
+                    <td style={{ padding: '14px 24px', textAlign: 'left' }}>
+                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.35' }}>{rep.title}</div>
+                    </td>
+                    <td style={{ padding: '14px 24px', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
+                        <MapPin size={14} color="#00e5ff" style={{ flexShrink: 0 }} />
+                        <span>{rep.location_name || `${parseFloat(rep.latitude).toFixed(4)}, ${parseFloat(rep.longitude).toFixed(4)}`}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '14px 24px', textAlign: 'left', fontSize: '0.85rem', color: '#e2e8f0', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                      {rep.waste_type || 'General'}
+                    </td>
+                    <td style={{ padding: '14px 24px', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      <span className={`badge ${rep.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.74rem', padding: '4px 10px' }}>
                         {rep.report_category}
                       </span>
                     </td>
-                    <td>
+                    <td style={{ padding: '14px 24px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <span style={{ 
-                        fontWeight: '600', 
-                        color: rep.severity === 'High' ? 'var(--danger)' : rep.severity === 'Medium' ? 'var(--warning)' : 'var(--success)'
+                        fontWeight: '700', 
+                        fontSize: '0.84rem',
+                        color: rep.severity === 'High' ? '#ff4d4d' : rep.severity === 'Medium' ? '#ffb703' : '#00f5d4'
                       }}>
                         {rep.severity || 'Medium'}
                       </span>
                     </td>
-                    <td>
-                      <span className={`badge badge-${rep.status.toLowerCase()}`}>{rep.status}</span>
-                    </td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: '14px 24px', textAlign: 'center', fontSize: '0.84rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
                       {new Date(rep.reported_at).toLocaleDateString()}
                     </td>
-                    <td>
+                    <td style={{ padding: '12px 24px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button 
                         onClick={() => handleOpenDetails(rep.report_id)}
                         className="btn btn-secondary" 
-                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                        style={{ 
+                          padding: '6px 14px', 
+                          fontSize: '0.78rem', 
+                          borderRadius: '8px', 
+                          whiteSpace: 'nowrap',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
                       >
-                        <Info size={14} />
+                        <Info size={13} />
                         Details
                       </button>
                     </td>
@@ -847,7 +1000,7 @@ const Reports = () => {
           padding: '20px'
         }}>
           <div className="glass-panel" style={{
-            maxWidth: '700px',
+            maxWidth: '740px',
             width: '100%',
             maxHeight: '90vh',
             overflowY: 'auto',
@@ -877,6 +1030,62 @@ const Reports = () => {
             <span className={`badge ${activeReportDetails.report.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`} style={{ marginBottom: '16px' }}>
               {activeReportDetails.report.report_category}
             </span>
+
+            {/* Live Complaint Progress Stepper */}
+            <div style={{
+              margin: '18px 0 22px 0',
+              padding: '18px 20px',
+              background: 'rgba(5, 18, 38, 0.85)',
+              border: '1px solid rgba(0, 229, 255, 0.25)',
+              borderRadius: '16px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: '#00e5ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={18} />
+                  Live Complaint Tracking Timeline
+                </h4>
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                  Tracking Ref: <strong style={{ color: '#ffffff' }}>#REP-{activeReportDetails.report.report_id}</strong>
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', textAlign: 'center' }}>
+                {/* Step 1: Submitted */}
+                <div style={{ padding: '10px 8px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px auto', fontWeight: '700', fontSize: '0.8rem' }}>✓</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#ffffff' }}>1. Complaint Filed</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{new Date(activeReportDetails.report.reported_at).toLocaleDateString()}</div>
+                </div>
+
+                {/* Step 2: Under Review */}
+                <div style={{ padding: '10px 8px', background: ['Verified', 'InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? 'rgba(16, 185, 129, 0.1)' : 'rgba(0, 229, 255, 0.08)', border: ['Verified', 'InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(0, 229, 255, 0.3)', borderRadius: '12px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ['Verified', 'InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '#10b981' : '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px auto', fontWeight: '700', fontSize: '0.8rem' }}>
+                    {['Verified', 'InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '✓' : '2'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#ffffff' }}>2. Authority Review</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{activeReportDetails.report.status === 'Pending' ? 'In Review' : 'Verified'}</div>
+                </div>
+
+                {/* Step 3: Action Scheduled */}
+                <div style={{ padding: '10px 8px', background: ['InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? 'rgba(16, 185, 129, 0.1)' : activeReportDetails.report.status === 'Verified' ? 'rgba(0, 229, 255, 0.08)' : 'rgba(255,255,255,0.03)', border: ['InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ['InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '#10b981' : activeReportDetails.report.status === 'Verified' ? '#0284c7' : 'rgba(255,255,255,0.2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px auto', fontWeight: '700', fontSize: '0.8rem' }}>
+                    {['InProgress', 'Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '✓' : '3'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '700', color: ['InProgress', 'Resolved', 'Completed', 'Verified'].includes(activeReportDetails.report.status) ? '#ffffff' : '#64748b' }}>3. Cleanup Action</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{activeReportDetails.report.status === 'InProgress' ? 'Drive Active' : ['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? 'Completed' : 'Pending'}</div>
+                </div>
+
+                {/* Step 4: Resolved */}
+                <div style={{ padding: '10px 8px', background: ['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)', border: ['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '1px solid #00f5d4' : '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '#00f5d4' : 'rgba(255,255,255,0.2)', color: ['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '#041126' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px auto', fontWeight: '700', fontSize: '0.8rem' }}>
+                    {['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '✓' : '4'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '700', color: ['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? '#00f5d4' : '#64748b' }}>4. Resolved</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{['Resolved', 'Completed'].includes(activeReportDetails.report.status) ? 'Restored' : 'Awaiting'}</div>
+                </div>
+              </div>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', margin: '20px 0' }}>
               {/* Left Column: Image */}

@@ -18,6 +18,21 @@ const Payments = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Auto-dismiss notifications after 2 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const fetchPayments = async () => {
     try {
       const res = await authFetch('/payments');
@@ -86,11 +101,8 @@ const Payments = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Rewards & Compensation Payouts</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Manage clean-up rewards and disbursements for coastal volunteers.
-        </p>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '2rem', margin: 0 }}>Rewards & Compensation Payouts</h1>
       </div>
 
       {success && (

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 // Redefine leaflet marker icons to fix Vite asset path issues
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -43,6 +44,36 @@ const LocationPicker = ({ onLocationSelect }) => {
   return null;
 };
 
+// Auto-resizer helper component to fix Leaflet layout calculation bugs
+const MapResizer = () => {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const fixSize = () => {
+      try {
+        map.invalidateSize();
+      } catch (e) {
+        // ignore if unmounting
+      }
+    };
+
+    fixSize();
+    const t1 = setTimeout(fixSize, 100);
+    const t2 = setTimeout(fixSize, 400);
+
+    map.on('zoomend moveend dragend', fixSize);
+    window.addEventListener('resize', fixSize);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      map.off('zoomend moveend dragend', fixSize);
+      window.removeEventListener('resize', fixSize);
+    };
+  }, [map]);
+  return null;
+};
+
 const LeafletMap = ({ 
   center = [9.9760000, 76.2750000], // Fort Kochi default
   zoom = 13, 
@@ -61,12 +92,18 @@ const LeafletMap = ({
     <MapContainer 
       center={center} 
       zoom={zoom} 
+      maxZoom={19}
+      minZoom={3}
       style={{ width: '100%', height: '100%' }}
       scrollWheelZoom={true}
     >
+      <MapResizer />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
+        maxNativeZoom={19}
+        minZoom={3}
       />
 
       {/* Render Location Picker Pin */}

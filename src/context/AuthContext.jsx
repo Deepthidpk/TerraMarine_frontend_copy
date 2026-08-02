@@ -189,6 +189,23 @@ export const AuthProvider = ({ children }) => {
     return res;
   };
 
+  const updateProfile = async (profileData) => {
+    const res = await authFetch('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    });
+
+    const data = await parseResponse(res);
+    if (!res.ok) {
+      throw new Error(data.error || 'Profile update failed.');
+    }
+
+    if (data.user) {
+      setUser(data.user);
+    }
+    return data.user;
+  };
+
   const value = {
     user,
     token,
@@ -198,6 +215,7 @@ export const AuthProvider = ({ children }) => {
     googleLogin,
     completeGoogleRegistration,
     logout,
+    updateProfile,
     authFetch,
     API_URL
   };

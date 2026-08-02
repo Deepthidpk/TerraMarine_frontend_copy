@@ -5,6 +5,8 @@ import {
   PlusCircle, X, Search, Filter, Clock, Sparkles, Compass, CheckCircle2, RotateCcw, AlertCircle
 } from 'lucide-react';
 import LeafletMap from '../components/LeafletMap';
+import CustomTimePicker from '../components/CustomTimePicker';
+import CustomDatePicker from '../components/CustomDatePicker';
 
 const Campaigns = () => {
   const { user, authFetch } = useAuth();
@@ -31,8 +33,126 @@ const Campaigns = () => {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [modalError, setModalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
+
+  const toMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    if (timeStr.includes('AM') || timeStr.includes('PM')) {
+      const parts = timeStr.split(' ');
+      const [h, m] = parts[0].split(':').map(Number);
+      let hour24 = h;
+      if (parts[1] === 'PM' && h < 12) hour24 += 12;
+      if (parts[1] === 'AM' && h === 12) hour24 = 0;
+      return hour24 * 60 + m;
+    }
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  // Live real-time single field validator
+  const validateField = (fieldName, value) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const maxDateObj = new Date();
+    maxDateObj.setFullYear(maxDateObj.getFullYear() + 1);
+    const maxDate = maxDateObj.toISOString().slice(0, 10);
+
+    const alphaRegex = /[a-zA-Z]/;
+    const symbolOnlyRegex = /^[^a-zA-Z0-9]+$/;
+
+    switch (fieldName) {
+      case 'campaignName':
+        if (!value || !value.trim()) return 'Campaign name is required.';
+        if (symbolOnlyRegex.test(value.trim()) || !alphaRegex.test(value)) return 'Must contain valid words (e.g. Fort Kochi Drive).';
+        if (value.trim().length < 5) return 'Must be at least 5 characters.';
+        if (value.trim().length > 100) return 'Cannot exceed 100 characters.';
+        return null;
+
+      case 'description':
+        if (value && value.trim()) {
+          if (symbolOnlyRegex.test(value.trim()) || !alphaRegex.test(value)) return 'Must contain valid sentences/words.';
+          if (value.trim().length < 10) return 'Must be at least 10 characters if provided.';
+        }
+        return null;
+
+      case 'campaignDate':
+        if (!value) return 'Campaign date is required.';
+        if (value < today) return 'Date cannot be in the past.';
+        if (value > maxDate) return 'Campaign date must be within 1 year from today.';
+        return null;
+
+      case 'startTime': {
+        if (!value) return 'Start time is required.';
+        const mins = toMinutes(value);
+        if (campaignDate === today) {
+          const now = new Date();
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          if (mins < currentMins) return 'Start time cannot be in the past for today.';
+        }
+        if (mins < 360 || mins > 1080) return 'Must be between 6:00 AM & 6:00 PM.';
+        return null;
+      }
+
+      case 'endTime': {
+        if (!value) return 'End time is required.';
+        const mins = toMinutes(value);
+        const startMins = toMinutes(startTime);
+        if (campaignDate === today) {
+          const now = new Date();
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          if (mins < currentMins) return 'End time cannot be in the past for today.';
+        }
+        if (mins < 360 || mins > 1080) return 'Must be between 6:00 AM & 6:00 PM.';
+        if (startTime && mins <= startMins) return 'End time must be after start time.';
+        return null;
+      }
+
+      case 'location':
+        if (!value || !value.trim()) return 'Location name is required.';
+        if (symbolOnlyRegex.test(value.trim()) || !alphaRegex.test(value)) return 'Must contain valid location name.';
+        if (value.trim().length < 3) return 'Must be at least 3 characters.';
+        return null;
+
+      case 'latitude':
+        if (!value) return 'Latitude is required (click map).';
+        const lat = parseFloat(value);
+        if (isNaN(lat) || lat < -90 || lat > 90) return 'Lat must be -90 to 90.';
+        return null;
+
+      case 'longitude':
+        if (!value) return 'Longitude is required (click map).';
+        const lng = parseFloat(value);
+        if (isNaN(lng) || lng < -180 || lng > 180) return 'Lng must be -180 to 180.';
+        return null;
+
+      case 'maxVolunteers':
+        if (!value) return 'Volunteer limit is required.';
+        const limit = parseInt(value, 10);
+        if (isNaN(limit) || limit < 1) return 'Must be at least 1 volunteer.';
+        if (limit > 100) return 'Limit cannot exceed 100 volunteers.';
+        return null;
+
+      default:
+        return null;
+    }
+  };
+
+  // Auto-dismiss notifications after 2 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Details Modal State
   const [activeCampaignDetails, setActiveCampaignDetails] = useState(null);
@@ -58,33 +178,74 @@ const Campaigns = () => {
   }, []);
 
   const handleMapClick = (lat, lng) => {
+    const latStr = lat.toFixed(6);
+    const lngStr = lng.toFixed(6);
+    setLatitude(latStr);
+    setLongitude(lngStr);
     setSelectedCoords({ lat, lng });
-    setLatitude(lat.toFixed(7));
-    setLongitude(lng.toFixed(7));
+
+    const latErr = validateField('latitude', latStr);
+    const lngErr = validateField('longitude', lngStr);
+
+    setFormErrors(prev => ({ 
+      ...prev, 
+      coordinates: null, 
+      latitude: latErr, 
+      longitude: lngErr 
+    }));
+    setModalError('');
   };
 
   const handleCreateCampaignSubmit = async (e) => {
     e.preventDefault();
-    if (!campaignName || !campaignDate || !location) {
-      return setError('Name, date, and location name are required.');
-    }
     setError('');
+    setModalError('');
     setSuccess('');
+
+    // Validate all fields
+    const errors = {
+      campaignName: validateField('campaignName', campaignName),
+      description: validateField('description', description),
+      campaignDate: validateField('campaignDate', campaignDate),
+      startTime: validateField('startTime', startTime),
+      endTime: validateField('endTime', endTime),
+      location: validateField('location', location),
+      latitude: validateField('latitude', latitude),
+      longitude: validateField('longitude', longitude),
+      maxVolunteers: validateField('maxVolunteers', maxVolunteers)
+    };
+
+    // Filter out nulls
+    const activeErrors = {};
+    Object.keys(errors).forEach(k => {
+      if (errors[k]) activeErrors[k] = errors[k];
+    });
+
+    if (!latitude || !longitude) {
+      activeErrors.coordinates = 'Please click map on the right to select coordinates.';
+    }
+
+    if (Object.keys(activeErrors).length > 0) {
+      setFormErrors(activeErrors);
+      setModalError('Please fix all highlighted red field errors before submitting.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const res = await authFetch('/campaigns', {
         method: 'POST',
         body: JSON.stringify({
-          campaign_name: campaignName,
-          description,
+          campaign_name: campaignName.trim(),
+          description: description.trim(),
           campaign_date: campaignDate,
           start_time: startTime || null,
           end_time: endTime || null,
-          location,
-          latitude: latitude ? parseFloat(latitude) : null,
-          longitude: longitude ? parseFloat(longitude) : null,
-          maximum_volunteers: maxVolunteers ? parseInt(maxVolunteers) : null
+          location: location.trim(),
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+          maximum_volunteers: parseInt(maxVolunteers)
         })
       });
 
@@ -105,11 +266,13 @@ const Campaigns = () => {
       setLongitude('');
       setSelectedCoords(null);
       setMaxVolunteers('');
+      setFormErrors({});
+      setModalError('');
       setShowFormModal(false);
 
       fetchCampaigns();
     } catch (err) {
-      setError(err.message || 'Error occurred while saving campaign.');
+      setModalError(err.message || 'Error occurred while saving campaign.');
     } finally {
       setSubmitting(false);
     }
@@ -203,23 +366,20 @@ const Campaigns = () => {
 
   return (
     <div>
-      {/* Header Banner & Action Button */}
+      {/* Header Banner & Action Button at Top Right Corner */}
       <div style={{
         display: 'flex',
-        justify: 'space-between',
+        justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '16px',
         marginBottom: '28px'
       }}>
         <div>
-          <h1 style={{ fontSize: '2.1rem', marginBottom: '6px', fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ fontSize: '2.1rem', margin: 0, fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px', color: '#ffffff' }}>
             <span>Cleanup Campaigns</span>
-            <Sparkles size={24} color="#0284c7" />
+            <Sparkles size={24} color="#00e5ff" />
           </h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.95rem' }}>
-            Coordinate, schedule, and volunteer for beach and shoreline cleanup operations.
-          </p>
         </div>
 
         {isOrganizeRole && (
@@ -228,17 +388,17 @@ const Campaigns = () => {
             style={{
               background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
               color: 'white',
-              border: 'none',
-              padding: '12px 22px',
-              borderRadius: '10px',
+              border: '1px solid rgba(0, 229, 255, 0.4)',
+              padding: '12px 24px',
+              borderRadius: '12px',
               fontWeight: '700',
               fontSize: '0.95rem',
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
               cursor: 'pointer',
-              boxShadow: '0 8px 20px -4px rgba(2, 132, 199, 0.4)',
-              transition: 'transform 0.2s ease, boxShadow 0.2s ease'
+              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.3)',
+              transition: 'all 0.2s ease'
             }}
           >
             <PlusCircle size={20} />
@@ -262,70 +422,129 @@ const Campaigns = () => {
       )}
 
       {/* Overview Statistics Cards */}
-      <div className="dashboard-grid" style={{ marginBottom: '28px' }}>
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #0284c7' }}>
-          <div className="stat-icon" style={{ color: '#0284c7', background: 'rgba(2, 132, 199, 0.1)' }}>
-            <Calendar size={24} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+        {/* Card 1: Total Campaigns (RED THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+          border: '1px solid rgba(255, 77, 77, 0.35)',
+          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+            <Calendar size={24} color="#ff4d4d" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>TOTAL CAMPAIGNS</span>
-            <div className="stat-number">{totalDrives}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Total Campaigns</span>
+            <div className="stat-val">{totalDrives}</div>
           </div>
+          <img 
+            src="/images/red_coral_card_bg.png" 
+            alt="Red Coral Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-          <div className="stat-icon" style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)' }}>
-            <Clock size={24} />
+        {/* Card 2: Upcoming Drives (CYAN BLUE THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+          border: '1px solid rgba(0, 229, 255, 0.35)',
+          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+            <Clock size={24} color="#00e5ff" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>UPCOMING DRIVES</span>
-            <div className="stat-number">{upcomingDrives}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Upcoming Drives</span>
+            <div className="stat-val">{upcomingDrives}</div>
           </div>
+          <img 
+            src="/images/cyan_cleanups_corner.png" 
+            alt="Cyan Coral Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #10b981' }}>
-          <div className="stat-icon" style={{ color: '#10b981', background: 'rgba(16, 185, 129, 0.1)' }}>
-            <Users size={24} />
+        {/* Card 3: Volunteers Mobilized (EMERALD TEAL THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
+          border: '1px solid rgba(0, 245, 212, 0.35)',
+          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
+            <Users size={24} color="#00f5d4" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>VOLUNTEERS MOBILIZED</span>
-            <div className="stat-number">{totalVolunteers}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Volunteers Mobilized</span>
+            <div className="stat-val">{totalVolunteers}</div>
           </div>
+          <img 
+            src="/images/green_teal_campaigns_bg.png" 
+            alt="Volunteers Mobilized Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
-          <div className="stat-icon" style={{ color: '#8b5cf6', background: 'rgba(139, 92, 246, 0.1)' }}>
-            <Compass size={24} />
+        {/* Card 4: Restored Shorelines (PURPLE THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
+          border: '1px solid rgba(157, 78, 221, 0.35)',
+          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
+            <Compass size={24} color="#9d4edd" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>RESTORED SHORELINES</span>
-            <div className="stat-number">{completedDrives}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Restored Shorelines</span>
+            <div className="stat-val">{completedDrives}</div>
           </div>
+          <img 
+            src="/images/purple_coral_card_bg.png" 
+            alt="Restored Shorelines Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
       </div>
 
       {/* Scheduled Campaigns Section */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
+      <div className="glass-panel" style={{ 
+        padding: '24px 28px', 
+        borderRadius: '20px',
+        border: '1px solid rgba(0, 229, 255, 0.25)',
+        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+        background: 'linear-gradient(180deg, rgba(12, 28, 54, 0.85) 0%, rgba(8, 20, 42, 0.95) 100%)'
+      }}>
         {/* Toolbar: Title, Search, Status Filter */}
         <div style={{
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '16px',
           marginBottom: '20px'
         }}>
           <div>
-            <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '700' }}>Scheduled Campaigns</h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Showing {filteredCampaigns.length} of {campaigns.length} cleanup drives
+            <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '700', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span>Scheduled Campaigns</span>
+              <span style={{ 
+                fontSize: '0.72rem', 
+                fontWeight: '700', 
+                background: 'rgba(0, 229, 255, 0.14)', 
+                color: '#00e5ff', 
+                border: '1px solid rgba(0, 229, 255, 0.35)', 
+                padding: '2px 9px', 
+                borderRadius: '20px' 
+              }}>
+                {filteredCampaigns.length} Active
+              </span>
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
+              Showing {filteredCampaigns.length} of {campaigns.length} total cleanup drives
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             {/* Search Bar */}
-            <div style={{ position: 'relative', minWidth: '240px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <div style={{ position: 'relative', width: '250px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#00e5ff' }} />
               <input
                 type="text"
                 placeholder="Search campaigns, beach, organizer..."
@@ -334,11 +553,13 @@ const Campaigns = () => {
                 style={{
                   width: '100%',
                   padding: '8px 30px 8px 36px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--card-border)',
-                  background: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem'
+                  borderRadius: '10px',
+                  border: '1px solid rgba(0, 229, 255, 0.25)',
+                  background: 'rgba(5, 19, 41, 0.85)',
+                  color: '#ffffff',
+                  fontSize: '0.84rem',
+                  outline: 'none',
+                  transition: 'all 0.2s ease'
                 }}
               />
               {searchQuery && (
@@ -357,12 +578,14 @@ const Campaigns = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               style={{
                 padding: '8px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--card-border)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem',
-                fontWeight: '600'
+                borderRadius: '10px',
+                border: '1px solid rgba(0, 229, 255, 0.25)',
+                background: 'rgba(5, 19, 41, 0.85)',
+                color: '#ffffff',
+                fontSize: '0.84rem',
+                fontWeight: '600',
+                outline: 'none',
+                cursor: 'pointer'
               }}
             >
               <option value="All">All Statuses</option>
@@ -375,9 +598,9 @@ const Campaigns = () => {
               <button
                 onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
                 style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  color: 'var(--danger)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#ff4d4d',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
                   padding: '7px 12px',
                   borderRadius: '8px',
                   fontSize: '0.8rem',
@@ -385,10 +608,10 @@ const Campaigns = () => {
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '5px'
                 }}
               >
-                <RotateCcw size={14} /> Clear
+                <RotateCcw size={13} /> Clear
               </button>
             )}
           </div>
@@ -396,90 +619,112 @@ const Campaigns = () => {
 
         {/* Campaign List Table */}
         {loading ? (
-          <div style={{ color: 'var(--text-secondary)', padding: '30px', textAlign: 'center' }}>Loading campaign schedules...</div>
+          <div style={{ color: 'var(--text-secondary)', padding: '30px', textAlign: 'center', fontSize: '0.9rem' }}>Loading campaign schedules...</div>
         ) : filteredCampaigns.length === 0 ? (
           <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px 20px' }}>
-            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>No cleanup campaigns found.</p>
+            <p style={{ margin: 0, fontSize: '0.98rem', fontWeight: '600', color: '#ffffff' }}>No cleanup campaigns found.</p>
             {(searchQuery || statusFilter !== 'All') && (
               <button
                 onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
-                style={{ marginTop: '12px', background: '#0284c7', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}
+                style={{ marginTop: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '0.84rem', fontWeight: '600', cursor: 'pointer' }}
               >
                 Reset Search & Filters
               </button>
             )}
           </div>
         ) : (
-          <div className="table-container">
-            <table className="custom-table">
+          <div className="table-container" style={{ 
+            width: '100%', 
+            borderRadius: '14px', 
+            border: '1px solid rgba(0, 229, 255, 0.2)', 
+            background: 'rgba(6, 18, 38, 0.75)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+            overflow: 'hidden',
+            marginTop: '16px'
+          }}>
+            <table className="custom-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
               <thead>
-                <tr>
-                  <th>Campaign Name</th>
-                  <th>Organizer</th>
-                  <th>Location</th>
-                  <th>Campaign Date</th>
-                  <th>Timing</th>
-                  <th>Volunteers Joined</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                <tr style={{ background: 'rgba(4, 14, 30, 0.9)' }}>
+                  <th style={{ width: '23%', padding: '12px 14px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>CAMPAIGN NAME</th>
+                  <th style={{ width: '15%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>ORGANIZER</th>
+                  <th style={{ width: '15%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>LOCATION</th>
+                  <th style={{ width: '10%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>DATE</th>
+                  <th style={{ width: '8%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>TIMING</th>
+                  <th style={{ width: '11%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>VOLUNTEERS</th>
+                  <th style={{ width: '10%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>STATUS</th>
+                  <th style={{ width: '8%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCampaigns.map((camp) => {
                   const volCount = parseInt(camp.volunteer_count) || 0;
                   const maxVol = camp.maximum_volunteers || null;
-                  const percent = maxVol ? Math.min(100, Math.round((volCount / maxVol) * 100)) : null;
 
                   return (
-                    <tr key={camp.campaign_id}>
-                      <td>
-                        <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{camp.campaign_name}</div>
+                    <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
+                      <td style={{ padding: '14px 14px' }}>
+                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.3' }}>{camp.campaign_name}</div>
                         {camp.description && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '220px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {camp.description}
                           </div>
                         )}
                       </td>
-                      <td style={{ fontWeight: '600' }}>{camp.organization_name || camp.creator_name}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}>
-                          <MapPin size={14} color="#0284c7" />
+                      <td style={{ padding: '14px 10px', fontWeight: '600', fontSize: '0.82rem', color: '#e2e8f0', lineHeight: '1.3' }}>
+                        {camp.organization_name || camp.creator_name}
+                      </td>
+                      <td style={{ padding: '14px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.3' }}>
+                          <MapPin size={13} color="#00e5ff" style={{ flexShrink: 0, marginTop: '2px' }} />
                           <span>{camp.location}</span>
                         </div>
                       </td>
-                      <td style={{ fontSize: '0.85rem', fontWeight: '600' }}>
+                      <td style={{ padding: '14px 10px', fontSize: '0.82rem', fontWeight: '600', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {new Date(camp.campaign_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        {camp.start_time ? `${camp.start_time.slice(0,5)} - ${camp.end_time?.slice(0,5) || 'TBD'}` : 'All Day'}
-                      </td>
-                      <td>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '2px' }}>
-                          {volCount} {maxVol ? `/ ${maxVol}` : 'Registered'}
-                        </div>
-                        {percent !== null && (
-                          <div style={{ width: '80px', height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${percent}%`, height: '100%', background: percent >= 100 ? '#ef4444' : '#10b981' }} />
+                      <td style={{ padding: '14px 10px', fontSize: '0.82rem', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                        {camp.start_time ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', lineHeight: '1.2' }}>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.82rem' }}>{camp.start_time.slice(0,5)}</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.75rem' }}>to</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.82rem' }}>{camp.end_time?.slice(0,5) || 'TBD'}</span>
                           </div>
+                        ) : (
+                          <span style={{ color: '#ffffff', fontWeight: '600' }}>All Day</span>
                         )}
                       </td>
-                      <td>
+                      <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#00e5ff', background: 'rgba(0, 229, 255, 0.1)', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(0, 229, 255, 0.25)' }}>
+                          {volCount} {maxVol ? `/ ${maxVol}` : ''}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
                         <span className={`badge ${
                           camp.status === 'Completed' ? 'badge-completed' :
                           camp.status === 'Upcoming' ? 'badge-pending' :
                           camp.status === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
-                        }`}>
+                        }`} style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
                           {camp.status}
                         </span>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                      <td style={{ padding: '14px 10px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                           <button 
                             onClick={() => handleOpenDetails(camp.campaign_id)}
                             className="btn btn-secondary" 
-                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            style={{ 
+                              padding: '4px 8px', 
+                              fontSize: '0.72rem', 
+                              borderRadius: '6px', 
+                              gap: '4px',
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              width: '100%',
+                              maxWidth: '75px',
+                              justifyContent: 'center'
+                            }}
                           >
-                            <Info size={14} />
+                            <Info size={12} />
                             Details
                           </button>
 
@@ -487,10 +732,22 @@ const Campaigns = () => {
                             <button 
                               onClick={() => handleJoinCampaign(camp.campaign_id)}
                               className="btn btn-primary" 
-                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                              style={{ 
+                                padding: '4px 8px', 
+                                fontSize: '0.72rem', 
+                                borderRadius: '6px', 
+                                gap: '4px',
+                                background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                                color: '#041126',
+                                fontWeight: '700',
+                                boxShadow: '0 3px 10px rgba(0, 229, 255, 0.35)',
+                                width: '100%',
+                                maxWidth: '75px',
+                                justifyContent: 'center'
+                              }}
                             >
-                              <Users size={14} />
-                              Join Drive
+                              <Users size={12} />
+                              Join
                             </button>
                           )}
                         </div>
@@ -505,45 +762,44 @@ const Campaigns = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: ORGANIZE CLEANUP CAMPAIGN (Form + Map Picker) */}
+      {/* MODAL: ORGANIZE CLEANUP CAMPAIGN FORM */}
       {/* ========================================================================= */}
-      {showFormModal && isOrganizeRole && (
+      {showFormModal && (
         <div style={{
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(6px)',
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           display: 'flex',
           justify: 'center',
           alignItems: 'center',
-          zIndex: 1000,
-          padding: '20px'
+          zIndex: 9999,
+          padding: '16px'
         }}>
           <div className="glass-panel" style={{
-            maxWidth: '980px',
+            maxWidth: '960px',
             width: '100%',
-            maxHeight: '90vh',
+            maxHeight: '94vh',
             overflowY: 'auto',
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
-            border: '1px solid var(--card-border)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(0, 229, 255, 0.25)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
             position: 'relative',
-            padding: '28px'
+            padding: '20px 24px',
+            margin: 'auto'
           }}>
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '1.4rem', margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Calendar size={22} color="#0284c7" />
+                <h2 style={{ fontSize: '1.3rem', margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calendar size={20} color="#00e5ff" />
                   Organize Cleanup Campaign
                 </h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Set campaign timing, shoreline assembly location, and target volunteer capacity.
-                </p>
               </div>
 
               <button 
@@ -551,153 +807,255 @@ const Campaigns = () => {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'var(--text-secondary)',
+                  color: '#94a3b8',
                   cursor: 'pointer',
-                  padding: '6px',
+                  padding: '4px',
                   borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center'
                 }}
               >
-                <X size={22} />
+                <X size={20} />
               </button>
             </div>
 
             {/* Split View: Left Form / Right Interactive Map */}
-            <div className="grid-2col" style={{ gap: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', alignItems: 'start' }}>
               {/* Form Column */}
               <div>
                 <form onSubmit={handleCreateCampaignSubmit}>
-                  <div className="form-group">
+
+                  <div className="form-group" style={{ marginBottom: '10px' }}>
                     <label className="form-label">Campaign Name *</label>
                     <input 
                       type="text" 
                       className="form-control" 
                       placeholder="e.g. Fort Kochi Shoreline Cleanup Drive" 
                       value={campaignName}
-                      onChange={(e) => setCampaignName(e.target.value)}
-                      required
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCampaignName(val);
+                        const err = validateField('campaignName', val);
+                        setFormErrors(prev => ({ ...prev, campaignName: err }));
+                      }}
+                      style={{ padding: '8px 12px', border: formErrors.campaignName ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: formErrors.campaignName ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                     />
+                    {formErrors.campaignName && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                        ⚠️ {formErrors.campaignName}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: '10px' }}>
                     <label className="form-label">Description & Objectives</label>
                     <textarea 
                       className="form-control" 
                       placeholder="Assembly details, target waste types, refreshment info..." 
-                      rows="3"
+                      rows="2"
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDescription(val);
+                        const err = validateField('description', val);
+                        setFormErrors(prev => ({ ...prev, description: err }));
+                      }}
+                      style={{ padding: '8px 12px', border: formErrors.description ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: formErrors.description ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                     />
+                    {formErrors.description && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                        ⚠️ {formErrors.description}
+                      </span>
+                    )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                    <div className="form-group">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Date *</label>
-                      <input 
-                        type="date" 
-                        className="form-control" 
+                      <CustomDatePicker 
                         value={campaignDate}
-                        onChange={(e) => setCampaignDate(e.target.value)}
-                        required
+                        onChange={(val) => {
+                          setCampaignDate(val);
+                          const err = validateField('campaignDate',val);
+                          setFormErrors(prev => ({ ...prev, campaignDate: err }));
+                        }}
+                        error={formErrors.campaignDate}
                       />
+                      {formErrors.campaignDate && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.72rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                          ⚠️ {formErrors.campaignDate}
+                        </span>
+                      )}
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Start Time</label>
-                      <input 
-                        type="time" 
-                        className="form-control" 
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Start Time *</label>
+                      <CustomTimePicker 
                         value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
+                        onChange={(val) => {
+                          setStartTime(val);
+                          const err = validateField('startTime', val);
+                          setFormErrors(prev => ({ ...prev, startTime: err }));
+                        }}
+                        error={formErrors.startTime}
+                        selectedDate={campaignDate}
                       />
+                      {formErrors.startTime && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.72rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                          ⚠️ {formErrors.startTime}
+                        </span>
+                      )}
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">End Time</label>
-                      <input 
-                        type="time" 
-                        className="form-control" 
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">End Time *</label>
+                      <CustomTimePicker 
                         value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
+                        onChange={(val) => {
+                          setEndTime(val);
+                          const err = validateField('endTime', val);
+                          setFormErrors(prev => ({ ...prev, endTime: err }));
+                        }}
+                        error={formErrors.endTime}
+                        selectedDate={campaignDate}
                       />
+                      {formErrors.endTime && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.72rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                          ⚠️ {formErrors.endTime}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: '10px' }}>
                     <label className="form-label">Beach / Location Name *</label>
                     <input 
                       type="text" 
                       className="form-control" 
                       placeholder="e.g. Fort Kochi Beach Promenade" 
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      required
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setLocation(val);
+                        const err = validateField('location', val);
+                        setFormErrors(prev => ({ ...prev, location: err }));
+                      }}
+                      style={{ padding: '8px 12px', border: formErrors.location ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: formErrors.location ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                     />
+                    {formErrors.location && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                        ⚠️ {formErrors.location}
+                      </span>
+                    )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Latitude</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Latitude *</label>
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="Click map right →" 
+                        placeholder="Click map →" 
                         value={latitude}
-                        onChange={(e) => setLatitude(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLatitude(val);
+                          const err = validateField('latitude', val);
+                          setFormErrors(prev => ({ ...prev, latitude: err, coordinates: null }));
+                        }}
+                        style={{ padding: '8px 10px', border: (formErrors.latitude || formErrors.coordinates) ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: (formErrors.latitude || formErrors.coordinates) ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                       />
+                      {formErrors.latitude && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.72rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                          ⚠️ {formErrors.latitude}
+                        </span>
+                      )}
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Longitude</label>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Longitude *</label>
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="Click map right →" 
+                        placeholder="Click map →" 
                         value={longitude}
-                        onChange={(e) => setLongitude(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLongitude(val);
+                          const err = validateField('longitude', val);
+                          setFormErrors(prev => ({ ...prev, longitude: err, coordinates: null }));
+                        }}
+                        style={{ padding: '8px 10px', border: (formErrors.longitude || formErrors.coordinates) ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: (formErrors.longitude || formErrors.coordinates) ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                       />
+                      {formErrors.longitude && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.72rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                          ⚠️ {formErrors.longitude}
+                        </span>
+                      )}
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Volunteer Limit</label>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Volunteer Limit (Max 100) *</label>
                       <input 
-                        type="number" 
+                        type="text" 
+                        inputMode="numeric"
                         className="form-control" 
                         placeholder="e.g. 50" 
                         value={maxVolunteers}
-                        onChange={(e) => setMaxVolunteers(e.target.value)}
+                        maxLength={3}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '');
+                          setMaxVolunteers(val);
+                          const err = validateField('maxVolunteers', val);
+                          setFormErrors(prev => ({ ...prev, maxVolunteers: err }));
+                        }}
+                        style={{ padding: '8px 10px', border: formErrors.maxVolunteers ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: formErrors.maxVolunteers ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                       />
+                      {formErrors.maxVolunteers && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.72rem', marginTop: '3px', display: 'block', fontWeight: '600' }}>
+                          ⚠️ {formErrors.maxVolunteers}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                  {formErrors.coordinates && (
+                    <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginBottom: '10px', fontWeight: '600' }}>
+                      ⚠️ {formErrors.coordinates}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
                     <button 
                       type="button"
                       onClick={() => setShowFormModal(false)}
                       className="btn btn-secondary" 
-                      style={{ flex: 1, padding: '10px' }}
+                      style={{ flex: 1, padding: '9px 14px', fontSize: '0.88rem' }}
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit" 
                       className="btn btn-primary" 
-                      style={{ flex: 2, padding: '10px' }}
+                      style={{ flex: 2, padding: '9px 14px', fontSize: '0.88rem' }}
                       disabled={submitting}
                     >
-                      {submitting ? 'Scheduling Campaign...' : 'Confirm & Schedule Campaign'}
+                      {submitting ? 'Scheduling...' : 'Confirm & Schedule Campaign'}
                     </button>
                   </div>
                 </form>
               </div>
 
               {/* Map Column */}
-              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <MapPin size={16} color="var(--accent-primary)" />
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <h4 style={{ fontSize: '0.9rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ffffff' }}>
+                  <MapPin size={15} color="#00e5ff" />
                   Select Shoreline Coordinates
                 </h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '12px' }}>
-                  Click anywhere on the shoreline map below to automatically pin campaign coordinates into the form.
+                <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginBottom: '8px' }}>
+                  Click anywhere on the map to pin campaign coordinates automatically.
                 </p>
-                <div style={{ flex: 1, minHeight: '320px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--card-border)' }}>
+                <div style={{ width: '100%', height: '280px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
                   <LeafletMap 
                     onLocationSelect={handleMapClick} 
                     selectedLocation={selectedCoords} 

@@ -21,6 +21,21 @@ const Biodiversity = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState(null);
 
+  // Auto-dismiss notifications after 2 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const fetchLogs = async () => {
     try {
       const res = await authFetch('/researcher/biodiversity');
@@ -99,11 +114,8 @@ const Biodiversity = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Marine Biodiversity Logging</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Record logs of rare marine species, dolphin sightings, or negative biodiversity indicators caused by plastics.
-        </p>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '2rem', margin: 0 }}>Marine Biodiversity Logging</h1>
       </div>
 
       {success && (

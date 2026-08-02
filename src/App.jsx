@@ -60,6 +60,15 @@ const AdminRoute = ({ children }) => {
   return children;
 };
 
+const AuthorityOrAdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user || (user.role !== 'Admin' && user.role !== 'Authority')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
 const App = () => {
   return (
     <AuthProvider>
@@ -79,7 +88,7 @@ const App = () => {
           <Route path="/tasks" element={<ProtectedLayout><Tasks /></ProtectedLayout>} />
           <Route path="/biodiversity" element={<ProtectedLayout><Biodiversity /></ProtectedLayout>} />
           <Route path="/payments" element={<ProtectedLayout><Payments /></ProtectedLayout>} />
-          <Route path="/user-approval" element={<ProtectedLayout><AdminRoute><UserApproval /></AdminRoute></ProtectedLayout>} />
+          <Route path="/user-approval" element={<ProtectedLayout><AuthorityOrAdminRoute><UserApproval /></AuthorityOrAdminRoute></ProtectedLayout>} />
 
           {/* Catch All Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />

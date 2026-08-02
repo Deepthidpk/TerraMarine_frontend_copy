@@ -36,6 +36,49 @@ const Tasks = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [taskFormErrors, setTaskFormErrors] = useState({});
+
+  // Single field validation helper for Task Assignment
+  const validateTaskField = (fieldName, value) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const maxDateObj = new Date();
+    maxDateObj.setFullYear(maxDateObj.getFullYear() + 1);
+    const maxDate = maxDateObj.toISOString().slice(0, 10);
+
+    switch (fieldName) {
+      case 'selectedReportId':
+        if (!value) return 'Verified incident report selection is required.';
+        return null;
+
+      case 'selectedWorkerId':
+        if (!value) return 'Worker / volunteer selection is required.';
+        return null;
+
+      case 'deadline':
+        if (!value) return 'Completion deadline is required.';
+        if (value < today) return 'Completion deadline cannot be in the past.';
+        if (value > maxDate) return 'Completion deadline must be within 1 year from today.';
+        return null;
+
+      default:
+        return null;
+    }
+  };
+
+  // Auto-dismiss notifications after 2 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const fetchTasksData = async () => {
     try {
@@ -93,11 +136,26 @@ const Tasks = () => {
 
   const handleCreateTaskSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedReportId || !selectedWorkerId) {
-      return setError('Please select a verified report and assign a worker.');
-    }
     setError('');
     setSuccess('');
+
+    // Validate all task fields
+    const errors = {
+      selectedReportId: validateTaskField('selectedReportId', selectedReportId),
+      selectedWorkerId: validateTaskField('selectedWorkerId', selectedWorkerId),
+      deadline: validateTaskField('deadline', deadline)
+    };
+
+    const activeErrors = {};
+    Object.keys(errors).forEach(k => {
+      if (errors[k]) activeErrors[k] = errors[k];
+    });
+
+    if (Object.keys(activeErrors).length > 0) {
+      setTaskFormErrors(activeErrors);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -121,6 +179,7 @@ const Tasks = () => {
       setSelectedCampaignId('');
       setSelectedWorkerId('');
       setDeadline('');
+      setTaskFormErrors({});
       setShowAssignModal(false);
 
       fetchTasksData();
@@ -230,39 +289,36 @@ const Tasks = () => {
       {/* Page Header & Top Right Action Button */}
       <div style={{
         display: 'flex',
-        justify: 'space-between',
+        justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '16px',
-        marginBottom: '28px'
+        gap: '20px',
+        marginBottom: '32px'
       }}>
         <div>
-          <h1 style={{ fontSize: '2.1rem', marginBottom: '6px', fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ fontSize: '2.1rem', margin: 0, fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px', color: '#ffffff' }}>
             <span>Cleanup Tasks Management</span>
-            <CheckSquare size={24} color="#0284c7" />
+            <CheckSquare size={26} color="#00e5ff" />
           </h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.95rem' }}>
-            Assign cleanup workers, submit completion photos, and verify completed beach actions.
-          </p>
         </div>
 
         {isAssignRole && (
           <button
-            onClick={() => setShowAssignModal(true)}
+            onClick={() => { setTaskFormErrors({}); setShowAssignModal(true); }}
             style={{
               background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
               color: 'white',
-              border: 'none',
-              padding: '12px 22px',
-              borderRadius: '10px',
+              border: '1px solid rgba(0, 229, 255, 0.4)',
+              padding: '12px 24px',
+              borderRadius: '12px',
               fontWeight: '700',
               fontSize: '0.95rem',
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
               cursor: 'pointer',
-              boxShadow: '0 8px 20px -4px rgba(2, 132, 199, 0.4)',
-              transition: 'transform 0.2s ease, boxShadow 0.2s ease'
+              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
+              marginLeft: 'auto'
             }}
           >
             <PlusCircle size={20} />
@@ -286,45 +342,85 @@ const Tasks = () => {
       )}
 
       {/* Overview Stats Cards */}
-      <div className="dashboard-grid" style={{ marginBottom: '28px' }}>
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #0284c7' }}>
-          <div className="stat-icon" style={{ color: '#0284c7', background: 'rgba(2, 132, 199, 0.1)' }}>
-            <CheckSquare size={24} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+        {/* Card 1: Total Tasks (RED THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+          border: '1px solid rgba(255, 77, 77, 0.35)',
+          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+            <CheckSquare size={24} color="#ff4d4d" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>TOTAL TASKS</span>
-            <div className="stat-number">{tasks.length}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Total Tasks</span>
+            <div className="stat-val">{tasks.length}</div>
           </div>
+          <img 
+            src="/images/red_coral_card_bg.png" 
+            alt="Red Coral Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-          <div className="stat-icon" style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)' }}>
-            <Clock size={24} />
+        {/* Card 2: Pending Tasks (CYAN BLUE THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+          border: '1px solid rgba(0, 229, 255, 0.35)',
+          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+            <Clock size={24} color="#00e5ff" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>PENDING TASKS</span>
-            <div className="stat-number">{tasks.filter(t => t.status === 'Pending').length}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Pending Tasks</span>
+            <div className="stat-val">{tasks.filter(t => t.status === 'Pending').length}</div>
           </div>
+          <img 
+            src="/images/cyan_cleanups_corner.png" 
+            alt="Cyan Coral Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #10b981' }}>
-          <div className="stat-icon" style={{ color: '#10b981', background: 'rgba(16, 185, 129, 0.1)' }}>
-            <Camera size={24} />
+        {/* Card 3: Submitted Proofs (EMERALD TEAL THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
+          border: '1px solid rgba(0, 245, 212, 0.35)',
+          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
+            <Camera size={24} color="#00f5d4" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>SUBMITTED PROOFS</span>
-            <div className="stat-number">{tasks.filter(t => t.status === 'Completed').length}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Submitted Proofs</span>
+            <div className="stat-val">{tasks.filter(t => t.status === 'Completed').length}</div>
           </div>
+          <img 
+            src="/images/green_teal_campaigns_bg.png" 
+            alt="Submitted Proofs Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        <div className="glass-panel stat-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
-          <div className="stat-icon" style={{ color: '#8b5cf6', background: 'rgba(139, 92, 246, 0.1)' }}>
-            <ShieldCheck size={24} />
+        {/* Card 4: Verified Cleanups (PURPLE THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
+          border: '1px solid rgba(157, 78, 221, 0.35)',
+          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
+            <ShieldCheck size={24} color="#9d4edd" />
           </div>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600' }}>VERIFIED CLEANUPS</span>
-            <div className="stat-number">{tasks.filter(t => t.status === 'Verified').length}</div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Verified Cleanups</span>
+            <div className="stat-val">{tasks.filter(t => t.status === 'Verified').length}</div>
           </div>
+          <img 
+            src="/images/purple_coral_card_bg.png" 
+            alt="Verified Cleanups Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
       </div>
 
@@ -513,43 +609,42 @@ const Tasks = () => {
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(6px)',
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           display: 'flex',
-          justify: 'center',
+          justifyContent: 'center',
           alignItems: 'center',
-          zIndex: 1000,
+          zIndex: 9999,
           padding: '20px'
         }}>
           <div className="glass-panel" style={{
-            maxWidth: '620px',
+            maxWidth: '580px',
             width: '100%',
             maxHeight: '90vh',
             overflowY: 'auto',
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
-            border: '1px solid var(--card-border)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(0, 229, 255, 0.25)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
             position: 'relative',
-            padding: '28px'
+            padding: '26px',
+            margin: 'auto'
           }}>
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <CheckSquare size={22} color="#0284c7" />
+                <h2 style={{ fontSize: '1.35rem', margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckSquare size={22} color="#00e5ff" />
                   Assign New Cleanup Task
                 </h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Assign verified incident reports to volunteer teams and set completion deadlines.
-                </p>
               </div>
 
               <button 
                 onClick={() => setShowAssignModal(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
               >
                 <X size={22} />
               </button>
@@ -562,16 +657,30 @@ const Tasks = () => {
                 <select 
                   className="form-control" 
                   value={selectedReportId} 
-                  onChange={(e) => setSelectedReportId(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedReportId(val);
+                    const err = validateTaskField('selectedReportId', val);
+                    setTaskFormErrors(prev => ({ ...prev, selectedReportId: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateTaskField('selectedReportId', e.target.value);
+                    setTaskFormErrors(prev => ({ ...prev, selectedReportId: err }));
+                  }}
+                  style={{ color: selectedReportId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedReportId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedReportId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 >
-                  <option value="">-- Choose Incident Report --</option>
+                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Choose Incident Report --</option>
                   {reports.map(rep => (
-                    <option key={rep.report_id} value={rep.report_id}>
+                    <option key={rep.report_id} value={rep.report_id} style={{ color: '#cbd5e1' }}>
                       {rep.title} ({rep.location_name})
                     </option>
                   ))}
                 </select>
+                {taskFormErrors.selectedReportId && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {taskFormErrors.selectedReportId}
+                  </span>
+                )}
               </div>
 
               <div className="form-group">
@@ -580,10 +689,11 @@ const Tasks = () => {
                   className="form-control" 
                   value={selectedCampaignId} 
                   onChange={(e) => setSelectedCampaignId(e.target.value)}
+                  style={{ color: selectedCampaignId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)' }}
                 >
-                  <option value="">-- No Campaign --</option>
+                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- No Campaign --</option>
                   {campaigns.map(camp => (
-                    <option key={camp.campaign_id} value={camp.campaign_id}>
+                    <option key={camp.campaign_id} value={camp.campaign_id} style={{ color: '#cbd5e1' }}>
                       {camp.campaign_name}
                     </option>
                   ))}
@@ -595,24 +705,59 @@ const Tasks = () => {
                 <select 
                   className="form-control" 
                   value={selectedWorkerId} 
-                  onChange={(e) => setSelectedWorkerId(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedWorkerId(val);
+                    const err = validateTaskField('selectedWorkerId', val);
+                    setTaskFormErrors(prev => ({ ...prev, selectedWorkerId: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateTaskField('selectedWorkerId', e.target.value);
+                    setTaskFormErrors(prev => ({ ...prev, selectedWorkerId: err }));
+                  }}
+                  style={{ color: selectedWorkerId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedWorkerId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedWorkerId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 >
-                  <option value="">-- Select Volunteer --</option>
+                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Select Volunteer --</option>
                   {workers.map(w => (
-                    <option key={w.user_id} value={w.user_id}>{w.full_name}</option>
+                    <option key={w.user_id} value={w.user_id} style={{ color: '#cbd5e1' }}>{w.full_name}</option>
                   ))}
                 </select>
+                {taskFormErrors.selectedWorkerId && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {taskFormErrors.selectedWorkerId}
+                  </span>
+                )}
               </div>
 
               <div className="form-group">
-                <label className="form-label">Completion Deadline</label>
+                <label className="form-label">Completion Deadline *</label>
                 <input 
                   type="date" 
                   className="form-control" 
+                  min={new Date().toISOString().slice(0, 10)}
+                  max={(() => {
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() + 1);
+                    return d.toISOString().slice(0, 10);
+                  })()}
                   value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDeadline(val);
+                    const err = validateTaskField('deadline', val);
+                    setTaskFormErrors(prev => ({ ...prev, deadline: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateTaskField('deadline', e.target.value);
+                    setTaskFormErrors(prev => ({ ...prev, deadline: err }));
+                  }}
+                  style={{ color: deadline ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.deadline ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.deadline ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 />
+                {taskFormErrors.deadline && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {taskFormErrors.deadline}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
@@ -639,21 +784,22 @@ const Tasks = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: TASK DETAILS & VOLUNTEER PROOF SUBMISSION */}
+      {/* MODAL: VIEW TASK DETAILS & SUBMIT PROOF */}
       {/* ========================================================================= */}
       {showUpdateModal && activeTaskDetails && (
         <div style={{
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(15, 23, 42, 0.8)',
-          backdropFilter: 'blur(4px)',
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           display: 'flex',
-          justify: 'center',
+          justifyContent: 'center',
           alignItems: 'center',
-          zIndex: 1000,
+          zIndex: 9999,
           padding: '20px'
         }}>
           <div className="glass-panel" style={{
@@ -661,20 +807,22 @@ const Tasks = () => {
             width: '100%',
             maxHeight: '90vh',
             overflowY: 'auto',
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
-            border: '1px solid var(--card-border)',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(0, 229, 255, 0.25)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
             position: 'relative',
-            padding: '28px'
+            padding: '28px',
+            margin: 'auto'
           }}>
             <button 
               onClick={() => setShowUpdateModal(false)}
-              style={{ position: 'absolute', right: '20px', top: '20px', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}
+              style={{ position: 'absolute', right: '20px', top: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
             >
-              <X size={20} />
+              <X size={22} />
             </button>
 
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px', fontWeight: '800' }}>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px', fontWeight: '800', color: '#ffffff' }}>
               Task details: {activeTaskDetails.report_title}
             </h2>
             <span className={`badge badge-${activeTaskDetails.status.toLowerCase()}`} style={{ marginBottom: '16px' }}>
@@ -684,51 +832,51 @@ const Tasks = () => {
             {/* Before / After Images comparison */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0' }}>
               <div>
-                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Before Cleanup</h4>
+                <h4 style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px' }}>Before Cleanup</h4>
                 {activeTaskDetails.before_image ? (
                   <img 
                     src={activeTaskDetails.before_image.startsWith('http') ? activeTaskDetails.before_image : `${import.meta.env.VITE_SERVER_URL || 'http://localhost:5000'}${activeTaskDetails.before_image}`} 
                     alt="Before evidence"
-                    style={{ width: '100%', borderRadius: '8px', objectFit: 'cover', height: '150px' }}
+                    style={{ width: '100%', borderRadius: '10px', objectFit: 'cover', height: '160px', border: '1px solid rgba(0, 229, 255, 0.2)' }}
                   />
                 ) : (
-                  <div style={{ height: '150px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.03)', border: '1px dotted var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ height: '160px', borderRadius: '10px', background: 'rgba(8, 20, 42, 0.6)', border: '1px dotted rgba(0, 229, 255, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: '#94a3b8' }}>
                     No image uploaded
                   </div>
                 )}
               </div>
 
               <div>
-                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>After Cleanup (Proof)</h4>
+                <h4 style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px' }}>After Cleanup (Proof)</h4>
                 {activeTaskDetails.after_image ? (
                   <img 
                     src={activeTaskDetails.after_image.startsWith('http') ? activeTaskDetails.after_image : `${import.meta.env.VITE_SERVER_URL || 'http://localhost:5000'}${activeTaskDetails.after_image}`} 
                     alt="After evidence"
-                    style={{ width: '100%', borderRadius: '8px', objectFit: 'cover', height: '150px' }}
+                    style={{ width: '100%', borderRadius: '10px', objectFit: 'cover', height: '160px', border: '1px solid rgba(0, 229, 255, 0.2)' }}
                   />
                 ) : (
-                  <div style={{ height: '150px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.03)', border: '1px dotted var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ height: '160px', borderRadius: '10px', background: 'rgba(8, 20, 42, 0.6)', border: '1px dotted rgba(0, 229, 255, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: '#64748b' }}>
                     No proof submitted yet
                   </div>
                 )}
               </div>
             </div>
 
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              <p style={{ margin: '4px 0' }}><strong>Location:</strong> {activeTaskDetails.location_name}</p>
-              <p style={{ margin: '4px 0' }}><strong>Coordinates:</strong> {activeTaskDetails.latitude}, {activeTaskDetails.longitude}</p>
-              <p style={{ margin: '4px 0' }}><strong>Description:</strong> {activeTaskDetails.report_description || 'No notes'}</p>
+            <div style={{ fontSize: '0.88rem', color: '#cbd5e1', marginBottom: '20px' }}>
+              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Location:</strong> {activeTaskDetails.location_name}</p>
+              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Coordinates:</strong> {activeTaskDetails.latitude}, {activeTaskDetails.longitude}</p>
+              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Description:</strong> {activeTaskDetails.report_description || 'No notes'}</p>
               {activeTaskDetails.completion_notes && (
-                <div style={{ marginTop: '10px', padding: '10px', background: 'rgba(15, 23, 42, 0.03)', border: '1px solid var(--card-border)', borderRadius: '8px', color: 'var(--text-primary)' }}>
-                  <strong>Completion Notes:</strong> {activeTaskDetails.completion_notes}
+                <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(8, 20, 42, 0.6)', border: '1px solid rgba(0, 229, 255, 0.2)', borderRadius: '10px', color: '#ffffff' }}>
+                  <strong style={{ color: '#00e5ff' }}>Completion Notes:</strong> {activeTaskDetails.completion_notes}
                 </div>
               )}
             </div>
 
             {/* Submit proof form for assigned volunteer */}
             {user.role === 'Volunteer' && activeTaskDetails.status === 'Pending' && (
-              <form onSubmit={handleVolunteerSubmitProof} style={{ borderTop: '1px solid var(--card-border)', paddingTop: '16px' }}>
-                <h4 style={{ fontSize: '1rem', color: 'var(--accent-primary)', marginBottom: '12px' }}>Submit Cleanup Verification Proof</h4>
+              <form onSubmit={handleVolunteerSubmitProof} style={{ borderTop: '1px solid rgba(0, 229, 255, 0.15)', paddingTop: '16px' }}>
+                <h4 style={{ fontSize: '1rem', color: '#00e5ff', marginBottom: '12px' }}>Submit Cleanup Verification Proof</h4>
                 
                 <div className="form-group">
                   <label className="form-label">Completion Notes *</label>
@@ -763,14 +911,6 @@ const Tasks = () => {
                 </button>
               </form>
             )}
-
-            <button 
-              onClick={() => setShowUpdateModal(false)}
-              className="btn btn-secondary" 
-              style={{ width: '100%', marginTop: '16px', padding: '10px' }}
-            >
-              Close
-            </button>
           </div>
         </div>
       )}

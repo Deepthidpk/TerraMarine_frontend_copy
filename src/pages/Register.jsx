@@ -481,89 +481,165 @@ const Register = () => {
 
   if (successMessage) {
     return (
-      <div className="auth-container" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div className="auth-container" style={{ 
+        minHeight: '100vh', 
+        width: '100vw',
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        padding: '24px',
+        background: 'radial-gradient(circle at 50% 40%, #071e3d 0%, #020b18 100%)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
         <div className="auth-card glass-panel" style={{ 
           maxWidth: '550px', 
           width: '100%', 
           textAlign: 'center', 
-          padding: '40px 32px',
-          boxShadow: '0 20px 40px -15px rgba(23, 28, 66, 0.35), 0 15px 30px -10px rgba(23, 28, 66, 0.15)',
-          border: '1px solid rgba(23, 28, 66, 0.12)'
+          padding: '44px 36px',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+          border: '1px solid rgba(0, 229, 255, 0.25)',
+          borderRadius: '24px',
+          background: 'linear-gradient(135deg, rgba(8, 24, 48, 0.95) 0%, rgba(4, 15, 32, 0.98) 100%)',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          <div style={{ fontSize: '3rem', marginBottom: '20px' }}>
-            ✅
+          {/* Soft Blended Octopus Image */}
+          <img 
+            src="/images/cute_octopus_marine.png" 
+            alt="Marine Octopus Background" 
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '320px',
+              height: 'auto',
+              opacity: 0.16,
+              pointerEvents: 'none',
+              zIndex: 0
+            }}
+          />
+
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>
+              ✅
+            </div>
+            <h2 style={{ 
+              fontFamily: 'var(--font-display)', 
+              fontWeight: 800, 
+              marginBottom: '16px', 
+              color: '#ffffff', 
+              fontSize: '1.6rem' 
+            }}>
+              Account Created Successfully
+            </h2>
+            <p style={{ 
+              color: '#94a3b8', 
+              lineHeight: '1.6', 
+              marginBottom: '28px',
+              fontSize: '0.95rem'
+            }}>
+              {successMessage}
+            </p>
+            <Link to="/login" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '12px 32px', fontWeight: 700 }}>
+              Go to Login
+            </Link>
           </div>
-          <h2 style={{ 
-            fontFamily: 'var(--font-display)', 
-            fontWeight: 700, 
-            marginBottom: '16px', 
-            color: '#171c42', 
-            fontSize: '1.5rem' 
-          }}>
-            Account Created Successfully
-          </h2>
-          <p style={{ 
-            fontFamily: 'var(--font-body)', 
-            color: 'var(--text-secondary)', 
-            lineHeight: '1.6', 
-            marginBottom: '28px',
-            fontSize: '0.95rem'
-          }}>
-            {successMessage}
-          </p>
-          <Link to="/login" className="btn btn-primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '12px 32px', fontWeight: 600, fontFamily: 'var(--font-body)' }}>
-            Go to Login
-          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="auth-container" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div className="auth-container" style={{ 
+      minHeight: '100vh', 
+      width: '100vw',
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      padding: '24px',
+      background: 'radial-gradient(circle at 50% 40%, #071e3d 0%, #020b18 100%)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
       <div className="auth-card glass-panel" style={{ 
-        maxWidth: '680px',
+        maxWidth: '720px',
         width: '100%',
-        maxHeight: '90vh',
+        maxHeight: '92vh',
         overflowY: 'auto',
-        boxShadow: '0 20px 40px -15px rgba(23, 28, 66, 0.35), 0 15px 30px -10px rgba(23, 28, 66, 0.15)',
-        border: '1px solid rgba(23, 28, 66, 0.12)',
-        padding: '36px 32px'
+        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+        border: '1px solid rgba(0, 229, 255, 0.25)',
+        borderRadius: '24px',
+        background: 'linear-gradient(135deg, rgba(8, 24, 48, 0.95) 0%, rgba(4, 15, 32, 0.98) 100%)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        position: 'relative',
+        zIndex: 2,
+        margin: 'auto',
+        padding: '42px 40px'
       }}>
-        <div className="auth-logo" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, textAlign: 'center', marginBottom: '16px' }}>
-          🌊 TerraMarine
-        </div>
-        <h2 style={{ 
-          fontFamily: 'var(--font-display)', 
-          fontWeight: 700, 
-          textAlign: 'center', 
-          marginBottom: '28px', 
-          fontSize: '1.6rem',
-          color: '#171c42'
-        }}>
-          Create Account
-        </h2>
+        {/* Soft Blended Octopus Image inside Register Box (Matches Reference) */}
+        <img 
+          src="/images/cute_octopus_marine.png" 
+          alt="Marine Octopus Background" 
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '380px',
+            height: 'auto',
+            opacity: 0.16,
+            pointerEvents: 'none',
+            zIndex: 0,
+            filter: 'brightness(0.95) contrast(1.1)'
+          }}
+        />
 
-        {error && (
-          <div style={{ 
-            padding: '12px', 
-            background: 'rgba(239, 68, 68, 0.08)', 
-            border: '1px solid var(--danger)', 
-            borderRadius: '8px', 
-            color: 'var(--danger)',
-            fontSize: '0.85rem',
-            marginBottom: '20px',
-            fontFamily: 'var(--font-body)'
-          }}>
-            {error}
+        {/* Content Wrapper */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div className="auth-logo" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, textAlign: 'center', marginBottom: '8px' }}>
+            <img 
+              src="/images/whale_logo_icon.png" 
+              alt="TerraMarine Logo" 
+              style={{ width: '56px', height: '56px', objectFit: 'contain', background: 'transparent', filter: 'drop-shadow(0 0 14px rgba(0, 229, 255, 0.7))', marginBottom: '4px' }} 
+            />
+            <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
+              TerraMarine
+            </h1>
           </div>
-        )}
+          <h2 style={{ 
+            fontFamily: 'var(--font-display)', 
+            fontWeight: 800, 
+            textAlign: 'center', 
+            marginBottom: '24px', 
+            fontSize: '1.5rem',
+            color: '#ffffff'
+          }}>
+            Create Account
+          </h2>
 
-        <form onSubmit={handleSubmit}>
-          {/* General Fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label" style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.05em' }}>Full Name *</label>
+          {error && (
+            <div style={{ 
+              padding: '12px 14px', 
+              background: 'rgba(239, 68, 68, 0.15)', 
+              border: '1px solid rgba(239, 68, 68, 0.4)', 
+              borderRadius: '10px', 
+              color: '#ef4444',
+              fontSize: '0.85rem',
+              marginBottom: '20px',
+              fontWeight: '600'
+            }}>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            {/* General Fields */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#e2e8f0', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.05em' }}>Full Name *</label>
               <input 
                 type="text" 
                 name="full_name" 
@@ -1065,12 +1141,13 @@ const Register = () => {
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: '28px', fontSize: '0.9rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
-          Already have an account?{' '}
-          <Link to="/login" className="register-link">
-            Sign In
-          </Link>
-        </p>
+          <p style={{ textAlign: 'center', marginTop: '28px', fontSize: '0.88rem', color: '#94a3b8' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#00e5ff', textDecoration: 'underline', fontWeight: 600 }}>
+              Sign In
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

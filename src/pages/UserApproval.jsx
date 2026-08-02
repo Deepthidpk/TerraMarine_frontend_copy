@@ -48,11 +48,28 @@ const UserApproval = () => {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [activeAuthorityTab, setActiveAuthorityTab] = useState('pending');
+  const [userStatusFilter, setUserStatusFilter] = useState('All');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Auto-dismiss notifications after 2 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Form State: Onboard Organization (Admin)
   const [orgForm, setOrgForm] = useState({
@@ -899,91 +916,215 @@ const UserApproval = () => {
       {/* ========================================================================= */}
       {/* AUTHORITY VIEW — DISTRICT USER MANAGEMENT */}
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* AUTHORITY VIEW — DISTRICT USER MANAGEMENT */}
+      {/* ========================================================================= */}
       {!isAdmin && (
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.05)', padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div className="glass-panel" style={{ padding: '28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800' }}>District User Approvals & Management</h3>
-              <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Manage operational users, volunteers, and researchers assigned to {user?.district || 'your'} district.</p>
+              <h3 style={{ margin: 0, color: '#ffffff', fontWeight: '700', fontSize: '1.35rem' }}>District User Approvals & Management</h3>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                Showing {allUsers.filter(u => {
+                  if (userStatusFilter !== 'All' && u.status !== userStatusFilter) return false;
+                  if (userSearchQuery.trim()) {
+                    const q = userSearchQuery.toLowerCase();
+                    return u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.district?.toLowerCase().includes(q) || u.organization_name?.toLowerCase().includes(q);
+                  }
+                  return true;
+                }).length} of {allUsers.length} total registered users
+              </span>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setActiveAuthorityTab('pending')}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Search Bar */}
+              <div style={{ position: 'relative', minWidth: '240px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Search user, email, role..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 30px 8px 36px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(0, 229, 255, 0.25)',
+                    background: 'rgba(8, 20, 42, 0.7)',
+                    color: '#e2e8f0',
+                    fontSize: '0.85rem',
+                    outline: 'none'
+                  }}
+                />
+                {userSearchQuery && (
+                  <button
+                    onClick={() => setUserSearchQuery('')}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Select */}
+              <select
+                value={userStatusFilter}
+                onChange={(e) => setUserStatusFilter(e.target.value)}
                 style={{
-                  padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer',
-                  background: activeAuthorityTab === 'pending' ? '#0284c7' : '#f1f5f9',
-                  color: activeAuthorityTab === 'pending' ? 'white' : '#475569'
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(0, 229, 255, 0.25)',
+                  background: '#08172e',
+                  color: '#e2e8f0',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  outline: 'none',
+                  cursor: 'pointer'
                 }}
               >
-                Pending Approvals ({pendingUsers.length})
-              </button>
-              <button
-                onClick={() => setActiveAuthorityTab('all')}
-                style={{
-                  padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer',
-                  background: activeAuthorityTab === 'all' ? '#0284c7' : '#f1f5f9',
-                  color: activeAuthorityTab === 'all' ? 'white' : '#475569'
-                }}
-              >
-                All District Users ({allUsers.length})
-              </button>
+                <option value="All">All Statuses</option>
+                <option value="Pending">Pending Approvals</option>
+                <option value="Active">Active Users</option>
+                <option value="Suspended">Suspended Users</option>
+              </select>
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+          <div className="table-container">
+            <table className="custom-table">
               <thead>
-                <tr style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
-                  <th style={{ padding: '14px 18px' }}>User Name</th>
-                  <th style={{ padding: '14px 18px' }}>Role</th>
-                  <th style={{ padding: '14px 18px' }}>Contact Info</th>
-                  <th style={{ padding: '14px 18px' }}>Status</th>
-                  <th style={{ padding: '14px 18px', textAlign: 'center' }}>Actions</th>
+                <tr>
+                  <th>User Name</th>
+                  <th>Role</th>
+                  <th>Contact Info</th>
+                  <th>Verification & Proof Details</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {(activeAuthorityTab === 'pending' ? pendingUsers : allUsers).length === 0 ? (
+                {allUsers.filter(u => {
+                  if (userStatusFilter !== 'All' && u.status !== userStatusFilter) return false;
+                  if (userSearchQuery.trim()) {
+                    const q = userSearchQuery.toLowerCase();
+                    return u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.district?.toLowerCase().includes(q) || u.organization_name?.toLowerCase().includes(q);
+                  }
+                  return true;
+                }).length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                      No {activeAuthorityTab === 'pending' ? 'pending user approvals' : 'registered district users'} found.
+                    <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+                      No matching registered users found.
                     </td>
                   </tr>
                 ) : (
-                  (activeAuthorityTab === 'pending' ? pendingUsers : allUsers).map((u) => (
-                    <tr key={u.user_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '14px 18px', fontWeight: '600', color: '#0f172a' }}>{u.full_name}</td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{ padding: '3px 10px', borderRadius: '12px', background: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem', fontWeight: '600' }}>
+                  allUsers.filter(u => {
+                    if (userStatusFilter !== 'All' && u.status !== userStatusFilter) return false;
+                    if (userSearchQuery.trim()) {
+                      const q = userSearchQuery.toLowerCase();
+                      return u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.district?.toLowerCase().includes(q) || u.organization_name?.toLowerCase().includes(q);
+                    }
+                    return true;
+                  }).map((u) => (
+                    <tr key={u.user_id}>
+                      <td style={{ fontWeight: '600', color: '#ffffff' }}>
+                        {u.full_name}
+                        {u.district && <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '400' }}>District: {u.district}</div>}
+                      </td>
+                      <td>
+                        <span style={{ padding: '4px 12px', borderRadius: '12px', background: 'rgba(0, 229, 255, 0.15)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', fontSize: '0.75rem', fontWeight: '600' }}>
                           {u.role}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '0.85rem' }}>
+                      <td style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>
                         <div>{u.email}</div>
-                        <div>{u.phone}</div>
+                        <div style={{ color: '#94a3b8' }}>{u.phone || 'N/A'}</div>
                       </td>
-                      <td style={{ padding: '14px 18px' }}>
+                      <td style={{ color: '#e2e8f0', fontSize: '0.82rem' }}>
+                        {u.role === 'NGO' && (
+                          <div>
+                            <div><strong>Org:</strong> {u.organization_name || 'N/A'}</div>
+                            <div><strong>Reg #:</strong> {u.registration_number || 'N/A'}</div>
+                            {u.registration_certificate_url && (
+                              <button
+                                onClick={() => {
+                                  const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+                                  window.open(u.registration_certificate_url.startsWith('http') ? u.registration_certificate_url : `${baseUrl}${u.registration_certificate_url}`, '_blank');
+                                }}
+                                style={{ marginTop: '6px', background: 'rgba(0, 229, 255, 0.15)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <FileText size={12} /> View Certificate
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {u.role === 'Researcher' && (
+                          <div>
+                            <div><strong>Inst:</strong> {u.institution_name || 'N/A'}</div>
+                            <div><strong>Dept:</strong> {u.department || 'N/A'}</div>
+                            <div><strong>Area:</strong> {u.research_area || 'N/A'}</div>
+                            {u.institution_id_url && (
+                              <button
+                                onClick={() => {
+                                  const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+                                  window.open(u.institution_id_url.startsWith('http') ? u.institution_id_url : `${baseUrl}${u.institution_id_url}`, '_blank');
+                                }}
+                                style={{ marginTop: '6px', background: 'rgba(0, 229, 255, 0.15)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <FileText size={12} /> View Institution ID
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {u.role === 'Volunteer' && (
+                          <div>
+                            <div><strong>ID Type:</strong> {u.government_id_type || 'Govt ID'}</div>
+                            <div><strong>ID #:</strong> {u.government_id_number || 'N/A'}</div>
+                            {u.government_id_url && (
+                              <button
+                                onClick={() => {
+                                  const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+                                  window.open(u.government_id_url.startsWith('http') ? u.government_id_url : `${baseUrl}${u.government_id_url}`, '_blank');
+                                }}
+                                style={{ marginTop: '6px', background: 'rgba(0, 229, 255, 0.15)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <FileText size={12} /> View Govt ID
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {u.role === 'Fisherman' && (
+                          <div>
+                            <div><strong>License #:</strong> {u.fishing_license_number || 'N/A'}</div>
+                            <div><strong>Boat Reg #:</strong> {u.boat_registration_number || 'N/A'}</div>
+                          </div>
+                        )}
+                        {['Citizen', 'Admin', 'Authority'].includes(u.role) && (
+                          <div style={{ color: '#64748b' }}>Standard Account</div>
+                        )}
+                      </td>
+                      <td>
                         <span style={{
-                          padding: '4px 10px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '600',
-                          background: u.status === 'Active' ? '#dcfce7' : (u.status === 'Pending' ? '#fef3c7' : '#ffe4e6'),
-                          color: u.status === 'Active' ? '#15803d' : (u.status === 'Pending' ? '#b45309' : '#be123c'),
-                          border: `1px solid ${u.status === 'Active' ? '#bbf7d0' : (u.status === 'Pending' ? '#fde68a' : '#fecdd3')}`
+                          padding: '4px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '600',
+                          background: u.status === 'Active' ? 'rgba(0, 245, 212, 0.15)' : (u.status === 'Pending' ? 'rgba(255, 183, 3, 0.15)' : 'rgba(255, 77, 77, 0.15)'),
+                          color: u.status === 'Active' ? '#00f5d4' : (u.status === 'Pending' ? '#ffb703' : '#ff4d4d'),
+                          border: `1px solid ${u.status === 'Active' ? 'rgba(0, 245, 212, 0.3)' : (u.status === 'Pending' ? 'rgba(255, 183, 3, 0.3)' : 'rgba(255, 77, 77, 0.3)')}`
                         }}>
                           {u.status}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                           {u.status === 'Pending' && (
                             <>
                               <button
                                 onClick={() => handleUpdateDistrictUserStatus(u.user_id, 'Active')}
-                                style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', background: '#166534', color: 'white', fontWeight: '600', cursor: 'pointer', fontSize: '0.8rem' }}
+                                style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', fontWeight: '600', cursor: 'pointer', fontSize: '0.8rem', boxShadow: '0 2px 10px rgba(16, 185, 129, 0.3)' }}
                               >
                                 Approve
                               </button>
                               <button
                                 onClick={() => handleUpdateDistrictUserStatus(u.user_id, 'Rejected')}
-                                style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#991b1b', fontWeight: '600', cursor: 'pointer', fontSize: '0.8rem' }}
+                                style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid rgba(255, 77, 77, 0.4)', background: 'rgba(255, 77, 77, 0.15)', color: '#ff4d4d', fontWeight: '600', cursor: 'pointer', fontSize: '0.8rem' }}
                               >
                                 Reject
                               </button>
@@ -993,10 +1134,10 @@ const UserApproval = () => {
                             <button
                               onClick={() => handleUpdateDistrictUserStatus(u.user_id, u.status === 'Active' ? 'Suspended' : 'Active')}
                               style={{
-                                padding: '5px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
-                                background: u.status === 'Active' ? '#fff1f2' : '#f0fdf4',
-                                color: u.status === 'Active' ? '#be123c' : '#15803d',
-                                border: `1px solid ${u.status === 'Active' ? '#fecdd3' : '#bbf7d0'}`
+                                padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
+                                background: u.status === 'Active' ? 'rgba(255, 77, 77, 0.15)' : 'rgba(0, 245, 212, 0.15)',
+                                color: u.status === 'Active' ? '#ff4d4d' : '#00f5d4',
+                                border: `1px solid ${u.status === 'Active' ? 'rgba(255, 77, 77, 0.35)' : 'rgba(0, 245, 212, 0.35)'}`
                               }}
                             >
                               {u.status === 'Active' ? 'Suspend' : 'Activate'}
