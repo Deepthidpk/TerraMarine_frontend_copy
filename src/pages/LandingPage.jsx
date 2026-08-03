@@ -232,24 +232,28 @@ const LandingPage = () => {
               <div className="feature-num">01</div>
               <h4>Interactive GIS Mapping</h4>
               <p>Explore high-resolution spatial maps tracking pollution hot spots, volunteer deployment, and marine protected areas.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="feature-item">
               <div className="feature-num">02</div>
               <h4>Live Environmental Analytics</h4>
               <p>Track water clarity indices, debris removal velocity, and community contribution benchmarks in real time.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="feature-item">
               <div className="feature-num">03</div>
               <h4>Verified Green Badging</h4>
               <p>Earn verified credentials and recognition for participating in shoreline restoration drives and logging ecological data.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="feature-item">
               <div className="feature-num">04</div>
               <h4>Collaborative Task Management</h4>
               <p>Assign field tasks, coordinate equipment logistics, and stream real-time photos directly from shoreline sites.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
           </div>
         </div>
