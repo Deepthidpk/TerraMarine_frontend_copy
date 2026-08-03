@@ -282,14 +282,14 @@ button, input, select, textarea {
   right: 0;
   bottom: 0;
   top: 0;
-  width: 42%;
+  width: 55%;
   height: 100%;
   object-fit: cover;
   object-position: right bottom;
-  opacity: 0.9;
+  opacity: 0.85;
   mix-blend-mode: screen;
-  -webkit-mask-image: radial-gradient(ellipse at 100% 100%, rgba(0, 0, 0, 1) 25%, rgba(0, 0, 0, 0.5) 65%, transparent 100%);
-  mask-image: radial-gradient(ellipse at 100% 100%, rgba(0, 0, 0, 1) 25%, rgba(0, 0, 0, 0.5) 65%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 110% 110% at 100% 100%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 30%, rgba(0, 0, 0, 0.2) 55%, transparent 75%);
+  mask-image: radial-gradient(ellipse 110% 110% at 100% 100%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 30%, rgba(0, 0, 0, 0.2) 55%, transparent 75%);
   pointer-events: none;
   z-index: 1;
 }

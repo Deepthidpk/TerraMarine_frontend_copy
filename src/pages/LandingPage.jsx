@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -110,6 +110,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">18,500+</div>
               <div className="stat-label">KG Ocean Plastic Collected</div>
+              <img src="/images/cyan_coral_corner_clean.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="stat-box">
@@ -118,6 +119,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">3,400+</div>
               <div className="stat-label">Active Coastal Volunteers</div>
+              <img src="/images/cyan_marine_cleanups_bg.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="stat-box">
@@ -126,6 +128,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">420+</div>
               <div className="stat-label">Marine Species Tracked</div>
+              <img src="/images/cyan_fish_coral_bg.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="stat-box">
@@ -134,6 +137,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">120+</div>
               <div className="stat-label">Protected Coastline Miles</div>
+              <img src="/images/purple_coral_card_bg.png" alt="" className="card-artwork-blend" />
             </div>
           </div>
         </div>
@@ -168,6 +172,7 @@ const LandingPage = () => {
                 <li><CheckCircle2 size={16} /> Volunteer reward badges</li>
                 <li><CheckCircle2 size={16} /> Debris weigh-in analytics</li>
               </ul>
+              <img src="/images/cyan_cleanups_corner.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="eco-card">
@@ -185,6 +190,7 @@ const LandingPage = () => {
                 <li><CheckCircle2 size={16} /> Coral bleaching indices</li>
                 <li><CheckCircle2 size={16} /> Wildlife protection alerts</li>
               </ul>
+              <img src="/images/emerald_teal_reef_bg.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="eco-card">
@@ -202,6 +208,7 @@ const LandingPage = () => {
                 <li><CheckCircle2 size={16} /> Real-time status updates</li>
                 <li><CheckCircle2 size={16} /> Community verification</li>
               </ul>
+              <img src="/images/red_coral_card_bg.png" alt="" className="card-artwork-blend" />
             </div>
           </div>
         </div>
@@ -289,6 +296,7 @@ const LandingPage = () => {
             <button className="cta-action-btn" onClick={handleJoin}>
               Get Started Now <ArrowRight size={18} />
             </button>
+            <img src="/images/sidebar_underwater_coral.png" alt="" className="card-artwork-blend" />
           </div>
         </div>
       </section>
