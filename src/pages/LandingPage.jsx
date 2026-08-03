@@ -165,7 +165,7 @@ const LandingPage = () => {
                 <h3>Coastal Cleanup Campaigns</h3>
               </div>
               <p>
-                Organize, fund, and mobilize community beach cleanups with live geotagged volunteer check-ins and debris sorting reports.
+                Mobilize beach cleanups with live GPS check-ins and debris analytics.
               </p>
               <ul className="eco-list">
                 <li><CheckCircle2 size={16} /> Live GPS map locations</li>
@@ -183,7 +183,7 @@ const LandingPage = () => {
                 <h3>Marine Biodiversity Tracker</h3>
               </div>
               <p>
-                Empowering marine biologists and citizen scientists to log species sightings, track endangered coral reefs, and map marine life health.
+                Log species sightings, track endangered coral reefs, and map marine health.
               </p>
               <ul className="eco-list">
                 <li><CheckCircle2 size={16} /> Species image recognition</li>
@@ -201,7 +201,7 @@ const LandingPage = () => {
                 <h3>Incident & Hazard Alerts</h3>
               </div>
               <p>
-                Instant emergency reporting for oil spills, illegally dumped marine waste, stranded marine life, and coastal hazards.
+                Instant emergency reporting for oil spills, marine waste, and hazards.
               </p>
               <ul className="eco-list">
                 <li><CheckCircle2 size={16} /> Rapid authority dispatch</li>
