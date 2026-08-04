@@ -175,13 +175,15 @@ const Campaigns = () => {
         setCampaigns(data.campaigns);
       }
 
-      if (['Volunteer', 'Citizen'].includes(user.role)) {
+      try {
         const historyRes = await authFetch('/campaigns/my-history');
         if (historyRes.ok) {
           const historyData = await historyRes.json();
-          const joinedIds = new Set((historyData.history || []).map(h => String(h.campaign_id)));
+          const joinedIds = new Set((historyData.history || []).map(h => h.campaign_id));
           setJoinedCampaignIds(joinedIds);
         }
+      } catch (hErr) {
+        console.error('History fetch warning:', hErr);
       }
     } catch (err) {
       console.error('Error fetching campaigns:', err);
@@ -203,19 +205,15 @@ const Campaigns = () => {
 
     const latErr = validateField('latitude', latStr);
     const lngErr = validateField('longitude', lngStr);
-
-    setFormErrors(prev => ({ 
-      ...prev, 
-      coordinates: null, 
-      latitude: latErr, 
-      longitude: lngErr 
+    setFormErrors(prev => ({
+      ...prev,
+      latitude: latErr,
+      longitude: lngErr
     }));
-    setModalError('');
   };
 
   const handleCreateCampaignSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setModalError('');
     setSuccess('');
 
@@ -232,19 +230,14 @@ const Campaigns = () => {
       maxVolunteers: validateField('maxVolunteers', maxVolunteers)
     };
 
-    // Filter out nulls
     const activeErrors = {};
     Object.keys(errors).forEach(k => {
       if (errors[k]) activeErrors[k] = errors[k];
     });
 
-    if (!latitude || !longitude) {
-      activeErrors.coordinates = 'Please click map on the right to select coordinates.';
-    }
-
     if (Object.keys(activeErrors).length > 0) {
       setFormErrors(activeErrors);
-      setModalError('Please fix all highlighted red field errors before submitting.');
+      setModalError('Please fix validation errors before submitting.');
       return;
     }
 
@@ -301,14 +294,29 @@ const Campaigns = () => {
     try {
       const res = await authFetch(`/campaigns/${campaignId}/join`, { method: 'POST' });
       const data = await res.json();
+
+      // Immediately mark as joined in local state so UI updates button to 'Joined' right away
+      setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+      setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
+
       if (!res.ok) {
-        throw new Error(data.error || 'Could not join campaign.');
+        if (data.error && data.error.includes('already registered')) {
+          setSuccess('You are registered for this cleanup drive!');
+        } else {
+          throw new Error(data.error || 'Could not join campaign.');
+        }
+      } else {
+        setSuccess(data.message || 'You have registered for the cleanup drive successfully!');
       }
-      setSuccess('You have registered for the cleanup drive successfully!');
-      setJoinedCampaignIds(prev => new Set([...prev, String(campaignId)]));
+
       fetchCampaigns();
     } catch (err) {
-      setError(err.message || 'Failed to join campaign.');
+      if (err.message && err.message.includes('already registered')) {
+        setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
+      } else {
+        setError(err.message || 'Failed to join campaign.');
+      }
     }
   };
 
@@ -787,7 +795,7 @@ const Campaigns = () => {
                             Details
                           </button>
 
-                          {camp.is_joined === true || camp.is_joined === 'true' || joinedCampaignIds.has(String(camp.campaign_id)) ? (
+                          {camp.is_joined || joinedCampaignIds.has(camp.campaign_id) ? (
                             <button 
                               disabled
                               style={{
