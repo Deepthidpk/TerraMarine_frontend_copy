@@ -704,13 +704,13 @@ const Register = () => {
                 value={formData.role}
                 onChange={handleChange}
                 required
-                style={{ color: '#171c42', fontWeight: 600, fontSize: '0.9rem' }}
+                style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}
               >
-                <option value="Citizen">Citizen</option>
-                <option value="Fisherman">Fisherman</option>
-                <option value="Volunteer">Volunteer</option>
-                <option value="NGO">NGO</option>
-                <option value="Researcher">Researcher</option>
+                <option value="Citizen" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Citizen</option>
+                <option value="Fisherman" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Fisherman</option>
+                <option value="Volunteer" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Volunteer</option>
+                <option value="NGO" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>NGO</option>
+                <option value="Researcher" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Researcher</option>
               </select>
             </div>
           </div>
@@ -1024,12 +1024,12 @@ const Register = () => {
                     value={formData.government_id_type}
                     onChange={handleChange}
                     required
-                    style={{ fontSize: '0.9rem' }}
+                    style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}
                   >
-                    <option value="Aadhaar">Aadhaar</option>
-                    <option value="Driving License">Driving License</option>
-                    <option value="Passport">Passport</option>
-                    <option value="Voter ID">Voter ID</option>
+                    <option value="Aadhaar" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Aadhaar</option>
+                    <option value="Driving License" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Driving License</option>
+                    <option value="Passport" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Passport</option>
+                    <option value="Voter ID" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Voter ID</option>
                   </select>
                 </div>
 
