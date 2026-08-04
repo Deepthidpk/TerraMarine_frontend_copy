@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Bell, Trash2, RefreshCw, X, CheckCircle2, Calendar, CheckSquare } from 'lucide-react';
+import { Bell, Trash2, RefreshCw, X, CheckCircle2, Calendar, CheckSquare, AlertTriangle } from 'lucide-react';
 
 const Notifications = () => {
   const { 
@@ -33,8 +33,9 @@ const Notifications = () => {
 
   const filteredNotifications = (notifications || []).filter(notif => {
     if (filter === 'unread') return !notif.is_read;
-    if (filter === 'campaigns') return notif.title?.toLowerCase().includes('campaign') || notif.message?.toLowerCase().includes('campaign');
-    if (filter === 'tasks') return notif.title?.toLowerCase().includes('task') || notif.message?.toLowerCase().includes('task');
+    if (filter === 'reports') return notif.title?.toLowerCase().includes('report') || notif.message?.toLowerCase().includes('report') || notif.reference_type === 'PollutionReport';
+    if (filter === 'campaigns') return notif.title?.toLowerCase().includes('campaign') || notif.message?.toLowerCase().includes('campaign') || notif.reference_type === 'Campaign';
+    if (filter === 'tasks') return notif.title?.toLowerCase().includes('task') || notif.message?.toLowerCase().includes('task') || notif.reference_type === 'CleanupTask';
     return true; // 'all'
   });
 
@@ -245,6 +246,26 @@ const Notifications = () => {
               {unreadCount}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setFilter('reports')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '10px',
+            border: filter === 'reports' ? '1px solid #00e5ff' : '1px solid rgba(0, 229, 255, 0.15)',
+            background: filter === 'reports' ? 'rgba(0, 229, 255, 0.15)' : 'rgba(8, 20, 42, 0.5)',
+            color: filter === 'reports' ? '#00e5ff' : '#94a3b8',
+            fontWeight: '600',
+            fontSize: '0.88rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <AlertTriangle size={15} />
+          <span>Pollution Reports</span>
         </button>
 
         <button
