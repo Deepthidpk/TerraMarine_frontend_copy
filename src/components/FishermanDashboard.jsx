@@ -290,7 +290,7 @@ const FishermanDashboard = ({
       </div>
 
       {/* 2. 4 METRIC STAT CARDS ACROSS TOP (EXACT STAT-CARD-MARINE DESIGN) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
         
         {/* Card 1: Active Complaints (RED THEME) */}
         <div className="stat-card-marine" style={{

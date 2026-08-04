@@ -172,7 +172,7 @@ const Dashboard = () => {
       )}
 
       {/* 4 Metric Stats Cards Across Top */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
         {/* Card 1: Active Complaints (RED THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
