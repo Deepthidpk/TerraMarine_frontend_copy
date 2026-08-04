@@ -153,11 +153,14 @@ const Sidebar = () => {
     }
 
     // 2. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, Researcher, NGO)
-    const links = [
-      { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    const links = [];
+    if (user.role !== 'Citizen') {
+      links.push({ to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> });
+    }
+    links.push(
       { to: '/reports', label: 'Pollution Reports & Tracking', icon: <AlertTriangle size={18} /> },
       { to: '/campaigns', label: 'Cleanup Campaigns', icon: <Calendar size={18} /> }
-    ];
+    );
 
     if (['Authority', 'Volunteer'].includes(user.role)) {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
@@ -481,4 +484,12 @@ const Sidebar = () => {
                 </button>
               </div>
             </form>
-          </
+          </div>
+        </div>,
+        document.body
+      )}
+    </aside>
+  );
+};
+
+export default Sidebar;

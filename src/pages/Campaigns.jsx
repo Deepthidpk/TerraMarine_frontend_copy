@@ -715,14 +715,14 @@ const Campaigns = () => {
             <table className="custom-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'rgba(4, 14, 30, 0.9)' }}>
-                  <th style={{ width: '23%', padding: '12px 14px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>CAMPAIGN NAME</th>
-                  <th style={{ width: '15%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>ORGANIZER</th>
-                  <th style={{ width: '15%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>LOCATION</th>
-                  <th style={{ width: '10%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>DATE</th>
-                  <th style={{ width: '8%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>TIMING</th>
-                  <th style={{ width: '11%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>VOLUNTEERS</th>
-                  <th style={{ width: '10%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>STATUS</th>
-                  <th style={{ width: '8%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>ACTIONS</th>
+                  <th style={{ width: '23%', padding: '8px 10px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>CAMPAIGN NAME</th>
+                  <th style={{ width: '15%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>ORGANIZER</th>
+                  <th style={{ width: '15%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>LOCATION</th>
+                  <th style={{ width: '10%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>DATE</th>
+                  <th style={{ width: '8%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>TIMING</th>
+                  <th style={{ width: '11%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>VOLUNTEERS</th>
+                  <th style={{ width: '10%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>STATUS</th>
+                  <th style={{ width: '8%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -733,35 +733,35 @@ const Campaigns = () => {
 
                   return (
                     <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
-                      <td style={{ padding: '14px 14px' }}>
-                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.3' }}>{camp.campaign_name}</div>
+                      <td style={{ padding: '8px 10px' }}>
+                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3' }}>{camp.campaign_name}</div>
                         {camp.description && (
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', lineHeight: '1.25', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {camp.description}
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '14px 10px', fontWeight: '600', fontSize: '0.82rem', color: '#e2e8f0', lineHeight: '1.3' }}>
+                      <td style={{ padding: '8px 8px', fontWeight: '600', fontSize: '0.78rem', color: '#e2e8f0', lineHeight: '1.3' }}>
                         {camp.organization_name || camp.creator_name}
                       </td>
-                      <td style={{ padding: '14px 10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.3' }}>
+                      <td style={{ padding: '8px 8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: '1.3' }}>
                           <MapPin size={13} color="#00e5ff" style={{ flexShrink: 0, marginTop: '2px' }} />
                           <span>{camp.location}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '14px 10px', fontSize: '0.82rem', fontWeight: '600', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '8px 8px', fontSize: '0.78rem', fontWeight: '600', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {new Date(camp.campaign_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
-                      <td style={{ padding: '14px 10px', fontSize: '0.82rem', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                      <td style={{ padding: '8px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap', textAlign: 'center' }}>
                         {camp.start_time ? (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', lineHeight: '1.2' }}>
-                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.82rem' }}>{camp.start_time.slice(0,5)}</span>
-                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.75rem' }}>to</span>
-                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.82rem' }}>{camp.end_time?.slice(0,5) || 'TBD'}</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.78rem' }}>{camp.start_time.slice(0,5)}</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.7rem' }}>to</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.78rem' }}>{camp.end_time?.slice(0,5) || 'TBD'}</span>
                           </div>
                         ) : (
-                          <span style={{ color: '#ffffff', fontWeight: '600' }}>All Day</span>
+                          <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.78rem' }}>All Day</span>
                         )}
                       </td>
                       <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>

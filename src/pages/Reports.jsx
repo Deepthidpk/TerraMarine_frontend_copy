@@ -916,60 +916,60 @@ const Reports = () => {
             <table className="custom-table" style={{ width: '100%', tableLayout: 'auto', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'rgba(4, 14, 30, 0.95)', borderBottom: '1px solid rgba(0, 229, 255, 0.2)' }}>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>TITLE</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>LOCATION</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>WASTE TYPE</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>CATEGORY</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>REPORTED DATE</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>ACTIONS</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>TITLE</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>LOCATION</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>WASTE TYPE</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>CATEGORY</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>REPORTED DATE</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredReports.map((rep) => (
                   <tr key={rep.report_id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background 0.2s ease' }}>
-                    <td style={{ padding: '14px 24px', textAlign: 'left' }}>
-                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.35' }}>{rep.title}</div>
+                    <td style={{ padding: '8px 12px', textAlign: 'left' }}>
+                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3' }}>{rep.title}</div>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
-                        <MapPin size={14} color="#00e5ff" style={{ flexShrink: 0 }} />
+                    <td style={{ padding: '8px 12px', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
+                        <MapPin size={13} color="#00e5ff" style={{ flexShrink: 0 }} />
                         <span>{rep.location_name || `${parseFloat(rep.latitude).toFixed(4)}, ${parseFloat(rep.longitude).toFixed(4)}`}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'left', fontSize: '0.85rem', color: '#e2e8f0', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.78rem', color: '#e2e8f0', fontWeight: '500', whiteSpace: 'nowrap' }}>
                       {rep.waste_type || 'General'}
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <span className={`badge ${rep.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.74rem', padding: '4px 10px' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      <span className={`badge ${rep.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.7rem', padding: '3px 8px' }}>
                         {rep.report_category}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <span style={{ 
                         fontWeight: '700', 
-                        fontSize: '0.84rem',
+                        fontSize: '0.78rem',
                         color: rep.severity === 'High' ? '#ff4d4d' : rep.severity === 'Medium' ? '#ffb703' : '#00f5d4'
                       }}>
                         {rep.severity || 'Medium'}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'center', fontSize: '0.84rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
                       {new Date(rep.reported_at).toLocaleDateString()}
                     </td>
-                    <td style={{ padding: '12px 24px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button 
                         onClick={() => handleOpenDetails(rep.report_id)}
                         className="btn btn-secondary" 
                         style={{ 
-                          padding: '6px 14px', 
-                          fontSize: '0.78rem', 
-                          borderRadius: '8px', 
+                          padding: '4px 10px', 
+                          fontSize: '0.75rem', 
+                          borderRadius: '6px', 
                           whiteSpace: 'nowrap',
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px'
+                          gap: '5px'
                         }}
                       >
                         <Info size={13} />

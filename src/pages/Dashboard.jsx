@@ -74,8 +74,12 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    if (user && user.role === 'Citizen') {
+      navigate('/reports', { replace: true });
+      return;
+    }
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const handleClearAllNotifications = async () => {
     try {

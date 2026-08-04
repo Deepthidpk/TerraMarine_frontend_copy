@@ -444,10 +444,10 @@ button, input, select, textarea {
 }
 
 .custom-table th {
-  padding: 14px 16px;
+  padding: 8px 10px;
   background: rgba(5, 16, 35, 0.9);
   color: #94a3b8;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 700;
@@ -456,9 +456,9 @@ button, input, select, textarea {
 }
 
 .custom-table td {
-  padding: 15px 16px;
+  padding: 8px 10px;
   border-bottom: 1px solid rgba(0, 229, 255, 0.08);
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   color: #e2e8f0;
   vertical-align: middle;
 }

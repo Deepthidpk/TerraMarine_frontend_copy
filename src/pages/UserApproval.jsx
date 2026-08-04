@@ -505,33 +505,33 @@ const UserApproval = () => {
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
                     <thead>
                       <tr style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
-                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>Organization Name</th>
-                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>Admin Account</th>
-                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>Jurisdiction</th>
-                        <th style={{ padding: '16px 20px', fontWeight: '700' }}>License Status</th>
-                        <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'center' }}>Actions</th>
+                        <th style={{ padding: '10px 14px', fontWeight: '700' }}>Organization Name</th>
+                        <th style={{ padding: '10px 14px', fontWeight: '700' }}>Admin Account</th>
+                        <th style={{ padding: '10px 14px', fontWeight: '700' }}>Jurisdiction</th>
+                        <th style={{ padding: '10px 14px', fontWeight: '700' }}>License Status</th>
+                        <th style={{ padding: '10px 14px', fontWeight: '700', textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {organizations.map((org) => (
                         <tr key={org.user_id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.15s ease' }}>
-                          <td style={{ padding: '16px 20px', fontWeight: '600', color: '#0f172a' }}>
+                          <td style={{ padding: '10px 14px', fontWeight: '600', color: '#0f172a' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <Building2 size={16} color="#0284c7" />
                               <span>{org.organization_name || 'Municipal Authority'}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '16px 20px' }}>
+                          <td style={{ padding: '10px 14px' }}>
                             <div style={{ fontWeight: '600', color: '#1e293b' }}>{org.full_name}</div>
-                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{org.email}</div>
+                            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{org.email}</div>
                           </td>
-                          <td style={{ padding: '16px 20px', color: '#334155' }}>
+                          <td style={{ padding: '10px 14px', color: '#334155' }}>
                             {org.district}, {org.state}
                           </td>
-                          <td style={{ padding: '16px 20px' }}>
+                          <td style={{ padding: '10px 14px' }}>
                             <span style={{
                               padding: '5px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '600',
                               background: org.status === 'Active' ? '#dcfce7' : '#ffe4e6',
