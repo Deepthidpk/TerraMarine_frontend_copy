@@ -428,7 +428,7 @@ const Campaigns = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {['Volunteer', 'Citizen'].includes(user.role) && (
+          {user.role === 'Volunteer' && (
             <button
               onClick={handleOpenHistory}
               style={{
@@ -492,87 +492,89 @@ const Campaigns = () => {
       )}
 
       {/* Overview Statistics Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        {/* Card 1: Total Campaigns (RED THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
-          border: '1px solid rgba(255, 77, 77, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
-            <Calendar size={24} color="#ff4d4d" />
+      {user.role !== 'Citizen' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+          {/* Card 1: Total Campaigns (RED THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+            border: '1px solid rgba(255, 77, 77, 0.35)',
+            boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+              <Calendar size={24} color="#ff4d4d" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Total Campaigns</span>
+              <div className="stat-val">{totalDrives}</div>
+            </div>
+            <img 
+              src="/images/red_coral_card_bg.png" 
+              alt="Red Coral Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Total Campaigns</span>
-            <div className="stat-val">{totalDrives}</div>
-          </div>
-          <img 
-            src="/images/red_coral_card_bg.png" 
-            alt="Red Coral Artwork" 
-            className="card-artwork-blend"
-          />
-        </div>
 
-        {/* Card 2: Upcoming Drives (CYAN BLUE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
-          border: '1px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
-            <Clock size={24} color="#00e5ff" />
+          {/* Card 2: Upcoming Drives (CYAN BLUE THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+            border: '1px solid rgba(0, 229, 255, 0.35)',
+            boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+              <Clock size={24} color="#00e5ff" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Upcoming Drives</span>
+              <div className="stat-val">{upcomingDrives}</div>
+            </div>
+            <img 
+              src="/images/cyan_cleanups_corner.png" 
+              alt="Cyan Coral Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Upcoming Drives</span>
-            <div className="stat-val">{upcomingDrives}</div>
-          </div>
-          <img 
-            src="/images/cyan_cleanups_corner.png" 
-            alt="Cyan Coral Artwork" 
-            className="card-artwork-blend"
-          />
-        </div>
 
-        {/* Card 3: Volunteers Mobilized (EMERALD TEAL THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
-          border: '1px solid rgba(0, 245, 212, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
-            <Users size={24} color="#00f5d4" />
+          {/* Card 3: Volunteers Mobilized (EMERALD TEAL THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
+            border: '1px solid rgba(0, 245, 212, 0.35)',
+            boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
+              <Users size={24} color="#00f5d4" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Volunteers Mobilized</span>
+              <div className="stat-val">{totalVolunteers}</div>
+            </div>
+            <img 
+              src="/images/green_teal_campaigns_bg.png" 
+              alt="Volunteers Mobilized Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Volunteers Mobilized</span>
-            <div className="stat-val">{totalVolunteers}</div>
-          </div>
-          <img 
-            src="/images/green_teal_campaigns_bg.png" 
-            alt="Volunteers Mobilized Artwork" 
-            className="card-artwork-blend"
-          />
-        </div>
 
-        {/* Card 4: Restored Shorelines (PURPLE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
-          border: '1px solid rgba(157, 78, 221, 0.35)',
-          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
-            <Compass size={24} color="#9d4edd" />
+          {/* Card 4: Restored Shorelines (PURPLE THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
+            border: '1px solid rgba(157, 78, 221, 0.35)',
+            boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
+              <Compass size={24} color="#9d4edd" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Restored Shorelines</span>
+              <div className="stat-val">{completedDrives}</div>
+            </div>
+            <img 
+              src="/images/purple_coral_card_bg.png" 
+              alt="Restored Shorelines Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Restored Shorelines</span>
-            <div className="stat-val">{completedDrives}</div>
-          </div>
-          <img 
-            src="/images/purple_coral_card_bg.png" 
-            alt="Restored Shorelines Artwork" 
-            className="card-artwork-blend"
-          />
         </div>
-      </div>
+      )}
 
       {/* Scheduled Campaigns Section */}
       <div className="glass-panel" style={{ 

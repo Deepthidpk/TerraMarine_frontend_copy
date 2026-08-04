@@ -99,6 +99,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handleMarkAsRead = async (id) => {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/notifications/${id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => n.notification_id === id ? { ...n, is_read: true } : n));
+    } catch (err) {
+      console.error('Error marking notification read:', err);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/notifications`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error('Error marking all notifications read:', err);
+    }
+  };
+
   useEffect(() => {
     if (user && token) {
       fetchNotifications();
@@ -271,7 +297,9 @@ export const AuthProvider = ({ children }) => {
     notifications,
     fetchNotifications,
     handleClearAllNotifications,
-    handleDismissNotification
+    handleDismissNotification,
+    handleMarkAsRead,
+    handleMarkAllAsRead
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

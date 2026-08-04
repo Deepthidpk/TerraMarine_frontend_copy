@@ -255,7 +255,7 @@ const Sidebar = () => {
       >
         {navLinks.map((link) => {
           const active = isAdmin ? isTabActive(link.tabKey) : location.pathname === link.to;
-          const unreadCount = link.isNotification && notifications ? notifications.length : 0;
+          const unreadCount = link.isNotification && notifications ? notifications.filter(n => !n.is_read).length : 0;
 
           return (
             <Link
