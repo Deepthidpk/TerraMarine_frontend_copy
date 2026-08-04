@@ -69,6 +69,15 @@ const AuthorityOrAdminRoute = ({ children }) => {
   return children;
 };
 
+const NonVolunteerRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user || user.role === 'Volunteer') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
 const App = () => {
   return (
     <AuthProvider>
@@ -86,7 +95,7 @@ const App = () => {
           <Route path="/reports" element={<ProtectedLayout><Reports /></ProtectedLayout>} />
           <Route path="/campaigns" element={<ProtectedLayout><Campaigns /></ProtectedLayout>} />
           <Route path="/tasks" element={<ProtectedLayout><Tasks /></ProtectedLayout>} />
-          <Route path="/biodiversity" element={<ProtectedLayout><Biodiversity /></ProtectedLayout>} />
+          <Route path="/biodiversity" element={<ProtectedLayout><NonVolunteerRoute><Biodiversity /></NonVolunteerRoute></ProtectedLayout>} />
           <Route path="/payments" element={<ProtectedLayout><Payments /></ProtectedLayout>} />
           <Route path="/user-approval" element={<ProtectedLayout><AuthorityOrAdminRoute><UserApproval /></AuthorityOrAdminRoute></ProtectedLayout>} />
 

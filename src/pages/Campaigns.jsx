@@ -193,8 +193,10 @@ const Campaigns = () => {
   };
 
   useEffect(() => {
-    fetchCampaigns();
-  }, []);
+    if (user) {
+      fetchCampaigns();
+    }
+  }, [user]);
 
   const handleMapClick = (lat, lng) => {
     const latStr = lat.toFixed(6);
@@ -295,18 +297,18 @@ const Campaigns = () => {
       const res = await authFetch(`/campaigns/${campaignId}/join`, { method: 'POST' });
       const data = await res.json();
 
-      // Immediately mark as joined in local state so UI updates button to 'Joined' right away
-      setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
-      setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
-
       if (!res.ok) {
         if (data.error && data.error.includes('already registered')) {
-          setSuccess('You are registered for this cleanup drive!');
+          setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+          setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
+          setError('You have already registered for this campaign.');
         } else {
           throw new Error(data.error || 'Could not join campaign.');
         }
       } else {
-        setSuccess(data.message || 'You have registered for the cleanup drive successfully!');
+        setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true, volunteer_count: (parseInt(c.volunteer_count) || 0) + 1 } : c));
+        setSuccess('You have registered for the cleanup drive successfully!');
       }
 
       fetchCampaigns();
@@ -314,6 +316,7 @@ const Campaigns = () => {
       if (err.message && err.message.includes('already registered')) {
         setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
         setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
+        setError('You have already registered for this campaign.');
       } else {
         setError(err.message || 'Failed to join campaign.');
       }
@@ -726,6 +729,7 @@ const Campaigns = () => {
                 {filteredCampaigns.map((camp) => {
                   const volCount = parseInt(camp.volunteer_count) || 0;
                   const maxVol = camp.maximum_volunteers || null;
+                  const isJoined = Boolean(camp.is_joined) || camp.is_joined === 'true' || camp.is_joined === 't' || camp.is_joined === 1 || joinedCampaignIds.has(camp.campaign_id);
 
                   return (
                     <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
@@ -795,7 +799,7 @@ const Campaigns = () => {
                             Details
                           </button>
 
-                          {camp.is_joined || joinedCampaignIds.has(camp.campaign_id) ? (
+                          {isJoined ? (
                             <button 
                               disabled
                               style={{

@@ -160,7 +160,9 @@ const Sidebar = () => {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
     }
 
-    links.push({ to: '/biodiversity', label: 'Biodiversity', icon: <Map size={18} /> });
+    if (user.role !== 'Volunteer') {
+      links.push({ to: '/biodiversity', label: 'Biodiversity', icon: <Map size={18} /> });
+    }
 
     if (['Authority', 'Volunteer'].includes(user.role)) {
       links.push({ to: '/payments', label: 'Rewards & Payments', icon: <Award size={18} /> });
