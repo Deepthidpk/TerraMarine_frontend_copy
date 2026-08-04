@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
+import Navbar from './components/Navbar';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -16,6 +17,7 @@ import Tasks from './pages/Tasks';
 import Biodiversity from './pages/Biodiversity';
 import Payments from './pages/Payments';
 import UserApproval from './pages/UserApproval';
+import Notifications from './pages/Notifications';
 
 const ProtectedLayout = ({ children }) => {
   const { user, loading } = useAuth();
@@ -72,7 +74,7 @@ const AuthorityOrAdminRoute = ({ children }) => {
 const NonVolunteerRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user || user.role === 'Volunteer') {
+  if (!user || ['Volunteer', 'Citizen'].includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
   return children;
@@ -97,6 +99,7 @@ const App = () => {
           <Route path="/tasks" element={<ProtectedLayout><Tasks /></ProtectedLayout>} />
           <Route path="/biodiversity" element={<ProtectedLayout><NonVolunteerRoute><Biodiversity /></NonVolunteerRoute></ProtectedLayout>} />
           <Route path="/payments" element={<ProtectedLayout><Payments /></ProtectedLayout>} />
+          <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />
           <Route path="/user-approval" element={<ProtectedLayout><AuthorityOrAdminRoute><UserApproval /></AuthorityOrAdminRoute></ProtectedLayout>} />
 
           {/* Catch All Redirect */}

@@ -6,6 +6,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('terramarine_token') || null);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -56,6 +57,55 @@ export const AuthProvider = ({ children }) => {
       if (intervalId) clearInterval(intervalId);
     };
   }, [token]);
+
+  const fetchNotifications = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/notifications`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/notifications`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setNotifications([]);
+    } catch (err) {
+      console.error('Error clearing notifications:', err);
+    }
+  };
+
+  const handleDismissNotification = async (id) => {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/notifications/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.filter(n => n.notification_id !== id));
+    } catch (err) {
+      console.error('Error dismissing notification:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (user && token) {
+      fetchNotifications();
+      const notifInterval = setInterval(fetchNotifications, 5000);
+      return () => clearInterval(notifInterval);
+    }
+  }, [user, token]);
 
   const parseResponse = async (res) => {
     const contentType = res.headers.get('content-type');
@@ -217,7 +267,11 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile,
     authFetch,
-    API_URL
+    API_URL,
+    notifications,
+    fetchNotifications,
+    handleClearAllNotifications,
+    handleDismissNotification
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

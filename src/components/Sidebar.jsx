@@ -24,14 +24,16 @@ import {
   Edit3,
   Camera,
   User,
-  X
+  X,
+  Bell
 } from 'lucide-react';
 
 const Sidebar = () => {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile, notifications, handleClearAllNotifications, handleDismissNotification } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [profileForm, setProfileForm] = useState({
     full_name: '',
@@ -145,6 +147,7 @@ const Sidebar = () => {
         { to: '/dashboard?tab=audit', tabKey: 'audit', label: 'System Audit Logs', icon: <ShieldCheck size={18} /> },
         { to: '/dashboard?tab=backup', tabKey: 'backup', label: 'Backup & Recovery', icon: <HardDriveDownload size={18} /> },
         { to: '/dashboard?tab=reports', tabKey: 'reports', label: 'Platform Reports', icon: <BarChart3 size={18} /> },
+        { to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> },
         { to: '/dashboard?tab=support', tabKey: 'support', label: 'Technical Support', icon: <LifeBuoy size={18} /> }
       ];
     }
@@ -160,7 +163,7 @@ const Sidebar = () => {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
     }
 
-    if (user.role !== 'Volunteer') {
+    if (!['Volunteer', 'Citizen'].includes(user.role)) {
       links.push({ to: '/biodiversity', label: 'Biodiversity', icon: <Map size={18} /> });
     }
 
@@ -171,6 +174,8 @@ const Sidebar = () => {
     if (user.role === 'Authority') {
       links.push({ to: '/user-approval', label: 'User Approvals', icon: <Shield size={18} /> });
     }
+
+    links.push({ to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> });
 
     return links;
   };
@@ -247,15 +252,33 @@ const Sidebar = () => {
       >
         {navLinks.map((link) => {
           const active = isAdmin ? isTabActive(link.tabKey) : location.pathname === link.to;
+          const unreadCount = link.isNotification && notifications ? notifications.length : 0;
 
           return (
             <Link
               key={link.to}
               to={link.to}
               className={`sidebar-nav-item ${active ? 'active' : ''}`}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
-              {link.icon}
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{link.label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                {link.icon}
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{link.label}</span>
+              </div>
+              {link.isNotification && unreadCount > 0 && (
+                <span style={{
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  color: '#ffffff',
+                  fontSize: '0.72rem',
+                  fontWeight: '800',
+                  padding: '1px 7px',
+                  borderRadius: '10px',
+                  boxShadow: '0 0 10px rgba(239, 68, 68, 0.6)',
+                  flexShrink: 0
+                }}>
+                  {unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -458,12 +481,4 @@ const Sidebar = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>,
-        document.body
-      )}
-    </aside>
-  );
-};
-
-export default Sidebar;
+          </

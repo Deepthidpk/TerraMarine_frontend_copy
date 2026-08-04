@@ -910,7 +910,7 @@ const Tasks = () => {
             </div>
 
             {/* Submit proof form for assigned volunteer */}
-            {user.role === 'Volunteer' && activeTaskDetails.status === 'Pending' && (
+            {['Volunteer', 'Citizen'].includes(user.role) && ['Pending', 'In Progress'].includes(activeTaskDetails.status) && (
               <form onSubmit={handleVolunteerSubmitProof} style={{ borderTop: '1px solid rgba(0, 229, 255, 0.15)', paddingTop: '16px' }}>
                 <h4 style={{ fontSize: '1rem', color: '#00e5ff', marginBottom: '12px' }}>Submit Cleanup Verification Proof</h4>
                 
