@@ -7,6 +7,7 @@ import {
 import LeafletMap from '../components/LeafletMap';
 import CustomTimePicker from '../components/CustomTimePicker';
 import CustomDatePicker from '../components/CustomDatePicker';
+import CertificateModal from '../components/CertificateModal';
 
 const Campaigns = () => {
   const { user, authFetch } = useAuth();
@@ -37,6 +38,13 @@ const Campaigns = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+
+  // Volunteer History & Certificates State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [myHistory, setMyHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedCert, setSelectedCert] = useState(null);
+  const [joinedCampaignIds, setJoinedCampaignIds] = useState(new Set());
 
   const toMinutes = (timeStr) => {
     if (!timeStr) return 0;
@@ -166,6 +174,15 @@ const Campaigns = () => {
         const data = await res.json();
         setCampaigns(data.campaigns);
       }
+
+      if (['Volunteer', 'Citizen'].includes(user.role)) {
+        const historyRes = await authFetch('/campaigns/my-history');
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          const joinedIds = new Set((historyData.history || []).map(h => h.campaign_id));
+          setJoinedCampaignIds(joinedIds);
+        }
+      }
     } catch (err) {
       console.error('Error fetching campaigns:', err);
     } finally {
@@ -288,9 +305,26 @@ const Campaigns = () => {
         throw new Error(data.error || 'Could not join campaign.');
       }
       setSuccess('You have registered for the cleanup drive successfully!');
+      setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
       fetchCampaigns();
     } catch (err) {
       setError(err.message || 'Failed to join campaign.');
+    }
+  };
+
+  const handleOpenHistory = async () => {
+    setHistoryLoading(true);
+    setShowHistoryModal(true);
+    try {
+      const res = await authFetch('/campaigns/my-history');
+      if (res.ok) {
+        const data = await res.json();
+        setMyHistory(data.history || []);
+      }
+    } catch (err) {
+      console.error('Error fetching my history:', err);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -382,29 +416,54 @@ const Campaigns = () => {
           </h1>
         </div>
 
-        {isOrganizeRole && (
-          <button
-            onClick={() => setShowFormModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              color: 'white',
-              border: '1px solid rgba(0, 229, 255, 0.4)',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.95rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.3)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <PlusCircle size={20} />
-            Organize Cleanup Campaign
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+          {['Volunteer', 'Citizen'].includes(user.role) && (
+            <button
+              onClick={handleOpenHistory}
+              style={{
+                background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
+                color: 'white',
+                border: '1px solid rgba(0, 245, 212, 0.4)',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 245, 212, 0.25)'
+              }}
+            >
+              <Award size={18} />
+              My Participation & Certificates
+            </button>
+          )}
+
+          {isOrganizeRole && (
+            <button
+              onClick={() => setShowFormModal(true)}
+              style={{
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: 'white',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.3)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <PlusCircle size={20} />
+              Organize Cleanup Campaign
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Notifications */}
@@ -728,27 +787,51 @@ const Campaigns = () => {
                             Details
                           </button>
 
-                          {['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
+                          {camp.is_joined || joinedCampaignIds.has(camp.campaign_id) ? (
                             <button 
-                              onClick={() => handleJoinCampaign(camp.campaign_id)}
-                              className="btn btn-primary" 
-                              style={{ 
-                                padding: '4px 8px', 
-                                fontSize: '0.72rem', 
-                                borderRadius: '6px', 
+                              disabled
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '0.72rem',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
                                 gap: '4px',
-                                background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
-                                color: '#041126',
+                                background: 'rgba(16, 185, 129, 0.2)',
+                                color: '#00f5d4',
+                                border: '1px solid rgba(0, 245, 212, 0.4)',
                                 fontWeight: '700',
-                                boxShadow: '0 3px 10px rgba(0, 229, 255, 0.35)',
+                                cursor: 'default',
                                 width: '100%',
                                 maxWidth: '75px',
                                 justifyContent: 'center'
                               }}
                             >
-                              <Users size={12} />
-                              Join
+                              <Check size={12} /> Joined
                             </button>
+                          ) : (
+                            ['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
+                              <button 
+                                onClick={() => handleJoinCampaign(camp.campaign_id)}
+                                className="btn btn-primary" 
+                                style={{ 
+                                  padding: '4px 8px', 
+                                  fontSize: '0.72rem', 
+                                  borderRadius: '6px', 
+                                  gap: '4px',
+                                  background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                                  color: '#041126',
+                                  fontWeight: '700',
+                                  boxShadow: '0 3px 10px rgba(0, 229, 255, 0.35)',
+                                  width: '100%',
+                                  maxWidth: '75px',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Users size={12} />
+                                Join
+                              </button>
+                            )
                           )}
                         </div>
                       </td>
@@ -1218,6 +1301,127 @@ const Campaigns = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: MY PARTICIPATION HISTORY & CERTIFICATES (VOLUNTEER) */}
+      {/* ========================================================================= */}
+      {showHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '850px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(0, 245, 212, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75)',
+            padding: '28px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Award size={24} color="#00f5d4" />
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                  My Participation History & Certificates
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowHistoryModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading history...</div>
+            ) : myHistory.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <Award size={48} color="#64748b" style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem' }}>No Campaign History Found</h4>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.88rem' }}>You haven't registered for any cleanup drives yet. Join an upcoming campaign to earn certificates!</p>
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Campaign Title</th>
+                      <th>Location</th>
+                      <th>Date</th>
+                      <th>Attendance</th>
+                      <th>Certificate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myHistory.map((item) => (
+                      <tr key={item.registration_id}>
+                        <td style={{ fontWeight: '600' }}>{item.campaign_name}</td>
+                        <td>{item.location}</td>
+                        <td>{new Date(item.campaign_date).toLocaleDateString()}</td>
+                        <td>
+                          <span className={`badge ${item.attendance ? 'badge-verified' : 'badge-pending'}`}>
+                            {item.attendance ? 'Attended' : 'Registered'}
+                          </span>
+                        </td>
+                        <td>
+                          {item.certificate_status ? (
+                            <button
+                              onClick={() => setSelectedCert({
+                                certificate_id: item.certificate_id,
+                                volunteer_name: user.full_name,
+                                campaign_name: item.campaign_name,
+                                location: item.location,
+                                campaign_date: item.campaign_date,
+                                issued_date: item.issued_date,
+                                organization_name: item.organization_name || item.creator_name
+                              })}
+                              className="btn btn-primary"
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: '0.75rem',
+                                background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
+                                color: '#ffffff',
+                                border: '1px solid rgba(0, 245, 212, 0.4)'
+                              }}
+                            >
+                              <Award size={14} /> View Certificate
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Pending Verification</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Render Certificate Print / Download Modal */}
+      {selectedCert && (
+        <CertificateModal
+          certificate={selectedCert}
+          onClose={() => setSelectedCert(null)}
+        />
       )}
     </div>
   );

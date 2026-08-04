@@ -264,6 +264,24 @@ const Tasks = () => {
     }
   };
 
+  const handleAcceptTask = async (taskId) => {
+    setError('');
+    setSuccess('');
+    try {
+      const res = await authFetch(`/tasks/${taskId}/accept`, {
+        method: 'PUT'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to accept task.');
+      }
+      setSuccess('Task accepted successfully! It is now listed under your active tasks.');
+      fetchTasksData();
+    } catch (err) {
+      setError(err.message || 'Error accepting task.');
+    }
+  };
+
   // Filtered tasks computation
   const filteredTasks = tasks.filter((t) => {
     if (searchQuery.trim()) {
@@ -562,14 +580,32 @@ const Tasks = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        {user.role === 'Volunteer' && task.status === 'Pending' && (
+                        {['Volunteer', 'Citizen'].includes(user.role) && (!task.assigned_worker || task.assigned_worker !== user.user_id) && task.status === 'Pending' && (
+                          <button 
+                            onClick={() => handleAcceptTask(task.task_id)}
+                            className="btn btn-primary" 
+                            style={{ 
+                              padding: '6px 12px', 
+                              fontSize: '0.8rem',
+                              background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                              color: '#041126',
+                              fontWeight: '700',
+                              boxShadow: '0 4px 12px rgba(0, 229, 255, 0.3)'
+                            }}
+                          >
+                            <CheckSquare size={14} />
+                            Accept Task
+                          </button>
+                        )}
+
+                        {['Volunteer', 'Citizen'].includes(user.role) && task.assigned_worker === user.user_id && ['Pending', 'In Progress'].includes(task.status) && (
                           <button 
                             onClick={() => handleOpenUpdateModal(task.task_id)}
                             className="btn btn-primary" 
                             style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                           >
                             <Camera size={14} />
-                            Complete
+                            Complete Task
                           </button>
                         )}
 
