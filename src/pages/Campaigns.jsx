@@ -179,7 +179,7 @@ const Campaigns = () => {
         const historyRes = await authFetch('/campaigns/my-history');
         if (historyRes.ok) {
           const historyData = await historyRes.json();
-          const joinedIds = new Set((historyData.history || []).map(h => h.campaign_id));
+          const joinedIds = new Set((historyData.history || []).map(h => String(h.campaign_id)));
           setJoinedCampaignIds(joinedIds);
         }
       }
@@ -305,7 +305,7 @@ const Campaigns = () => {
         throw new Error(data.error || 'Could not join campaign.');
       }
       setSuccess('You have registered for the cleanup drive successfully!');
-      setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+      setJoinedCampaignIds(prev => new Set([...prev, String(campaignId)]));
       fetchCampaigns();
     } catch (err) {
       setError(err.message || 'Failed to join campaign.');
@@ -787,7 +787,7 @@ const Campaigns = () => {
                             Details
                           </button>
 
-                          {camp.is_joined || joinedCampaignIds.has(camp.campaign_id) ? (
+                          {camp.is_joined === true || camp.is_joined === 'true' || joinedCampaignIds.has(String(camp.campaign_id)) ? (
                             <button 
                               disabled
                               style={{
