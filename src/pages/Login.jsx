@@ -53,7 +53,13 @@ const Login = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      if (user.role === 'Citizen') {
+        navigate('/reports');
+      } else if (user.role === 'Volunteer') {
+        navigate('/tasks');
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [user, navigate]);
 
@@ -113,6 +119,8 @@ const Login = () => {
       const loggedUser = await login(email, password);
       if (loggedUser?.role === 'Citizen') {
         navigate('/reports');
+      } else if (loggedUser?.role === 'Volunteer') {
+        navigate('/tasks');
       } else {
         navigate('/dashboard');
       }

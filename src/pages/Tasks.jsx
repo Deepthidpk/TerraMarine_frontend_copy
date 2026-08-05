@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   CheckSquare, User, Calendar, Image, Info, Camera, Send, FileText,
@@ -27,6 +28,15 @@ const Tasks = () => {
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
   const [deadline, setDeadline] = useState('');
   
+  // Add Worker Modal State (Authority / Admin)
+  const [showAddWorkerModal, setShowAddWorkerModal] = useState(false);
+  const [workerName, setWorkerName] = useState('');
+  const [workerEmail, setWorkerEmail] = useState('');
+  const [workerPhone, setWorkerPhone] = useState('');
+  const [workerFormErrors, setWorkerFormErrors] = useState({});
+  const [addingWorker, setAddingWorker] = useState(false);
+  const [workerError, setWorkerError] = useState('');
+
   // Volunteer Update task form state
   const [activeTaskDetails, setActiveTaskDetails] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -90,7 +100,7 @@ const Tasks = () => {
       }
 
       // If Authority/Admin, fetch reports and workers for assignment form
-      if (['Authority', 'Admin'].includes(user.role)) {
+      if (user && ['Authority', 'Admin'].includes(user.role)) {
         const reportsRes = await authFetch('/reports');
         if (reportsRes.ok) {
           const repData = await reportsRes.json();
@@ -131,8 +141,10 @@ const Tasks = () => {
   };
 
   useEffect(() => {
-    fetchTasksData();
-  }, []);
+    if (user) {
+      fetchTasksData();
+    }
+  }, [user]);
 
   const handleCreateTaskSubmit = async (e) => {
     e.preventDefault();
@@ -187,6 +199,61 @@ const Tasks = () => {
       setError(err.message || 'Error occurred during task assignment.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAddWorkerSubmit = async (e) => {
+    e.preventDefault();
+    setWorkerError('');
+    setError('');
+    setSuccess('');
+
+    const errors = {};
+    if (!workerName.trim() || workerName.trim().length < 2) {
+      errors.name = 'Full name is required (at least 2 characters).';
+    }
+    if (!workerEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workerEmail.trim())) {
+      errors.email = 'A valid email address is required.';
+    }
+    if (!workerPhone.trim() || !/^[0-9+\s-]{8,15}$/.test(workerPhone.trim())) {
+      errors.phone = 'A valid phone number is required (8-15 digits).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setWorkerFormErrors(errors);
+      return;
+    }
+
+    setAddingWorker(true);
+    try {
+      const res = await authFetch('/authority/workers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: workerName.trim(),
+          email: workerEmail.trim(),
+          phone: workerPhone.trim()
+        })
+      });
+
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setWorkerError(data.error || 'Failed to add worker.');
+      } else {
+        setSuccess(`Worker "${workerName.trim()}" registered successfully! Login details sent to ${workerEmail.trim()}.`);
+        setWorkerName('');
+        setWorkerEmail('');
+        setWorkerPhone('');
+        setWorkerFormErrors({});
+        setShowAddWorkerModal(false);
+        fetchTasksData();
+      }
+    } catch (err) {
+      setWorkerError('Network error while adding worker: ' + (err.message || 'Server error'));
+    } finally {
+      setAddingWorker(false);
     }
   };
 
@@ -300,7 +367,7 @@ const Tasks = () => {
     return true;
   });
 
-  const isAssignRole = ['Authority', 'Admin'].includes(user.role);
+  const isAssignRole = ['Authority', 'Admin'].includes(user?.role);
 
   return (
     <div>
@@ -321,27 +388,51 @@ const Tasks = () => {
         </div>
 
         {isAssignRole && (
-          <button
-            onClick={() => { setTaskFormErrors({}); setShowAssignModal(true); }}
-            style={{
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              color: 'white',
-              border: '1px solid rgba(0, 229, 255, 0.4)',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.95rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
-              marginLeft: 'auto'
-            }}
-          >
-            <PlusCircle size={20} />
-            Assign Cleanup Task
-          </button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginLeft: 'auto' }}>
+            <button
+              type="button"
+              onClick={() => { setWorkerFormErrors({}); setWorkerError(''); setShowAddWorkerModal(true); }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.15) 0%, rgba(2, 132, 199, 0.25) 100%)',
+                color: '#00e5ff',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(0, 229, 255, 0.15)'
+              }}
+            >
+              <User size={18} />
+              + Add Worker
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setTaskFormErrors({}); setShowAssignModal(true); }}
+              style={{
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: 'white',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)'
+              }}
+            >
+              <PlusCircle size={20} />
+              Assign Cleanup Task
+            </button>
+          </div>
         )}
       </div>
 
@@ -580,7 +671,7 @@ const Tasks = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        {['Volunteer', 'Citizen'].includes(user.role) && (!task.assigned_worker || task.assigned_worker !== user.user_id) && task.status === 'Pending' && (
+                        {['Volunteer', 'Citizen'].includes(user?.role) && (!task.assigned_worker || task.assigned_worker !== user?.user_id) && task.status === 'Pending' && (
                           <button 
                             onClick={() => handleAcceptTask(task.task_id)}
                             className="btn btn-primary" 
@@ -598,7 +689,7 @@ const Tasks = () => {
                           </button>
                         )}
 
-                        {['Volunteer', 'Citizen'].includes(user.role) && task.assigned_worker === user.user_id && ['Pending', 'In Progress'].includes(task.status) && (
+                        {['Volunteer', 'Citizen'].includes(user?.role) && task.assigned_worker === user?.user_id && ['Pending', 'In Progress'].includes(task.status) && (
                           <button 
                             onClick={() => handleOpenUpdateModal(task.task_id)}
                             className="btn btn-primary" 
@@ -949,6 +1040,142 @@ const Tasks = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: REGISTER NEW CLEANUP WORKER */}
+      {/* ========================================================================= */}
+      {showAddWorkerModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '540px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            position: 'relative',
+            padding: '28px',
+            margin: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <User size={24} color="#00e5ff" />
+                <h2 style={{ fontSize: '1.3rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                  Register New Cleanup Worker
+                </h2>
+              </div>
+              <button 
+                onClick={() => setShowAddWorkerModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {workerError && (
+              <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--danger)', borderRadius: '8px', color: '#f87171', marginBottom: '16px', fontSize: '0.85rem' }}>
+                ⚠️ {workerError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddWorkerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Worker Full Name *</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="e.g. Rahul Kumar" 
+                  value={workerName}
+                  onChange={(e) => setWorkerName(e.target.value)}
+                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: workerFormErrors.name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                />
+                {workerFormErrors.name && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    {workerFormErrors.name}
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Email Address *</label>
+                <input 
+                  type="email" 
+                  className="form-control" 
+                  placeholder="e.g. worker@example.com" 
+                  value={workerEmail}
+                  onChange={(e) => setWorkerEmail(e.target.value)}
+                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: workerFormErrors.email ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                />
+                {workerFormErrors.email && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    {workerFormErrors.email}
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Phone Number *</label>
+                <input 
+                  type="tel" 
+                  className="form-control" 
+                  placeholder="e.g. +91 9876543210" 
+                  value={workerPhone}
+                  onChange={(e) => setWorkerPhone(e.target.value)}
+                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: workerFormErrors.phone ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                />
+                {workerFormErrors.phone && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    {workerFormErrors.phone}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ background: 'rgba(0, 229, 255, 0.05)', border: '1px solid rgba(0, 229, 255, 0.2)', padding: '12px', borderRadius: '10px', fontSize: '0.8rem', color: '#94a3b8' }}>
+                <p style={{ margin: 0 }}>
+                  💡 An automated welcome email containing their login details and portal link will be dispatched upon registration.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddWorkerModal(false)}
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingWorker}
+                  className="btn btn-primary"
+                  style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+                >
+                  {addingWorker ? 'Registering...' : 'Add Worker'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
