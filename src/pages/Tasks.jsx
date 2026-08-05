@@ -61,7 +61,7 @@ const Tasks = () => {
         return null;
 
       case 'selectedWorkerId':
-        if (!value) return 'Worker / volunteer selection is required.';
+        if (!value) return 'Municipal worker selection is required.';
         return null;
 
       case 'deadline':
@@ -114,23 +114,16 @@ const Tasks = () => {
         }
 
         try {
-          const usersRes = await authFetch('/authority/users');
+          const usersRes = await authFetch('/authority/users?role=Worker');
           if (usersRes.ok) {
             const uData = await usersRes.json();
-            if (uData.users && uData.users.length > 0) {
-              setWorkers(uData.users);
-            } else {
-              setWorkers([
-                { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
-                { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
-              ]);
-            }
+            const workerList = (uData.users || []).filter(u => u.role === 'Worker');
+            setWorkers(workerList);
+          } else {
+            setWorkers([]);
           }
         } catch (uErr) {
-          setWorkers([
-            { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
-            { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
-          ]);
+          setWorkers([]);
         }
       }
     } catch (err) {
@@ -828,7 +821,7 @@ const Tasks = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Assign Worker / Volunteer *</label>
+                <label className="form-label">Assign Worker *</label>
                 <select 
                   className="form-control" 
                   value={selectedWorkerId} 
@@ -844,7 +837,7 @@ const Tasks = () => {
                   }}
                   style={{ color: selectedWorkerId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedWorkerId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedWorkerId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 >
-                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Select Volunteer --</option>
+                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Select Municipal Worker --</option>
                   {workers.map(w => (
                     <option key={w.user_id} value={w.user_id} style={{ color: '#cbd5e1' }}>{w.full_name}</option>
                   ))}

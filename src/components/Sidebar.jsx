@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -30,12 +30,33 @@ import {
 } from 'lucide-react';
 
 const Sidebar = () => {
-  const { user, logout, updateProfile, notifications, handleClearAllNotifications, handleDismissNotification } = useAuth();
+  const { user, logout, updateProfile, notifications, authFetch } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [pendingReportsCount, setPendingReportsCount] = useState(0);
+
+  useEffect(() => {
+    if (user && ['Authority', 'Admin'].includes(user.role)) {
+      const checkPendingReports = async () => {
+        try {
+          const res = await authFetch('/reports');
+          if (res.ok) {
+            const data = await res.json();
+            const pendingCount = (data.reports || []).filter(r => r.status === 'Pending').length;
+            setPendingReportsCount(pendingCount);
+          }
+        } catch (e) {
+          // Silent catch
+        }
+      };
+      checkPendingReports();
+      const interval = setInterval(checkPendingReports, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
   const [profileForm, setProfileForm] = useState({
     full_name: '',
     phone: '',
@@ -291,6 +312,34 @@ const Sidebar = () => {
                   flexShrink: 0
                 }}>
                   {unreadCount}
+                </span>
+              )}
+              {link.to === '/reports' && pendingReportsCount > 0 && ['Authority', 'Admin'].includes(user?.role) && (
+                <span 
+                  title={`${pendingReportsCount} new complaint(s) awaiting approval`}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.35) 100%)',
+                    border: '1px solid #10b981',
+                    color: '#10b981',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    boxShadow: '0 0 10px rgba(16, 185, 129, 0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    flexShrink: 0
+                  }}
+                >
+                  <span style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    boxShadow: '0 0 8px #10b981'
+                  }} />
+                  {pendingReportsCount}
                 </span>
               )}
             </Link>

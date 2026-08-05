@@ -74,15 +74,16 @@ const Reports = () => {
   const [severityFilter, setSeverityFilter] = useState('All');
   const [wasteTypeFilter, setWasteTypeFilter] = useState('All');
 
-  // Count user's filed complaints
-  const myComplaintsCount = reports.filter(r => r.reported_by === user?.user_id).length;
-
   // Filtered reports computation
-  const filteredReports = reports.filter((rep) => {
+  const safeReports = Array.isArray(reports) ? reports : [];
+  const myComplaintsCount = safeReports.filter(r => r && r.reported_by === user?.user_id).length;
+
+  const filteredReports = safeReports.filter((rep) => {
+    if (!rep) return false;
     if (reportTab === 'my_complaints' && rep.reported_by !== user?.user_id) {
       return false;
     }
-    if (searchQuery.trim()) {
+    if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = rep.title?.toLowerCase().includes(q);
       const locMatch = rep.location_name?.toLowerCase().includes(q);
@@ -199,7 +200,7 @@ const Reports = () => {
       const res = await authFetch('/reports');
       if (res.ok) {
         const data = await res.json();
-        setReports(data.reports);
+        setReports(Array.isArray(data.reports) ? data.reports : []);
       }
     } catch (err) {
       console.error('Error fetching reports:', err);
@@ -949,7 +950,7 @@ const Reports = () => {
         {/* Filter Controls Toolbar */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
+          gridTemplateColumns: ['Authority', 'Admin'].includes(user?.role) ? '2.5fr 1fr 1fr 1fr' : '2.5fr 1.5fr 1.5fr',
           gap: '12px',
           alignItems: 'end',
           marginBottom: '20px',
@@ -1025,30 +1026,32 @@ const Reports = () => {
             </select>
           </div>
 
-          {/* Severity Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Severity
-            </label>
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                borderRadius: '6px',
-                border: '1px solid var(--card-border)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem'
-              }}
-            >
-              <option value="All">All Severities</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-            </select>
-          </div>
+          {/* Severity Filter (Authority / Admin Only) */}
+          {['Authority', 'Admin'].includes(user?.role) && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Severity
+              </label>
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--card-border)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem'
+                }}
+              >
+                <option value="All">All Severities</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+          )}
 
           {/* Waste Type Filter */}
           <div>
@@ -1109,7 +1112,9 @@ const Reports = () => {
                   <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>LOCATION</th>
                   <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>WASTE TYPE</th>
                   <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>CATEGORY</th>
-                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
+                  {['Authority', 'Admin'].includes(user?.role) && (
+                    <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
+                  )}
                   <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>REPORTED DATE</th>
                   <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 </tr>
@@ -1118,7 +1123,40 @@ const Reports = () => {
                 {filteredReports.map((rep) => (
                   <tr key={rep.report_id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background 0.2s ease' }}>
                     <td style={{ padding: '8px 12px', textAlign: 'left' }}>
-                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3' }}>{rep.title}</div>
+                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {rep.status === 'Pending' && ['Authority', 'Admin'].includes(user?.role) && (
+                          <span 
+                            title="New complaint requiring approval"
+                            style={{
+                              width: '9px',
+                              height: '9px',
+                              borderRadius: '50%',
+                              background: '#10b981',
+                              boxShadow: '0 0 10px #10b981',
+                              flexShrink: 0,
+                              display: 'inline-block'
+                            }} 
+                          />
+                        )}
+                        <span>{rep.title}</span>
+                        {rep.status === 'Pending' && ['Authority', 'Admin'].includes(user?.role) && (
+                          <span style={{
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                            color: '#10b981',
+                            fontSize: '0.68rem',
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            fontWeight: '700',
+                            whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            Requires Approval
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'left' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
@@ -1134,15 +1172,17 @@ const Reports = () => {
                         {rep.report_category}
                       </span>
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{ 
-                        fontWeight: '700', 
-                        fontSize: '0.78rem',
-                        color: rep.severity === 'High' ? '#ff4d4d' : rep.severity === 'Medium' ? '#ffb703' : '#00f5d4'
-                      }}>
-                        {rep.severity || 'Medium'}
-                      </span>
-                    </td>
+                    {['Authority', 'Admin'].includes(user?.role) && (
+                      <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <span style={{ 
+                          fontWeight: '700', 
+                          fontSize: '0.78rem',
+                          color: rep.severity === 'High' ? '#ff4d4d' : rep.severity === 'Medium' ? '#ffb703' : '#00f5d4'
+                        }}>
+                          {rep.severity || 'Medium'}
+                        </span>
+                      </td>
+                    )}
                     <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
                       {new Date(rep.reported_at).toLocaleDateString()}
                     </td>
@@ -1316,7 +1356,9 @@ const Reports = () => {
                 </p>
 
                 <p><strong>Waste Type:</strong> {activeReportDetails.report.waste_type || 'General'}</p>
-                <p><strong>Severity:</strong> {activeReportDetails.report.severity || 'Medium'}</p>
+                {['Authority', 'Admin'].includes(user?.role) && (
+                  <p><strong>Severity:</strong> {activeReportDetails.report.severity || 'Medium'}</p>
+                )}
                 <p><strong>Current Status:</strong> <span className={`badge badge-${activeReportDetails.report.status.toLowerCase()}`} style={{ verticalAlign: 'middle' }}>{activeReportDetails.report.status}</span></p>
                 
                 {/* Authority verification controls */}
