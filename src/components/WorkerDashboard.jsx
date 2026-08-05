@@ -121,59 +121,11 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Top Header Banner */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '16px',
-        background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.95) 0%, rgba(8, 20, 40, 0.98) 100%)',
-        padding: '24px',
-        borderRadius: '20px',
-        border: '1px solid rgba(0, 229, 255, 0.25)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <h1 style={{ fontSize: '1.85rem', color: '#ffffff', fontWeight: '800', margin: 0 }}>
-              Welcome back, <span style={{ color: '#00e5ff' }}>{user.full_name}</span>!
-            </h1>
-            <span style={{
-              background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
-              color: '#041126',
-              fontWeight: '800',
-              fontSize: '0.8rem',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em'
-            }}>
-              Worker
-            </span>
-          </div>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.9rem' }}>
-            Official Municipal Cleanup Worker • {user.district || 'Kochi'} Coastal Operational Hub
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigate('/tasks')}
-          className="btn btn-primary"
-          style={{
-            background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-            padding: '12px 20px',
-            borderRadius: '12px',
-            fontWeight: '700',
-            fontSize: '0.9rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <CheckSquare size={18} />
-          View All Tasks
-        </button>
+      {/* Header welcome text */}
+      <div style={{ marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '1.85rem', color: '#ffffff', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>
+          Welcome back, <span style={{ color: '#00e5ff' }}>{user.full_name}</span>!
+        </h1>
       </div>
 
       {successMsg && (
