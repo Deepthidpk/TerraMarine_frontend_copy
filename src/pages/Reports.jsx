@@ -1344,7 +1344,9 @@ const Reports = () => {
                 <div style={{ marginTop: '16px', fontSize: '0.85rem' }}>
                   <p><strong>Coordinates:</strong> {parseFloat(activeReportDetails.report.latitude).toFixed(6)}, {parseFloat(activeReportDetails.report.longitude).toFixed(6)}</p>
                   <p><strong>Location:</strong> {activeReportDetails.report.location_name || 'Coastal boundary'}</p>
-                  <p><strong>Reporter:</strong> {activeReportDetails.report.reporter_name} ({activeReportDetails.report.reporter_phone || 'No phone'})</p>
+                  {['Authority', 'Admin'].includes(user?.role) && (
+                    <p><strong>Reporter:</strong> {activeReportDetails.report.reporter_name} ({activeReportDetails.report.reporter_phone || 'No phone'})</p>
+                  )}
                 </div>
               </div>
 
@@ -1389,8 +1391,8 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Audit updates timeline */}
-            {activeReportDetails.updates && activeReportDetails.updates.length > 0 && (
+            {/* Audit updates timeline - RESTRICTED TO MUNICIPAL AUTHORITY & ADMIN */}
+            {['Authority', 'Admin'].includes(user?.role) && activeReportDetails.updates && activeReportDetails.updates.length > 0 && (
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--card-border)', paddingTop: '16px' }}>
                 <h4 style={{ fontSize: '1rem', marginBottom: '12px' }}>Incident Updates & Audit Log</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
