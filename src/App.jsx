@@ -18,6 +18,7 @@ import Biodiversity from './pages/Biodiversity';
 import Payments from './pages/Payments';
 import UserApproval from './pages/UserApproval';
 import Notifications from './pages/Notifications';
+import MyParticipations from './pages/MyParticipations';
 
 const ProtectedLayout = ({ children }) => {
   const { user, loading } = useAuth();
@@ -99,6 +100,7 @@ const App = () => {
           <Route path="/tasks" element={<ProtectedLayout><Tasks /></ProtectedLayout>} />
           <Route path="/biodiversity" element={<ProtectedLayout><NonVolunteerRoute><Biodiversity /></NonVolunteerRoute></ProtectedLayout>} />
           <Route path="/payments" element={<ProtectedLayout><Payments /></ProtectedLayout>} />
+          <Route path="/participations" element={<ProtectedLayout><MyParticipations /></ProtectedLayout>} />
           <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />
           <Route path="/user-approval" element={<ProtectedLayout><AuthorityOrAdminRoute><UserApproval /></AuthorityOrAdminRoute></ProtectedLayout>} />
 

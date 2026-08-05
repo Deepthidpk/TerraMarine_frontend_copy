@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { 
   CheckSquare, Clock, Camera, ShieldCheck, User, Calendar, MapPin, 
   Upload, CheckCircle2, AlertCircle, FileText, X, ArrowRight, Award,
-  Search, RotateCcw
+  Search, RotateCcw, DollarSign, History, Layers, PlusCircle
 } from 'lucide-react';
 
 const WorkerDashboard = ({ user, authFetch, navigate }) => {
-  const [tasks, setTasks] = useState([]);
+  const [myTasks, setMyTasks] = useState([]);
+  const [availableTasks, setAvailableTasks] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Tab State: 'my_tasks' | 'available_tasks' | 'history' | 'payments'
+  const [activeTab, setActiveTab] = useState('my_tasks');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,15 +31,20 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
   const fetchWorkerData = async () => {
     setLoading(true);
     try {
-      // Fetch tasks assigned to worker
-      const tasksRes = await authFetch('/tasks?type=my_tasks');
-      if (tasksRes.ok) {
-        const data = await tasksRes.json();
-        setTasks(data.tasks || []);
-      }
+      const [myRes, availRes, payRes] = await Promise.all([
+        authFetch('/tasks?type=my_tasks'),
+        authFetch('/tasks?type=available'),
+        authFetch('/payments')
+      ]);
 
-      // Fetch payments for worker
-      const payRes = await authFetch('/payments');
+      if (myRes.ok) {
+        const myData = await myRes.json();
+        setMyTasks(myData.tasks || []);
+      }
+      if (availRes.ok) {
+        const availData = await availRes.json();
+        setAvailableTasks(availData.tasks || []);
+      }
       if (payRes.ok) {
         const payData = await payRes.json();
         setPayments(payData.payments || []);
@@ -50,6 +59,25 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
   useEffect(() => {
     fetchWorkerData();
   }, []);
+
+  const handleAcceptTask = async (taskId) => {
+    setFormError('');
+    setSuccessMsg('');
+    try {
+      const res = await authFetch(`/tasks/${taskId}/accept`, {
+        method: 'PUT'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to accept task.');
+      }
+      setSuccessMsg('Cleanup task accepted successfully! It is now listed under your active tasks.');
+      fetchWorkerData();
+      setActiveTab('my_tasks');
+    } catch (err) {
+      setFormError(err.message || 'Error accepting cleanup task.');
+    }
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -115,17 +143,22 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
     }
   };
 
-  const assignedTasksCount = tasks.length;
-  const inProgressCount = tasks.filter(t => t.status === 'Pending' || t.status === 'In Progress').length;
-  const completedCount = tasks.filter(t => t.status === 'Completed').length;
-  const verifiedCount = tasks.filter(t => t.status === 'Verified').length;
+  // Metrics computation
+  const assignedTasksCount = myTasks.length;
+  const pendingCount = myTasks.filter(t => t.status === 'Pending' || t.status === 'In Progress').length;
+  const completedCount = myTasks.filter(t => t.status === 'Completed').length;
+  const verifiedCount = myTasks.filter(t => t.status === 'Verified').length;
 
   const totalRewardsEarned = payments
     .filter(p => p.payment_status === 'Paid')
     .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
 
-  // Filtered tasks computation
-  const filteredTasks = tasks.filter((t) => {
+  const pendingRewards = payments
+    .filter(p => p.payment_status === 'Pending')
+    .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+
+  // Filtered assigned tasks computation
+  const filteredMyTasks = myTasks.filter((t) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = t.report_title?.toLowerCase().includes(q);
@@ -141,6 +174,9 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
 
     return true;
   });
+
+  // Participation History tasks
+  const historyTasks = myTasks.filter(t => t.status === 'Completed' || t.status === 'Verified');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -158,9 +194,16 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
         </div>
       )}
 
-      {/* 4 Metric Stats Cards Across Top (Authority Dashboard / Tasks Page Design) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        {/* Card 1: Total Tasks / Assigned Tasks (RED THEME) */}
+      {formError && (
+        <div style={{ padding: '14px 18px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', borderRadius: '12px', color: '#f87171', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <AlertCircle size={20} />
+          <span>{formError}</span>
+        </div>
+      )}
+
+      {/* 4 Metric Stats Cards Across Top */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+        {/* Card 1: Total Tasks (RED THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
           border: '1px solid rgba(255, 77, 77, 0.35)',
@@ -191,7 +234,7 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
           </div>
           <div className="stat-content-wrapper">
             <span className="stat-lbl">Pending Tasks</span>
-            <div className="stat-val">{inProgressCount}</div>
+            <div className="stat-val">{pendingCount}</div>
           </div>
           <img 
             src="/images/cyan_cleanups_corner.png" 
@@ -241,94 +284,209 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
         </div>
       </div>
 
-      {/* Main Assigned Cleanup Tasks Ledger */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <div style={{
-          display: 'flex',
-          justify: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px'
-        }}>
-          <div>
-            <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
-              My Assigned Cleanup Tasks
-            </h3>
-            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Showing {filteredTasks.length} of {tasks.length} assigned tasks
-            </span>
-          </div>
+      {/* SECTION 1: MY ASSIGNED & ACCEPTED TASKS */}
+      {activeTab === 'my_tasks' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <div style={{
+            display: 'flex',
+            justify: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '16px',
+            marginBottom: '20px'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
+                My Assigned Cleanup Tasks
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                Showing {filteredMyTasks.length} of {myTasks.length} assigned tasks
+              </span>
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            {/* Search Input */}
-            <div style={{ position: 'relative', minWidth: '240px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input
-                type="text"
-                placeholder="Search incident, location, waste..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Search Input */}
+              <div style={{ position: 'relative', minWidth: '240px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Search incident, location, waste..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 30px 8px 36px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(0, 229, 255, 0.25)',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    color: '#ffffff',
+                    fontSize: '0.85rem'
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 style={{
-                  width: '100%',
-                  padding: '8px 30px 8px 36px',
+                  padding: '8px 14px',
                   borderRadius: '8px',
                   border: '1px solid rgba(0, 229, 255, 0.25)',
                   background: 'rgba(8, 20, 42, 0.8)',
                   color: '#ffffff',
-                  fontSize: '0.85rem'
+                  fontSize: '0.85rem',
+                  fontWeight: '600'
                 }}
-              />
-              {searchQuery && (
+              >
+                <option value="All">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed (Proof Uploaded)</option>
+                <option value="Verified">Verified</option>
+              </select>
+
+              {(searchQuery || statusFilter !== 'All') && (
                 <button
-                  onClick={() => setSearchQuery('')}
-                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                  onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
                 >
-                  <X size={14} />
+                  <RotateCcw size={14} /> Clear
                 </button>
               )}
-            </div>
 
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                padding: '8px 14px',
-                borderRadius: '8px',
-                border: '1px solid rgba(0, 229, 255, 0.25)',
-                background: 'rgba(8, 20, 42, 0.8)',
-                color: '#ffffff',
-                fontSize: '0.85rem',
-                fontWeight: '600'
-              }}
-            >
-              <option value="All">All Statuses</option>
-              <option value="Pending">Pending</option>
-              <option value="Completed">Completed (Proof Uploaded)</option>
-              <option value="Verified">Verified</option>
-            </select>
-
-            {(searchQuery || statusFilter !== 'All') && (
               <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                onClick={fetchWorkerData}
                 style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  padding: '7px 12px',
+                  background: 'rgba(0, 229, 255, 0.1)',
+                  border: '1px solid rgba(0, 229, 255, 0.3)',
+                  color: '#00e5ff',
+                  padding: '8px 14px',
                   borderRadius: '8px',
                   fontSize: '0.8rem',
                   fontWeight: '600',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  cursor: 'pointer'
                 }}
               >
-                <RotateCcw size={14} /> Clear
+                Refresh Tasks
               </button>
-            )}
+            </div>
+          </div>
+
+          {loading ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '30px' }}>Loading worker tasks...</div>
+          ) : filteredMyTasks.length === 0 ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
+              <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No cleanup tasks found.</p>
+              {availableTasks.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('available_tasks')}
+                  style={{ marginTop: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  Browse Available Tasks to Accept ({availableTasks.length}) →
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Incident Name</th>
+                    <th>Location</th>
+                    <th>Campaign / Link</th>
+                    <th>Assigned Date</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMyTasks.map((t) => (
+                    <tr key={t.task_id}>
+                      <td style={{ fontWeight: '700', color: '#ffffff' }}>{t.report_title}</td>
+                      <td>{t.location_name}</td>
+                      <td>{t.campaign_name || 'Direct Authority Task'}</td>
+                      <td style={{ fontSize: '0.85rem' }}>{new Date(t.assigned_date).toLocaleDateString()}</td>
+                      <td style={{ fontSize: '0.85rem' }}>{t.deadline ? new Date(t.deadline).toLocaleDateString() : 'N/A'}</td>
+                      <td>
+                        <span className={`badge ${
+                          t.status === 'Verified' ? 'badge-completed' :
+                          t.status === 'Completed' ? 'badge-verified' : 'badge-pending'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </td>
+                      <td>
+                        {['Pending', 'In Progress'].includes(t.status) ? (
+                          <button
+                            onClick={() => handleOpenCompleteModal(t)}
+                            className="btn btn-primary"
+                            style={{
+                              padding: '6px 14px',
+                              fontSize: '0.8rem',
+                              background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                              color: '#041126',
+                              fontWeight: '700',
+                              borderRadius: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Camera size={14} />
+                            Upload Proof
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenCompleteModal(t)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                          >
+                            View Proof Details
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECTION 2: AVAILABLE CLEANUP TASKS TO ACCEPT */}
+      {activeTab === 'available_tasks' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
+                Available Coastal Cleanup Tasks
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                Browse open cleanup tasks created by Municipal Authorities and click Accept Task to claim them.
+              </span>
+            </div>
 
             <button
               onClick={fetchWorkerData}
@@ -336,72 +494,54 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
                 background: 'rgba(0, 229, 255, 0.1)',
                 border: '1px solid rgba(0, 229, 255, 0.3)',
                 color: '#00e5ff',
-                padding: '8px 14px',
+                padding: '6px 14px',
                 borderRadius: '8px',
                 fontSize: '0.8rem',
                 fontWeight: '600',
                 cursor: 'pointer'
               }}
             >
-              Refresh Tasks
+              Refresh List
             </button>
           </div>
-        </div>
 
-        {loading ? (
-          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '30px' }}>Loading worker tasks...</div>
-        ) : filteredTasks.length === 0 ? (
-          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
-            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No cleanup tasks found.</p>
-            {(searchQuery || statusFilter !== 'All') && (
-              <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
-                style={{ marginTop: '12px', background: '#0284c7', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}
-              >
-                Reset Search & Filters
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Incident Name</th>
-                  <th>Location</th>
-                  <th>Campaign / Link</th>
-                  <th>Assigned Date</th>
-                  <th>Deadline</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.map((t) => (
-                  <tr key={t.task_id}>
-                    <td style={{ fontWeight: '700', color: '#ffffff' }}>{t.report_title}</td>
-                    <td>{t.location_name}</td>
-                    <td>{t.campaign_name || 'Direct Authority Task'}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{new Date(t.assigned_date).toLocaleDateString()}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{t.deadline ? new Date(t.deadline).toLocaleDateString() : 'N/A'}</td>
-                    <td>
-                      <span className={`badge ${
-                        t.status === 'Verified' ? 'badge-completed' :
-                        t.status === 'Completed' ? 'badge-verified' : 'badge-pending'
-                      }`}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td>
-                      {['Pending', 'In Progress'].includes(t.status) ? (
+          {availableTasks.length === 0 ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
+              <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No open available tasks right now.</p>
+              <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Check back soon or review your currently assigned tasks.</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Incident Name</th>
+                    <th>Location</th>
+                    <th>Waste Type</th>
+                    <th>Campaign Link</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {availableTasks.map((t) => (
+                    <tr key={t.task_id}>
+                      <td style={{ fontWeight: '700', color: '#ffffff' }}>{t.report_title}</td>
+                      <td>{t.location_name}</td>
+                      <td>
+                        <span className="badge badge-pending">
+                          {t.waste_type || 'General litter'}
+                        </span>
+                      </td>
+                      <td>{t.campaign_name || 'Direct Authority Task'}</td>
+                      <td>
                         <button
-                          onClick={() => handleOpenCompleteModal(t)}
+                          onClick={() => handleAcceptTask(t.task_id)}
                           className="btn btn-primary"
                           style={{
                             padding: '6px 14px',
                             fontSize: '0.8rem',
-                            background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
-                            color: '#041126',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: '#ffffff',
                             fontWeight: '700',
                             borderRadius: '8px',
                             display: 'flex',
@@ -409,26 +549,72 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
                             gap: '6px'
                           }}
                         >
-                          <Camera size={14} />
-                          Complete Task
+                          <CheckSquare size={14} />
+                          Accept Task
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenCompleteModal(t)}
-                          className="btn btn-secondary"
-                          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                        >
-                          View Proof
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECTION 3: PARTICIPATION HISTORY */}
+      {activeTab === 'history' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
+              Worker Participation History & Proofs Log
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+              All completed and verified coastal cleanup tasks carried out by you
+            </span>
           </div>
-        )}
-      </div>
+
+          {historyTasks.length === 0 ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
+              <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No completed cleanup history yet.</p>
+              <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Completed tasks and verified proof uploads will appear here in your history log.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+              {historyTasks.map((t) => (
+                <div key={t.task_id} style={{ background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h4 style={{ margin: 0, color: '#ffffff', fontWeight: '700', fontSize: '1rem' }}>{t.report_title}</h4>
+                    <span className={`badge ${t.status === 'Verified' ? 'badge-completed' : 'badge-verified'}`}>
+                      {t.status}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>📍 <strong>Location:</strong> {t.location_name}</div>
+                    <div>🗓️ <strong>Completed Date:</strong> {t.completed_date ? new Date(t.completed_date).toLocaleDateString() : 'Pending'}</div>
+                    <div>💬 <strong>Notes:</strong> {t.completion_notes || 'No remarks added'}</div>
+                  </div>
+
+                  {t.after_image && (
+                    <div style={{ marginTop: '8px' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#00e5ff', fontWeight: '700', display: 'block', marginBottom: '4px' }}>After-Cleanup Proof Photo:</span>
+                      <img src={t.after_image} alt="After cleanup proof" style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '10px', border: '1px solid rgba(0, 229, 255, 0.3)' }} />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.82rem' }}>
+                    <span style={{ color: '#10b981', fontWeight: '700' }}>Reward: ₹500.00</span>
+                    <button onClick={() => handleOpenCompleteModal(t)} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', fontWeight: '600', fontSize: '0.8rem' }}>
+                      View Details →
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal for Submitting Cleanup Proof */}
       {showCompleteModal && selectedTask && (
@@ -471,12 +657,6 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
                 <X size={22} />
               </button>
             </div>
-
-            {formError && (
-              <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', borderRadius: '8px', color: '#f87171', marginBottom: '16px', fontSize: '0.85rem' }}>
-                ⚠️ {formError}
-              </div>
-            )}
 
             <form onSubmit={handleSubmitProof} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>

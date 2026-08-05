@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Bell, Trash2, RefreshCw, X, CheckCircle2, Calendar, CheckSquare, AlertTriangle } from 'lucide-react';
+import { Bell, Trash2, RefreshCw, X, CheckCircle2, Calendar, CheckSquare, AlertTriangle, Award } from 'lucide-react';
 
 const Notifications = () => {
   const { 
@@ -36,6 +36,7 @@ const Notifications = () => {
     if (filter === 'reports') return notif.title?.toLowerCase().includes('report') || notif.message?.toLowerCase().includes('report') || notif.reference_type === 'PollutionReport';
     if (filter === 'campaigns') return notif.title?.toLowerCase().includes('campaign') || notif.message?.toLowerCase().includes('campaign') || notif.reference_type === 'Campaign';
     if (filter === 'tasks') return notif.title?.toLowerCase().includes('task') || notif.message?.toLowerCase().includes('task') || notif.reference_type === 'CleanupTask';
+    if (filter === 'payments') return notif.title?.toLowerCase().includes('payment') || notif.title?.toLowerCase().includes('reward') || notif.message?.toLowerCase().includes('payment') || notif.reference_type === 'Payment';
     return true; // 'all'
   });
 
@@ -105,9 +106,6 @@ const Notifications = () => {
               <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.02em' }}>
                 Notifications Center
               </h1>
-              <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '0.92rem' }}>
-                View and manage your real-time alerts, cleanup campaign updates, and task assignments
-              </p>
             </div>
           </div>
         </div>
@@ -306,6 +304,26 @@ const Notifications = () => {
         >
           <CheckSquare size={15} />
           <span>Cleanup Tasks</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('payments')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '10px',
+            border: filter === 'payments' ? '1px solid #00e5ff' : '1px solid rgba(0, 229, 255, 0.15)',
+            background: filter === 'payments' ? 'rgba(0, 229, 255, 0.15)' : 'rgba(8, 20, 42, 0.5)',
+            color: filter === 'payments' ? '#00e5ff' : '#94a3b8',
+            fontWeight: '600',
+            fontSize: '0.88rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Award size={15} />
+          <span>Payments & Rewards</span>
         </button>
       </div>
 

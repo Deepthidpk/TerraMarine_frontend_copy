@@ -25,7 +25,8 @@ import {
   Camera,
   User,
   X,
-  Bell
+  Bell,
+  History
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -156,6 +157,7 @@ const Sidebar = () => {
     if (user.role === 'Worker') {
       return [
         { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+        { to: '/participations', label: 'My Participations', icon: <History size={18} /> },
         { to: '/payments', label: 'Rewards & Earnings', icon: <Award size={18} /> },
         { to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> }
       ];

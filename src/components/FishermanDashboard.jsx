@@ -263,9 +263,6 @@ const FishermanDashboard = ({
           <h1 style={{ fontSize: '1.85rem', color: '#ffffff', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>
             Welcome back, <span style={{ color: '#00e5ff' }}>{user.full_name}</span>!
           </h1>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Anchor size={14} color="#00e5ff" /> Coastal Observer Station | License: <strong style={{ color: '#ffffff' }}>{user?.fisherman_license_no || 'Verified Observer'}</strong>
-          </p>
         </div>
 
         {/* Action Buttons */}
