@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import WorkerProfileSetupModal from './WorkerProfileSetupModal';
 import { 
   CheckSquare, Clock, Camera, ShieldCheck, User, Calendar, MapPin, 
   Upload, CheckCircle2, AlertCircle, FileText, X, ArrowRight, Award,
@@ -175,11 +176,17 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
     return true;
   });
 
-  // Participation History tasks
-  const historyTasks = myTasks.filter(t => t.status === 'Completed' || t.status === 'Verified');
+  // Check if profile is incomplete (mandatory setup required)
+  const isProfileIncomplete = user?.role === 'Worker' && (
+    !user?.address || !user?.address.trim() ||
+    !user?.district || !user?.district.trim() ||
+    !user?.state || !user?.state.trim()
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Mandatory Worker Profile Completion Modal */}
+      {isProfileIncomplete && <WorkerProfileSetupModal />}
       {/* Header welcome text */}
       <div style={{ marginBottom: '4px' }}>
         <h1 style={{ fontSize: '1.85rem', color: '#ffffff', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>
