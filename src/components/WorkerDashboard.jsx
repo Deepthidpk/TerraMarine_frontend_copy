@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckSquare, Clock, Camera, ShieldCheck, User, Calendar, MapPin, 
-  Upload, CheckCircle2, AlertCircle, FileText, X, ArrowRight, Award
+  Upload, CheckCircle2, AlertCircle, FileText, X, ArrowRight, Award,
+  Search, RotateCcw
 } from 'lucide-react';
 
 const WorkerDashboard = ({ user, authFetch, navigate }) => {
   const [tasks, setTasks] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
 
   // Task Completion Modal State
   const [selectedTask, setSelectedTask] = useState(null);
@@ -119,6 +124,24 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
     .filter(p => p.payment_status === 'Paid')
     .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
 
+  // Filtered tasks computation
+  const filteredTasks = tasks.filter((t) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const titleMatch = t.report_title?.toLowerCase().includes(q);
+      const locMatch = t.location_name?.toLowerCase().includes(q);
+      const campaignMatch = t.campaign_name?.toLowerCase().includes(q);
+      const wasteMatch = t.waste_type?.toLowerCase().includes(q);
+      if (!titleMatch && !locMatch && !campaignMatch && !wasteMatch) return false;
+    }
+
+    if (statusFilter !== 'All' && t.status !== statusFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header welcome text */}
@@ -220,39 +243,124 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
 
       {/* Main Assigned Cleanup Tasks Ledger */}
       <div className="glass-panel" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{
+          display: 'flex',
+          justify: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+          marginBottom: '20px'
+        }}>
           <div>
             <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
               My Assigned Cleanup Tasks
             </h3>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Tasks assigned to you by Municipal Authorities for cleanup action
+              Showing {filteredTasks.length} of {tasks.length} assigned tasks
             </span>
           </div>
 
-          <button
-            onClick={fetchWorkerData}
-            style={{
-              background: 'rgba(0, 229, 255, 0.1)',
-              border: '1px solid rgba(0, 229, 255, 0.3)',
-              color: '#00e5ff',
-              padding: '6px 14px',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
-          >
-            Refresh Tasks
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Search Input */}
+            <div style={{ position: 'relative', minWidth: '240px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type="text"
+                placeholder="Search incident, location, waste..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 30px 8px 36px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(0, 229, 255, 0.25)',
+                  background: 'rgba(8, 20, 42, 0.8)',
+                  color: '#ffffff',
+                  fontSize: '0.85rem'
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 229, 255, 0.25)',
+                background: 'rgba(8, 20, 42, 0.8)',
+                color: '#ffffff',
+                fontSize: '0.85rem',
+                fontWeight: '600'
+              }}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Completed">Completed (Proof Uploaded)</option>
+              <option value="Verified">Verified</option>
+            </select>
+
+            {(searchQuery || statusFilter !== 'All') && (
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: '#ef4444',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RotateCcw size={14} /> Clear
+              </button>
+            )}
+
+            <button
+              onClick={fetchWorkerData}
+              style={{
+                background: 'rgba(0, 229, 255, 0.1)',
+                border: '1px solid rgba(0, 229, 255, 0.3)',
+                color: '#00e5ff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Refresh Tasks
+            </button>
+          </div>
         </div>
 
         {loading ? (
           <div style={{ color: '#94a3b8', textAlign: 'center', padding: '30px' }}>Loading worker tasks...</div>
-        ) : tasks.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
-            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No cleanup tasks assigned to you yet.</p>
-            <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Municipal Authorities will assign coastal incident cleanups directly to your dashboard.</p>
+            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No cleanup tasks found.</p>
+            {(searchQuery || statusFilter !== 'All') && (
+              <button
+                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                style={{ marginTop: '12px', background: '#0284c7', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Reset Search & Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="table-container">
@@ -269,7 +377,7 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((t) => (
+                {filteredTasks.map((t) => (
                   <tr key={t.task_id}>
                     <td style={{ fontWeight: '700', color: '#ffffff' }}>{t.report_title}</td>
                     <td>{t.location_name}</td>

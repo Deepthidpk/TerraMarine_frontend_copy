@@ -156,7 +156,6 @@ const Sidebar = () => {
     if (user.role === 'Worker') {
       return [
         { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-        { to: '/tasks', label: 'My Assigned Tasks', icon: <CheckSquare size={18} /> },
         { to: '/payments', label: 'Rewards & Earnings', icon: <Award size={18} /> },
         { to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> }
       ];
