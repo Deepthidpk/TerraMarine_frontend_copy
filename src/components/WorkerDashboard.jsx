@@ -135,39 +135,49 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
         </div>
       )}
 
-      {/* 4 Metric Stats Cards Across Top */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        {/* Card 1: Assigned Tasks */}
+      {/* 4 Metric Stats Cards Across Top (Authority Dashboard / Tasks Page Design) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+        {/* Card 1: Total Tasks / Assigned Tasks (RED THEME) */}
+        <div className="stat-card-marine" style={{
+          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+          border: '1px solid rgba(255, 77, 77, 0.35)',
+          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
+        }}>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+            <CheckSquare size={24} color="#ff4d4d" />
+          </div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Total Tasks</span>
+            <div className="stat-val">{assignedTasksCount}</div>
+          </div>
+          <img 
+            src="/images/red_coral_card_bg.png" 
+            alt="Red Coral Artwork" 
+            className="card-artwork-blend"
+          />
+        </div>
+
+        {/* Card 2: Pending Tasks (CYAN BLUE THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
           border: '1px solid rgba(0, 229, 255, 0.35)',
           boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
         }}>
           <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
-            <CheckSquare size={24} color="#00e5ff" />
+            <Clock size={24} color="#00e5ff" />
           </div>
           <div className="stat-content-wrapper">
-            <span className="stat-lbl">Assigned Tasks</span>
-            <div className="stat-val">{assignedTasksCount}</div>
-          </div>
-        </div>
-
-        {/* Card 2: In Progress */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(40, 30, 10, 0.85) 0%, rgba(25, 18, 5, 0.95) 100%)',
-          border: '1px solid rgba(255, 183, 3, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 183, 3, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 183, 3, 0.2)', border: '1px solid rgba(255, 183, 3, 0.4)' }}>
-            <Clock size={24} color="#ffb703" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">In Progress</span>
+            <span className="stat-lbl">Pending Tasks</span>
             <div className="stat-val">{inProgressCount}</div>
           </div>
+          <img 
+            src="/images/cyan_cleanups_corner.png" 
+            alt="Cyan Coral Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        {/* Card 3: Submitted Proofs */}
+        {/* Card 3: Submitted Proofs (EMERALD TEAL THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
           border: '1px solid rgba(0, 245, 212, 0.35)',
@@ -180,21 +190,31 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
             <span className="stat-lbl">Submitted Proofs</span>
             <div className="stat-val">{completedCount}</div>
           </div>
+          <img 
+            src="/images/green_teal_campaigns_bg.png" 
+            alt="Submitted Proofs Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        {/* Card 4: Verified & Rewards */}
+        {/* Card 4: Verified Cleanups (PURPLE THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
           border: '1px solid rgba(157, 78, 221, 0.35)',
           boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
         }}>
           <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
-            <Award size={24} color="#9d4edd" />
+            <ShieldCheck size={24} color="#9d4edd" />
           </div>
           <div className="stat-content-wrapper">
             <span className="stat-lbl">Verified Cleanups</span>
             <div className="stat-val">{verifiedCount}</div>
           </div>
+          <img 
+            src="/images/purple_coral_card_bg.png" 
+            alt="Verified Cleanups Artwork" 
+            className="card-artwork-blend"
+          />
         </div>
       </div>
 
