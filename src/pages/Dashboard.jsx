@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import LeafletMap from '../components/LeafletMap';
 import UserApproval from './UserApproval';
 import FishermanDashboard from '../components/FishermanDashboard';
+import WorkerDashboard from '../components/WorkerDashboard';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -128,6 +129,11 @@ const Dashboard = () => {
         handleDismissNotification={handleDismissNotification}
       />
     );
+  }
+
+  // Worker Municipal Cleanup Control Center
+  if (user?.role === 'Worker') {
+    return <WorkerDashboard user={user} authFetch={authFetch} navigate={navigate} />;
   }
 
   const summary = stats?.summary || {

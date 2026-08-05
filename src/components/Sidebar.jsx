@@ -152,7 +152,17 @@ const Sidebar = () => {
       ];
     }
 
-    // 2. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, Researcher, NGO)
+    // 2. WORKER ROLE SIDEBAR (Municipal Cleanup Task Worker)
+    if (user.role === 'Worker') {
+      return [
+        { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+        { to: '/tasks', label: 'My Assigned Tasks', icon: <CheckSquare size={18} /> },
+        { to: '/payments', label: 'Rewards & Earnings', icon: <Award size={18} /> },
+        { to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> }
+      ];
+    }
+
+    // 3. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, Researcher, NGO)
     const links = [];
     if (user.role !== 'Citizen') {
       links.push({ to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> });
@@ -162,15 +172,15 @@ const Sidebar = () => {
       { to: '/campaigns', label: 'Cleanup Campaigns', icon: <Calendar size={18} /> }
     );
 
-    if (['Authority', 'Volunteer'].includes(user.role)) {
+    if (['Authority', 'Volunteer', 'Worker'].includes(user.role)) {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
     }
 
-    if (!['Volunteer', 'Citizen'].includes(user.role)) {
+    if (!['Volunteer', 'Worker', 'Citizen'].includes(user.role)) {
       links.push({ to: '/biodiversity', label: 'Biodiversity', icon: <Map size={18} /> });
     }
 
-    if (['Authority', 'Volunteer'].includes(user.role)) {
+    if (['Authority', 'Volunteer', 'Worker'].includes(user.role)) {
       links.push({ to: '/payments', label: 'Rewards & Payments', icon: <Award size={18} /> });
     }
 
