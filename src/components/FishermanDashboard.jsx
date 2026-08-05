@@ -33,6 +33,33 @@ const FishermanDashboard = ({
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
 
+  // Dynamic categories & waste types
+  const [categoriesList, setCategoriesList] = useState(['Pollution', 'Emergency']);
+  const [wasteTypesList, setWasteTypesList] = useState(['Plastic', 'Glass', 'Fishing Nets', 'Oil Spill', 'Dead Marine Life', 'General Litter']);
+
+  useEffect(() => {
+    const fetchCats = async () => {
+      try {
+        const res = await authFetch('/categories');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.categories && data.categories.length > 0) setCategoriesList(data.categories.map(c => c.name));
+        }
+      } catch (err) {}
+    };
+    const fetchWastes = async () => {
+      try {
+        const res = await authFetch('/waste-types');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.wasteTypes && data.wasteTypes.length > 0) setWasteTypesList(data.wasteTypes.map(w => w.name));
+        }
+      } catch (err) {}
+    };
+    fetchCats();
+    fetchWastes();
+  }, []);
+
   // 2. REPORT DETAILS & TRACKING STEPPER MODAL STATE
   const [activeReportDetails, setActiveReportDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -660,8 +687,9 @@ const FishermanDashboard = ({
                     onChange={(e) => setModalCategory(e.target.value)}
                     style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
                   >
-                    <option value="Pollution" style={{ background: '#08142a' }}>Pollution (Floating Debris, Nets)</option>
-                    <option value="Emergency" style={{ background: '#08142a' }}>Emergency (Oil Spill, Toxic Leaks, Dead Life)</option>
+                    {categoriesList.map(c => (
+                      <option key={c} value={c} style={{ background: '#08142a' }}>{c}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -673,11 +701,9 @@ const FishermanDashboard = ({
                     onChange={(e) => setModalWasteType(e.target.value)}
                     style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
                   >
-                    <option value="Plastic" style={{ background: '#08142a' }}>Plastic Debris / Bottles</option>
-                    <option value="Fishing Nets" style={{ background: '#08142a' }}>Fishing Nets / Line</option>
-                    <option value="Oil Spill" style={{ background: '#08142a' }}>Oil Slick / Fuel Spill</option>
-                    <option value="Dead Marine Life" style={{ background: '#08142a' }}>Dead Marine Organism</option>
-                    <option value="General Litter" style={{ background: '#08142a' }}>General Waste</option>
+                    {wasteTypesList.map(w => (
+                      <option key={w} value={w} style={{ background: '#08142a' }}>{w}</option>
+                    ))}
                   </select>
                 </div>
               </div>
