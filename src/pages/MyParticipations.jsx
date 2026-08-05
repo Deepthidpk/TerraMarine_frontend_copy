@@ -3,29 +3,41 @@ import { useAuth } from '../context/AuthContext';
 import { 
   CheckSquare, Clock, Camera, ShieldCheck, User, Calendar, MapPin, 
   Upload, CheckCircle2, AlertCircle, FileText, X, ArrowRight, Award,
-  Search, RotateCcw, History, Filter, Eye
+  Search, RotateCcw, History, Filter, Eye, Check
 } from 'lucide-react';
+import CertificateModal from '../components/CertificateModal';
 
 const MyParticipations = () => {
   const { authFetch, user } = useAuth();
+  const [campaignHistory, setCampaignHistory] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Tab State: 'campaigns' | 'tasks'
+  const [activeTab, setActiveTab] = useState('campaigns');
+
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Detail Modal State
+  // Modals State
   const [selectedTask, setSelectedTask] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedCert, setSelectedCert] = useState(null);
 
   const fetchParticipations = async () => {
     setLoading(true);
     try {
-      const [tasksRes, payRes] = await Promise.all([
+      const [historyRes, tasksRes, payRes] = await Promise.all([
+        authFetch('/campaigns/my-history'),
         authFetch('/tasks?type=my_tasks'),
         authFetch('/payments')
       ]);
+
+      if (historyRes.ok) {
+        const historyData = await historyRes.json();
+        setCampaignHistory(historyData.history || []);
+      }
 
       if (tasksRes.ok) {
         const data = await tasksRes.json();
@@ -47,15 +59,26 @@ const MyParticipations = () => {
     fetchParticipations();
   }, []);
 
-  const totalParticipations = tasks.length;
-  const completedCount = tasks.filter(t => t.status === 'Completed' || t.status === 'Verified').length;
-  const verifiedCount = tasks.filter(t => t.status === 'Verified').length;
-
+  const totalCampaignsJoined = campaignHistory.length;
+  const attendedCount = campaignHistory.filter(c => c.attendance).length;
+  const certificatesCount = campaignHistory.filter(c => c.certificate_status).length;
   const totalRewardsEarned = payments
     .filter(p => p.payment_status === 'Paid')
     .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
 
-  // Filter tasks by search query
+  // Filtered Campaigns
+  const filteredCampaigns = campaignHistory.filter((c) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const nameMatch = c.campaign_name?.toLowerCase().includes(q);
+      const locMatch = c.location?.toLowerCase().includes(q);
+      const orgMatch = (c.organization_name || c.creator_name)?.toLowerCase().includes(q);
+      if (!nameMatch && !locMatch && !orgMatch) return false;
+    }
+    return true;
+  });
+
+  // Filtered Tasks
   const filteredTasks = tasks.filter((t) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -71,237 +94,171 @@ const MyParticipations = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '2.1rem', margin: 0, fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px', color: '#ffffff' }}>
-            <span>My Cleanup Participations</span>
-            <History size={26} color="#00e5ff" />
-          </h1>
-        </div>
+      <div>
+        <h1 style={{ fontSize: '2.1rem', margin: 0, fontWeight: '800', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px', color: '#ffffff' }}>
+          <span>My Participations & History</span>
+          <History size={26} color="#00e5ff" />
+        </h1>
       </div>
 
-      {/* Overview Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
-        {/* Card 1: Total Participated (Red Theme) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
-          border: '1px solid rgba(255, 77, 77, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
-            <CheckSquare size={24} color="#ff4d4d" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Total Participations</span>
-            <div className="stat-val">{totalParticipations}</div>
-          </div>
-          <img src="/images/red_coral_card_bg.png" alt="Artwork" className="card-artwork-blend" />
-        </div>
-
-        {/* Card 2: Completed Cleanups (Cyan Theme) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
-          border: '1px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
-            <Clock size={24} color="#00e5ff" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Completed Cleanups</span>
-            <div className="stat-val">{completedCount}</div>
-          </div>
-          <img src="/images/cyan_cleanups_corner.png" alt="Artwork" className="card-artwork-blend" />
-        </div>
-
-        {/* Card 3: Verified Cleanups (Teal Theme) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
-          border: '1px solid rgba(0, 245, 212, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
-            <ShieldCheck size={24} color="#00f5d4" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Verified Cleanups</span>
-            <div className="stat-val">{verifiedCount}</div>
-          </div>
-          <img src="/images/green_teal_campaigns_bg.png" alt="Artwork" className="card-artwork-blend" />
-        </div>
-
-        {/* Card 4: Rewards Earned (Purple Theme) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
-          border: '1px solid rgba(157, 78, 221, 0.35)',
-          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
-            <Award size={24} color="#9d4edd" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Total Rewards Earned</span>
-            <div className="stat-val">₹{totalRewardsEarned.toLocaleString('en-IN')}</div>
-          </div>
-          <img src="/images/purple_coral_card_bg.png" alt="Artwork" className="card-artwork-blend" />
-        </div>
-      </div>
-
-      {/* Main Ledger Panel */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <div style={{
-          display: 'flex',
-          justify: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px'
-        }}>
-          <div>
-            <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
-              Participated Cleanup Tasks Ledger
-            </h3>
-            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Showing {filteredTasks.length} of {tasks.length} participations
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            {/* Search Input */}
-            <div style={{ position: 'relative', minWidth: '240px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input
-                type="text"
-                placeholder="Search incident, location, waste..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 30px 8px 36px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(0, 229, 255, 0.25)',
-                  background: 'rgba(8, 20, 42, 0.8)',
-                  color: '#ffffff',
-                  fontSize: '0.85rem'
-                }}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-                >
-                  <X size={14} />
-                </button>
-              )}
+      {/* PARTICIPATED CLEANUP CAMPAIGNS */}
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <div style={{
+            display: 'flex',
+            justify: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '16px',
+            marginBottom: '20px'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '800', color: '#ffffff' }}>
+                Participated Cleanup Campaigns
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                Showing {filteredCampaigns.length} of {campaignHistory.length} joined drives
+              </span>
             </div>
 
-            {searchQuery && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', minWidth: '240px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Search campaign, location, org..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 30px 8px 36px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(0, 229, 255, 0.25)',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    color: '#ffffff',
+                    fontSize: '0.85rem'
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={fetchParticipations}
                 style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  padding: '7px 12px',
+                  background: 'rgba(0, 229, 255, 0.1)',
+                  border: '1px solid rgba(0, 229, 255, 0.3)',
+                  color: '#00e5ff',
+                  padding: '8px 14px',
                   borderRadius: '8px',
                   fontSize: '0.8rem',
                   fontWeight: '600',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  cursor: 'pointer'
                 }}
               >
-                <RotateCcw size={14} /> Clear
+                Refresh Log
               </button>
-            )}
-
-            <button
-              onClick={fetchParticipations}
-              style={{
-                background: 'rgba(0, 229, 255, 0.1)',
-                border: '1px solid rgba(0, 229, 255, 0.3)',
-                color: '#00e5ff',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                fontSize: '0.8rem',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Refresh Log
-            </button>
+            </div>
           </div>
+
+          {loading ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '30px' }}>Loading campaign participations...</div>
+          ) : filteredCampaigns.length === 0 ? (
+            <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
+              <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No participated campaigns found.</p>
+              <p style={{ margin: '6px 0 0 0', fontSize: '0.84rem', color: '#94a3b8' }}>Join upcoming coastal drives from your Dashboard!</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Campaign Name</th>
+                    <th>Organizer</th>
+                    <th>Location</th>
+                    <th>Date & Timing</th>
+                    <th>Attendance</th>
+                    <th>Certificate Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCampaigns.map((item) => (
+                    <tr key={item.registration_id}>
+                      <td style={{ fontWeight: '700', color: '#ffffff' }}>
+                        <div>{item.campaign_name}</div>
+                        {item.description && (
+                          <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px', fontWeight: 'normal' }}>
+                            {item.description.slice(0, 60)}...
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ color: '#e2e8f0' }}>{item.organization_name || item.creator_name}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#cbd5e1' }}>
+                          <MapPin size={13} color="#00e5ff" />
+                          <span>{item.location}</span>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: '0.84rem', color: '#ffffff' }}>
+                        <div>{new Date(item.campaign_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                        {item.start_time && (
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                            {item.start_time.slice(0, 5)} - {item.end_time?.slice(0, 5) || 'TBD'}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {item.attendance ? (
+                          <span style={{ background: 'rgba(0, 245, 212, 0.15)', color: '#00f5d4', border: '1px solid rgba(0, 245, 212, 0.3)', padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Check size={13} /> Attended
+                          </span>
+                        ) : (
+                          <span style={{ background: 'rgba(255, 183, 3, 0.15)', color: '#ffb703', border: '1px solid rgba(255, 183, 3, 0.3)', padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '600' }}>
+                            Registered
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {item.certificate_status ? (
+                          <span style={{ background: 'rgba(2, 132, 199, 0.2)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.35)', padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Award size={13} /> Certificate Issued
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                            Pending Issue
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {item.certificate_status ? (
+                          <button
+                            onClick={() => setSelectedCert(item)}
+                            className="btn btn-primary"
+                            style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)', color: '#041126', fontWeight: '700' }}
+                          >
+                            <Award size={14} />
+                            View Certificate
+                          </button>
+                        ) : (
+                          <span style={{ color: '#64748b', fontSize: '0.78rem' }}>No Actions</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '30px' }}>Loading cleanup participations...</div>
-        ) : filteredTasks.length === 0 ? (
-          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px 20px', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(0, 229, 255, 0.2)' }}>
-            <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#ffffff' }}>No cleanup task participations found.</p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                style={{ marginTop: '12px', background: '#0284c7', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}
-              >
-                Reset Search
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Incident Name</th>
-                  <th>Location</th>
-                  <th>Campaign / Link</th>
-                  <th>Assigned Date</th>
-                  <th>Completed Date</th>
-                  <th>Status</th>
-                  <th>Reward</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.map((t) => (
-                  <tr key={t.task_id}>
-                    <td style={{ fontWeight: '700', color: '#ffffff' }}>{t.report_title}</td>
-                    <td>{t.location_name}</td>
-                    <td>{t.campaign_name || 'Direct Municipal Cleanup'}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{new Date(t.assigned_date).toLocaleDateString()}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{t.completed_date ? new Date(t.completed_date).toLocaleDateString() : 'In Progress'}</td>
-                    <td>
-                      <span className={`badge ${
-                        t.status === 'Verified' ? 'badge-completed' :
-                        t.status === 'Completed' ? 'badge-verified' : 'badge-pending'
-                      }`}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: '700', color: '#10b981', fontSize: '0.9rem' }}>
-                      ₹500.00
-                    </td>
-                    <td>
-                      <button
-                        onClick={() => { setSelectedTask(t); setShowModal(true); }}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      >
-                        <Eye size={14} />
-                        View Proof
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Participation Details Modal */}
-      {showModal && selectedTask && (
+      {/* Task Proof Details Modal */}
+      {showTaskModal && selectedTask && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -311,7 +268,7 @@ const MyParticipations = () => {
           backgroundColor: 'rgba(4, 12, 26, 0.88)',
           backdropFilter: 'blur(12px)',
           display: 'flex',
-          justifyContent: 'center',
+          justify: 'center',
           alignItems: 'center',
           zIndex: 99999,
           padding: '20px'
@@ -335,7 +292,7 @@ const MyParticipations = () => {
                 </h3>
               </div>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowTaskModal(false)}
                 style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
               >
                 <X size={22} />
@@ -373,7 +330,7 @@ const MyParticipations = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '14px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
                 <span style={{ fontSize: '1rem', fontWeight: '800', color: '#10b981' }}>Cleanup Reward: ₹500.00</span>
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={() => setShowTaskModal(false)}
                   className="btn btn-primary"
                   style={{ padding: '8px 20px', borderRadius: '10px' }}
                 >
@@ -383,6 +340,14 @@ const MyParticipations = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Official Certificate Viewing Modal */}
+      {selectedCert && (
+        <CertificateModal
+          certificate={selectedCert}
+          onClose={() => setSelectedCert(null)}
+        />
       )}
     </div>
   );

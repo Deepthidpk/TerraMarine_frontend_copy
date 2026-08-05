@@ -190,9 +190,15 @@ const Sidebar = () => {
       links.push({ to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> });
     }
     links.push(
-      { to: '/reports', label: 'Pollution Reports & Tracking', icon: <AlertTriangle size={18} /> },
-      { to: '/campaigns', label: 'Cleanup Campaigns', icon: <Calendar size={18} /> }
+      { to: '/reports', label: 'Pollution Reports & Tracking', icon: <AlertTriangle size={18} /> }
     );
+    if (user.role !== 'Volunteer') {
+      links.push({ to: '/campaigns', label: 'Cleanup Campaigns', icon: <Calendar size={18} /> });
+    }
+
+    if (['Volunteer', 'Worker'].includes(user.role)) {
+      links.push({ to: '/participations', label: 'My Participations', icon: <History size={18} /> });
+    }
 
     if (['Authority', 'Volunteer', 'Worker'].includes(user.role)) {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
