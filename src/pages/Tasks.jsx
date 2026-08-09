@@ -437,17 +437,22 @@ const Tasks = () => {
     try {
       const res = await authFetch(`/tasks/${taskId}/status`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Verified' })
       });
+      const data = await res.json();
       if (res.ok) {
-        setSuccess('Cleanup verified! Payment reward logged for the volunteer.');
+        setSuccess('Cleanup verified successfully! Payment reward logged for the worker.');
         fetchTasksData();
+        if (activeTaskDetails && activeTaskDetails.task_id === taskId) {
+          setActiveTaskDetails(prev => prev ? ({ ...prev, status: 'Verified' }) : null);
+        }
       } else {
-        const data = await res.json();
         setError(data.error || 'Verification failed.');
       }
     } catch (err) {
       console.error('Verify task error:', err);
+      setError('Error occurred during cleanup verification.');
     }
   };
 
@@ -829,13 +834,24 @@ const Tasks = () => {
                           Details
                         </button>
 
-                        {isAssignRole && task.status === 'Completed' && (
+                        {isAssignRole && task.status !== 'Verified' && (
                           <button 
                             onClick={() => handleVerifyTask(task.task_id)}
+                            disabled={!task.after_image}
+                            title={task.after_image ? "Verify cleanup task" : "After Image proof photo required for verification"}
                             className="btn btn-primary" 
-                            style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' }}
+                            style={{ 
+                              padding: '6px 12px', 
+                              fontSize: '0.8rem', 
+                              background: task.after_image ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(51, 65, 85, 0.6)', 
+                              color: task.after_image ? '#ffffff' : '#94a3b8',
+                              border: task.after_image ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                              cursor: task.after_image ? 'pointer' : 'not-allowed',
+                              opacity: task.after_image ? 1 : 0.6
+                            }}
                           >
-                            Verify Cleanup
+                            <ShieldCheck size={14} />
+                            {task.after_image ? 'Verify Cleanup' : 'Verify (Proof Required)'}
                           </button>
                         )}
                       </div>
@@ -1255,16 +1271,54 @@ const Tasks = () => {
               </div>
             </div>
 
-            <div style={{ fontSize: '0.88rem', color: '#cbd5e1', marginBottom: '20px' }}>
-              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Location:</strong> {activeTaskDetails.location_name}</p>
-              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Coordinates:</strong> {activeTaskDetails.latitude}, {activeTaskDetails.longitude}</p>
-              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Description:</strong> {activeTaskDetails.report_description || 'No notes'}</p>
-              {activeTaskDetails.completion_notes && (
-                <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(8, 20, 42, 0.6)', border: '1px solid rgba(0, 229, 255, 0.2)', borderRadius: '10px', color: '#ffffff' }}>
-                  <strong style={{ color: '#00e5ff' }}>Completion Notes:</strong> {activeTaskDetails.completion_notes}
-                </div>
-              )}
-            </div>
+            {/* Authority / Admin Verification Action Section */}
+            {isAssignRole && (
+              <div style={{ borderTop: '1px solid rgba(0, 229, 255, 0.15)', paddingTop: '16px', marginTop: '16px' }}>
+                <h4 style={{ fontSize: '1rem', color: '#00e5ff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldCheck size={18} /> Municipal Authority Verification
+                </h4>
+
+                {activeTaskDetails.status === 'Verified' ? (
+                  <div style={{ padding: '12px 16px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', borderRadius: '10px', color: '#10b981', fontWeight: '700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={18} /> Cleanup task verified and completed.
+                  </div>
+                ) : (
+                  <div>
+                    <button 
+                      type="button"
+                      onClick={() => handleVerifyTask(activeTaskDetails.task_id)}
+                      disabled={!activeTaskDetails.after_image}
+                      style={{ 
+                        width: '100%', 
+                        padding: '12px', 
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '0.92rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: activeTaskDetails.after_image ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(51, 65, 85, 0.6)', 
+                        color: activeTaskDetails.after_image ? '#ffffff' : '#94a3b8',
+                        border: activeTaskDetails.after_image ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                        cursor: activeTaskDetails.after_image ? 'pointer' : 'not-allowed',
+                        opacity: activeTaskDetails.after_image ? 1 : 0.65,
+                        boxShadow: activeTaskDetails.after_image ? '0 4px 15px rgba(16, 185, 129, 0.3)' : 'none'
+                      }}
+                    >
+                      <ShieldCheck size={18} />
+                      {activeTaskDetails.after_image ? 'Verify & Confirm Cleanup Completed' : 'Verify Cleanup (Proof Image Required)'}
+                    </button>
+
+                    {!activeTaskDetails.after_image && (
+                      <div style={{ marginTop: '8px', padding: '8px 12px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', fontSize: '0.78rem', color: '#ff4d4d', fontWeight: '600' }}>
+                        ⚠️ Verification Locked: Cleanup proof photo (After Image) must be uploaded before Authority verification.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Submit proof form for assigned volunteer */}
             {['Volunteer', 'Citizen'].includes(user.role) && ['Pending', 'In Progress'].includes(activeTaskDetails.status) && (
