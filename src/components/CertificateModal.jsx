@@ -8,6 +8,48 @@ const CertificateModal = ({ certificate, onClose }) => {
     window.print();
   };
 
+  const handleDownload = () => {
+    const certElement = document.getElementById('printable-certificate');
+    if (!certElement) {
+      window.print();
+      return;
+    }
+
+    // Build self-contained HTML for instant offline viewing/downloading
+    const certHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>TerraMarine Certificate - ${certificate.volunteer_name || certificate.full_name || 'Volunteer'}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+        <style>
+          body { margin: 0; padding: 20px; font-family: 'Outfit', sans-serif; background: #08142a; color: #0f172a; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+          @media print {
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div style="max-width: 850px; width: 100%;">
+          ${certElement.outerHTML}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([certHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TerraMarine_Certificate_${(certificate.campaign_name || 'Cleanup').replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{
       position: 'fixed',
@@ -40,13 +82,15 @@ const CertificateModal = ({ certificate, onClose }) => {
         {/* Action Header bar (hidden during print) */}
         <div className="no-print" style={{
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           padding: '16px 24px',
           background: '#051329',
           color: '#ffffff',
           borderTopLeftRadius: '16px',
-          borderTopRightRadius: '16px'
+          borderTopRightRadius: '16px',
+          gap: '12px',
+          flexWrap: 'wrap'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Award size={22} color="#00e5ff" />
@@ -55,7 +99,26 @@ const CertificateModal = ({ certificate, onClose }) => {
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleDownload}
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <Download size={16} /> Download Certificate
+            </button>
             <button
               onClick={handlePrint}
               style={{

@@ -45,6 +45,7 @@ const Campaigns = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedCert, setSelectedCert] = useState(null);
   const [joinedCampaignIds, setJoinedCampaignIds] = useState(new Set());
+  const [certWarning, setCertWarning] = useState('');
 
   const toMinutes = (timeStr) => {
     if (!timeStr) return 0;
@@ -328,18 +329,53 @@ const Campaigns = () => {
     setShowHistoryModal(true);
     try {
       const res = await authFetch('/campaigns/my-history');
+      let historyItems = [];
       if (res.ok) {
         const data = await res.json();
-        setMyHistory(data.history || []);
+        historyItems = data.history || [];
       }
+
+      // Also check direct certificate records
+      const certRes = await authFetch('/certificates/my-certificates');
+      if (certRes.ok) {
+        const certData = await certRes.json();
+        const certList = certData.certificates || [];
+        
+        certList.forEach(cert => {
+          const exists = historyItems.find(h => h.campaign_id === cert.campaign_id);
+          if (exists) {
+            exists.certificate_status = true;
+            exists.certificate_id = cert.certificate_id;
+            exists.certificate_url = cert.certificate_url;
+            exists.issued_date = cert.issued_date;
+          } else {
+            historyItems.push({
+              registration_id: cert.certificate_id,
+              campaign_name: cert.campaign_name,
+              location: cert.location,
+              campaign_date: cert.campaign_date,
+              attendance: true,
+              certificate_status: true,
+              certificate_id: cert.certificate_id,
+              certificate_url: cert.certificate_url,
+              issued_date: cert.issued_date,
+              creator_name: cert.creator_name,
+              organization_name: cert.organization_name
+            });
+          }
+        });
+      }
+
+      setMyHistory(historyItems);
     } catch (err) {
-      console.error('Error fetching my history:', err);
+      console.error('Error fetching my certificates history:', err);
     } finally {
       setHistoryLoading(false);
     }
   };
 
   const handleOpenDetails = async (campaignId) => {
+    setCertWarning('');
     try {
       const res = await authFetch(`/campaigns/${campaignId}`);
       if (res.ok) {
@@ -350,6 +386,28 @@ const Campaigns = () => {
     } catch (err) {
       console.error('Error fetching campaign details:', err);
     }
+  };
+
+  const handleIssueCertificate = (campaign, vol) => {
+    setCertWarning('');
+
+    // Check 1: Volunteer must be marked as attended
+    if (!vol.attendance) {
+      setCertWarning('Volunteer must be marked as attended before issuing a certificate.');
+      return;
+    }
+
+    // Check 2: Campaign must have ended
+    const campDateStr = new Date(campaign.campaign_date).toISOString().slice(0, 10);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isEnded = campaign.status === 'Completed' || campDateStr < todayStr;
+
+    if (!isEnded) {
+      setCertWarning('Certificates can only be issued after the campaign has ended.');
+      return;
+    }
+
+    handleUpdateAttendance(campaign.campaign_id, vol.user_id, vol.attendance, true);
   };
 
   const handleUpdateAttendance = async (campaignId, volunteerId, attendanceVal, certVal) => {
@@ -384,6 +442,45 @@ const Campaigns = () => {
     }
   };
 
+  const getDynamicStatus = (camp) => {
+    if (camp.status === 'Completed') return 'Completed';
+    if (!camp.campaign_date) return camp.status || 'Upcoming';
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    const campDateObj = new Date(camp.campaign_date);
+    const cYear = campDateObj.getFullYear();
+    const cMonth = String(campDateObj.getMonth() + 1).padStart(2, '0');
+    const cDay = String(campDateObj.getDate()).padStart(2, '0');
+    const campDateStr = `${cYear}-${cMonth}-${cDay}`;
+
+    if (campDateStr < todayStr) return 'Completed';
+
+    if (campDateStr === todayStr) {
+      const curH = today.getHours();
+      const curM = today.getMinutes();
+      const curTotalMin = curH * 60 + curM;
+
+      if (camp.end_time) {
+        const [eh, em] = camp.end_time.split(':').map(Number);
+        if (curTotalMin >= eh * 60 + em) {
+          return 'Completed';
+        }
+      } else if (camp.start_time) {
+        const [sh, sm] = camp.start_time.split(':').map(Number);
+        if (curTotalMin >= sh * 60 + sm + 240) {
+          return 'Completed';
+        }
+      }
+    }
+
+    return camp.status || 'Upcoming';
+  };
+
   // Filtered campaigns
   const filteredCampaigns = campaigns.filter((camp) => {
     if (searchQuery.trim()) {
@@ -394,7 +491,7 @@ const Campaigns = () => {
       if (!nameMatch && !locMatch && !orgMatch) return false;
     }
 
-    if (statusFilter !== 'All' && camp.status !== statusFilter) {
+    if (statusFilter !== 'All' && getDynamicStatus(camp) !== statusFilter) {
       return false;
     }
 
@@ -403,9 +500,9 @@ const Campaigns = () => {
 
   // Calculate Summary Statistics
   const totalDrives = campaigns.length;
-  const upcomingDrives = campaigns.filter(c => c.status === 'Upcoming').length;
+  const upcomingDrives = campaigns.filter(c => getDynamicStatus(c) === 'Upcoming').length;
   const totalVolunteers = campaigns.reduce((sum, c) => sum + (parseInt(c.volunteer_count) || 0), 0);
-  const completedDrives = campaigns.filter(c => c.status === 'Completed').length;
+  const completedDrives = campaigns.filter(c => getDynamicStatus(c) === 'Completed').length;
 
   const isOrganizeRole = ['NGO', 'Authority', 'Admin'].includes(user.role);
 
@@ -428,28 +525,27 @@ const Campaigns = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {user.role === 'Volunteer' && (
-            <button
-              onClick={handleOpenHistory}
-              style={{
-                background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
-                color: 'white',
-                border: '1px solid rgba(0, 245, 212, 0.4)',
-                padding: '12px 20px',
-                borderRadius: '12px',
-                fontWeight: '700',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 8px 24px rgba(0, 245, 212, 0.25)'
-              }}
-            >
-              <Award size={18} />
-              My Participation & Certificates
-            </button>
-          )}
+          <button
+            onClick={handleOpenHistory}
+            style={{
+              background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
+              color: '#00e5ff',
+              border: '1px solid rgba(0, 229, 255, 0.5)',
+              padding: '12px 20px',
+              borderRadius: '12px',
+              fontWeight: '700',
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Award size={18} color="#00e5ff" />
+            My Certificates
+          </button>
 
           {isOrganizeRole && (
             <button
@@ -772,13 +868,18 @@ const Campaigns = () => {
                         </span>
                       </td>
                       <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                        <span className={`badge ${
-                          camp.status === 'Completed' ? 'badge-completed' :
-                          camp.status === 'Upcoming' ? 'badge-pending' :
-                          camp.status === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
-                        }`} style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
-                          {camp.status}
-                        </span>
+                        {(() => {
+                          const displayStatus = getDynamicStatus(camp);
+                          return (
+                            <span className={`badge ${
+                              displayStatus === 'Completed' ? 'badge-completed' :
+                              displayStatus === 'Upcoming' ? 'badge-pending' :
+                              displayStatus === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
+                            }`} style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
+                              {displayStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding: '14px 10px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
@@ -1244,6 +1345,27 @@ const Campaigns = () => {
                   <Award size={20} color="#0284c7" />
                   Registered Volunteers Attendance & Certificates
                 </h4>
+
+                {certWarning && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ff4d4d',
+                    color: '#ff4d4d',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    marginBottom: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.25)'
+                  }}>
+                    <AlertCircle size={18} color="#ff4d4d" style={{ flexShrink: 0 }} />
+                    <span>{certWarning}</span>
+                  </div>
+                )}
+
                 {activeCampaignDetails.volunteers.length === 0 ? (
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No volunteers have signed up for this campaign yet.</p>
                 ) : (
@@ -1272,7 +1394,7 @@ const Campaigns = () => {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleUpdateAttendance(activeCampaignDetails.campaign.campaign_id, vol.user_id, true, vol.certificate_status)}
+                                  onClick={() => { setCertWarning(''); handleUpdateAttendance(activeCampaignDetails.campaign.campaign_id, vol.user_id, true, vol.certificate_status); }}
                                   disabled={attendanceLoading[`${vol.user_id}-att`]}
                                   className="btn btn-secondary"
                                   style={{ padding: '4px 10px', fontSize: '0.75rem' }}
@@ -1288,8 +1410,8 @@ const Campaigns = () => {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleUpdateAttendance(activeCampaignDetails.campaign.campaign_id, vol.user_id, vol.attendance, true)}
-                                  disabled={!vol.attendance || attendanceLoading[`${vol.user_id}-cert`]}
+                                  onClick={() => handleIssueCertificate(activeCampaignDetails.campaign, vol)}
+                                  disabled={attendanceLoading[`${vol.user_id}-cert`]}
                                   className="btn btn-primary"
                                   style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                                 >
@@ -1349,9 +1471,9 @@ const Campaigns = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Award size={24} color="#00f5d4" />
+                <Award size={24} color="#00e5ff" />
                 <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
-                  My Participation History & Certificates
+                  My Certificates & Participation History
                 </h3>
               </div>
               <button 
@@ -1367,8 +1489,8 @@ const Campaigns = () => {
             ) : myHistory.length === 0 ? (
               <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <Award size={48} color="#64748b" style={{ marginBottom: '12px', opacity: 0.5 }} />
-                <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem' }}>No Campaign History Found</h4>
-                <p style={{ margin: '8px 0 0 0', fontSize: '0.88rem' }}>You haven't registered for any cleanup drives yet. Join an upcoming campaign to earn certificates!</p>
+                <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem' }}>No Certificates Earned Yet</h4>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.88rem' }}>Join and complete upcoming cleanup drives to earn official participation certificates!</p>
               </div>
             ) : (
               <div className="table-container">
@@ -1407,14 +1529,19 @@ const Campaigns = () => {
                               })}
                               className="btn btn-primary"
                               style={{
-                                padding: '4px 10px',
-                                fontSize: '0.75rem',
-                                background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
+                                padding: '6px 12px',
+                                fontSize: '0.78rem',
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                                 color: '#ffffff',
-                                border: '1px solid rgba(0, 245, 212, 0.4)'
+                                border: '1px solid rgba(16, 185, 129, 0.4)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
                               }}
                             >
-                              <Award size={14} /> View Certificate
+                              <Award size={14} /> View & Download Certificate
                             </button>
                           ) : (
                             <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Pending Verification</span>

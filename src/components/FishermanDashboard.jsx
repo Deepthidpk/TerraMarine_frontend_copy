@@ -225,8 +225,8 @@ const FishermanDashboard = ({
     }
   };
 
-  // Fisherman's own reported items
-  const myReports = reports.filter(r => r.reported_by === user?.user_id);
+  // Fisherman's own active reported items (exclude completed cleanups)
+  const myReports = reports.filter(r => r.reported_by === user?.user_id && r.status !== 'Completed');
   const activeAlerts = alerts.length > 0 ? alerts : [
     { 
       alert_id: 101, 

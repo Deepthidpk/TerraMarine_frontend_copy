@@ -321,7 +321,7 @@ const Dashboard = () => {
           </div>
 
           <div style={{ height: '420px', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(0, 229, 255, 0.2)', position: 'relative' }}>
-            <LeafletMap reports={reports} campaigns={campaigns} />
+            <LeafletMap reports={reports.filter(r => r.status !== 'Completed')} campaigns={campaigns} />
 
             {/* Bottom Legend Bar inside Map Container */}
             <div style={{

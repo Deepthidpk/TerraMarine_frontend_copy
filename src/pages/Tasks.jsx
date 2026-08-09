@@ -25,7 +25,7 @@ const Tasks = () => {
   // Task Creation Form State (Authority only)
   const [selectedReportId, setSelectedReportId] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
-  const [selectedWorkerId, setSelectedWorkerId] = useState('');
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState([]);
   const [deadline, setDeadline] = useState('');
   
   // Add Worker Modal State (Authority / Admin)
@@ -60,8 +60,8 @@ const Tasks = () => {
         if (!value) return 'Verified incident report selection is required.';
         return null;
 
-      case 'selectedWorkerId':
-        if (!value) return 'Municipal worker selection is required.';
+      case 'selectedWorkerIds':
+        if (!value || value.length === 0) return 'At least one municipal worker must be selected.';
         return null;
 
       case 'deadline':
@@ -139,6 +139,26 @@ const Tasks = () => {
     }
   }, [user]);
 
+  const handleToggleWorker = (wId) => {
+    setSelectedWorkerIds(prev => {
+      const next = prev.includes(wId) ? prev.filter(id => id !== wId) : [...prev, wId];
+      const err = validateTaskField('selectedWorkerIds', next);
+      setTaskFormErrors(p => ({ ...p, selectedWorkerIds: err }));
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllWorkers = () => {
+    if (selectedWorkerIds.length === workers.length) {
+      setSelectedWorkerIds([]);
+      setTaskFormErrors(p => ({ ...p, selectedWorkerIds: 'At least one municipal worker must be selected.' }));
+    } else {
+      const allIds = workers.map(w => w.user_id);
+      setSelectedWorkerIds(allIds);
+      setTaskFormErrors(p => ({ ...p, selectedWorkerIds: null }));
+    }
+  };
+
   const handleCreateTaskSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -147,7 +167,7 @@ const Tasks = () => {
     // Validate all task fields
     const errors = {
       selectedReportId: validateTaskField('selectedReportId', selectedReportId),
-      selectedWorkerId: validateTaskField('selectedWorkerId', selectedWorkerId),
+      selectedWorkerIds: validateTaskField('selectedWorkerIds', selectedWorkerIds),
       deadline: validateTaskField('deadline', deadline)
     };
 
@@ -169,7 +189,7 @@ const Tasks = () => {
         body: JSON.stringify({
           report_id: selectedReportId,
           campaign_id: selectedCampaignId || null,
-          assigned_worker: selectedWorkerId,
+          assigned_workers: selectedWorkerIds,
           deadline: deadline || null
         })
       });
@@ -182,7 +202,7 @@ const Tasks = () => {
       setSuccess('Cleanup task assigned to volunteer successfully!');
       setSelectedReportId('');
       setSelectedCampaignId('');
-      setSelectedWorkerId('');
+      setSelectedWorkerIds([]);
       setDeadline('');
       setTaskFormErrors({});
       setShowAssignModal(false);
@@ -195,25 +215,57 @@ const Tasks = () => {
     }
   };
 
+  const validateWorkerField = (fieldName, value) => {
+    const val = (value || '').trim();
+    switch (fieldName) {
+      case 'workerName':
+        if (!val) return 'Worker full name is required.';
+        if (val.length < 3) return 'Full name must be at least 3 characters long.';
+        if (val.length > 50) return 'Full name cannot exceed 50 characters.';
+        if (!/^[a-zA-Z\s.'-]+$/.test(val)) return 'Full name can only contain letters, spaces, dots, and hyphens (no numbers or special characters).';
+        return null;
+
+      case 'workerEmail':
+        if (!val) return 'Email address is required.';
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val)) return 'Please enter a valid email address (e.g. worker@example.com).';
+        return null;
+
+      case 'workerPhone': {
+        if (!val) return 'Phone number is required.';
+        const digitsOnly = val.replace(/\D/g, '');
+        if (digitsOnly.length < 10 || digitsOnly.length > 13) {
+          return 'Phone number must contain a valid 10-digit mobile number.';
+        }
+        if (!/^\+?[0-9\s-]{10,15}$/.test(val)) {
+          return 'Please enter a valid phone number format (e.g. +91 9876543210 or 9876543210).';
+        }
+        return null;
+      }
+
+      default:
+        return null;
+    }
+  };
+
   const handleAddWorkerSubmit = async (e) => {
     e.preventDefault();
     setWorkerError('');
     setError('');
     setSuccess('');
 
-    const errors = {};
-    if (!workerName.trim() || workerName.trim().length < 2) {
-      errors.name = 'Full name is required (at least 2 characters).';
-    }
-    if (!workerEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workerEmail.trim())) {
-      errors.email = 'A valid email address is required.';
-    }
-    if (!workerPhone.trim() || !/^[0-9+\s-]{8,15}$/.test(workerPhone.trim())) {
-      errors.phone = 'A valid phone number is required (8-15 digits).';
-    }
+    const errors = {
+      name: validateWorkerField('workerName', workerName),
+      email: validateWorkerField('workerEmail', workerEmail),
+      phone: validateWorkerField('workerPhone', workerPhone)
+    };
 
-    if (Object.keys(errors).length > 0) {
-      setWorkerFormErrors(errors);
+    const activeErrors = {};
+    if (errors.name) activeErrors.name = errors.name;
+    if (errors.email) activeErrors.email = errors.email;
+    if (errors.phone) activeErrors.phone = errors.phone;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setWorkerFormErrors(activeErrors);
       return;
     }
 
@@ -790,11 +842,14 @@ const Tasks = () => {
                   style={{ color: selectedReportId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedReportId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedReportId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 >
                   <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Choose Incident Report --</option>
-                  {reports.map(rep => (
-                    <option key={rep.report_id} value={rep.report_id} style={{ color: '#cbd5e1' }}>
-                      {rep.title} ({rep.location_name})
-                    </option>
-                  ))}
+                  {reports.filter(rep => rep.status !== 'Completed').map(rep => {
+                    const workerSuffix = rep.assigned_workers ? ` - ${rep.assigned_workers}` : '';
+                    return (
+                      <option key={rep.report_id} value={rep.report_id} style={{ color: '#cbd5e1' }}>
+                        {rep.title} ({rep.location_name}){workerSuffix}
+                      </option>
+                    );
+                  })}
                 </select>
                 {taskFormErrors.selectedReportId && (
                   <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
@@ -821,30 +876,53 @@ const Tasks = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Assign Worker *</label>
-                <select 
-                  className="form-control" 
-                  value={selectedWorkerId} 
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedWorkerId(val);
-                    const err = validateTaskField('selectedWorkerId', val);
-                    setTaskFormErrors(prev => ({ ...prev, selectedWorkerId: err }));
-                  }}
-                  onBlur={(e) => {
-                    const err = validateTaskField('selectedWorkerId', e.target.value);
-                    setTaskFormErrors(prev => ({ ...prev, selectedWorkerId: err }));
-                  }}
-                  style={{ color: selectedWorkerId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedWorkerId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedWorkerId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
-                >
-                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Select Municipal Worker --</option>
-                  {workers.map(w => (
-                    <option key={w.user_id} value={w.user_id} style={{ color: '#cbd5e1' }}>{w.full_name}</option>
-                  ))}
-                </select>
-                {taskFormErrors.selectedWorkerId && (
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Assign Workers * (Select 1 or more)</span>
+                  {workers.length > 0 && (
+                    <span 
+                      onClick={handleToggleSelectAllWorkers}
+                      style={{ fontSize: '0.75rem', color: '#00e5ff', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      {selectedWorkerIds.length === workers.length ? 'Deselect All' : 'Select All Workers'}
+                    </span>
+                  )}
+                </label>
+
+                {workers.length === 0 ? (
+                  <div style={{ color: '#94a3b8', fontSize: '0.84rem', fontStyle: 'italic', padding: '8px' }}>
+                    No municipal workers registered yet. Click "+ Add New Worker" to register worker accounts.
+                  </div>
+                ) : (
+                  <div style={{
+                    maxHeight: '160px',
+                    overflowY: 'auto',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    borderRadius: '10px',
+                    border: taskFormErrors.selectedWorkerIds ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    boxShadow: taskFormErrors.selectedWorkerIds ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                  }}>
+                    {workers.map(w => (
+                      <label key={w.user_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedWorkerIds.includes(w.user_id)}
+                          onChange={() => handleToggleWorker(w.user_id)}
+                          style={{ width: '16px', height: '16px', accentColor: '#00e5ff', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontWeight: '600' }}>{w.full_name}</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>({w.email})</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {taskFormErrors.selectedWorkerIds && (
                   <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
-                    ⚠️ {taskFormErrors.selectedWorkerId}
+                    ⚠️ {taskFormErrors.selectedWorkerIds}
                   </span>
                 )}
               </div>
@@ -1097,12 +1175,26 @@ const Tasks = () => {
                   className="form-control" 
                   placeholder="e.g. Rahul Kumar" 
                   value={workerName}
-                  onChange={(e) => setWorkerName(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: workerFormErrors.name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkerName(val);
+                    const err = validateWorkerField('workerName', val);
+                    setWorkerFormErrors(prev => ({ ...prev, name: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateWorkerField('workerName', e.target.value);
+                    setWorkerFormErrors(prev => ({ ...prev, name: err }));
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: workerFormErrors.name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: workerFormErrors.name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
                 />
                 {workerFormErrors.name && (
-                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                    {workerFormErrors.name}
+                  <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {workerFormErrors.name}
                   </span>
                 )}
               </div>
@@ -1114,12 +1206,26 @@ const Tasks = () => {
                   className="form-control" 
                   placeholder="e.g. worker@example.com" 
                   value={workerEmail}
-                  onChange={(e) => setWorkerEmail(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: workerFormErrors.email ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkerEmail(val);
+                    const err = validateWorkerField('workerEmail', val);
+                    setWorkerFormErrors(prev => ({ ...prev, email: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateWorkerField('workerEmail', e.target.value);
+                    setWorkerFormErrors(prev => ({ ...prev, email: err }));
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: workerFormErrors.email ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: workerFormErrors.email ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
                 />
                 {workerFormErrors.email && (
-                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                    {workerFormErrors.email}
+                  <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {workerFormErrors.email}
                   </span>
                 )}
               </div>
@@ -1131,12 +1237,26 @@ const Tasks = () => {
                   className="form-control" 
                   placeholder="e.g. +91 9876543210" 
                   value={workerPhone}
-                  onChange={(e) => setWorkerPhone(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: workerFormErrors.phone ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkerPhone(val);
+                    const err = validateWorkerField('workerPhone', val);
+                    setWorkerFormErrors(prev => ({ ...prev, phone: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateWorkerField('workerPhone', e.target.value);
+                    setWorkerFormErrors(prev => ({ ...prev, phone: err }));
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: workerFormErrors.phone ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: workerFormErrors.phone ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
                 />
                 {workerFormErrors.phone && (
-                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
-                    {workerFormErrors.phone}
+                  <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {workerFormErrors.phone}
                   </span>
                 )}
               </div>

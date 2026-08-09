@@ -8,6 +8,17 @@ const Reports = () => {
   const { user, authFetch, API_URL } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Date formatter for DD/MM/YYYY format
+  const formatDateDMY = (dateInput) => {
+    if (!dateInput) return 'N/A';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return 'N/A';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
   
   // Form State
   const [title, setTitle] = useState('');
@@ -74,12 +85,13 @@ const Reports = () => {
   const [severityFilter, setSeverityFilter] = useState('All');
   const [wasteTypeFilter, setWasteTypeFilter] = useState('All');
 
-  // Filtered reports computation
+  // Filtered reports computation (only show reports which are not cleaned / completed)
   const safeReports = Array.isArray(reports) ? reports : [];
-  const myComplaintsCount = safeReports.filter(r => r && r.reported_by === user?.user_id).length;
+  const activeReports = safeReports.filter(r => r && r.status !== 'Completed');
+  const myComplaintsCount = activeReports.filter(r => r.reported_by === user?.user_id).length;
 
-  const filteredReports = safeReports.filter((rep) => {
-    if (!rep) return false;
+  const filteredReports = activeReports.filter((rep) => {
+    if (!rep || rep.status === 'Completed') return false;
     if (reportTab === 'my_complaints' && rep.reported_by !== user?.user_id) {
       return false;
     }
@@ -900,7 +912,7 @@ const Reports = () => {
                   <LeafletMap 
                     onLocationSelect={handleMapClick} 
                     selectedLocation={selectedCoords} 
-                    reports={reports}
+                    reports={activeReports}
                   />
                 </div>
                 {selectedCoords && (
@@ -921,7 +933,7 @@ const Reports = () => {
           <div>
             <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Active Reports Ledger</h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Showing {filteredReports.length} of {reports.length} reports
+              Showing {filteredReports.length} of {activeReports.length} reports
             </span>
           </div>
 
@@ -1184,7 +1196,7 @@ const Reports = () => {
                       </td>
                     )}
                     <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
-                      {new Date(rep.reported_at).toLocaleDateString()}
+                      {formatDateDMY(rep.reported_at)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button 
@@ -1284,7 +1296,7 @@ const Reports = () => {
                 <div style={{ padding: '10px 8px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px auto', fontWeight: '700', fontSize: '0.8rem' }}>✓</div>
                   <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#ffffff' }}>1. Complaint Filed</div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{new Date(activeReportDetails.report.reported_at).toLocaleDateString()}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{formatDateDMY(activeReportDetails.report.reported_at)}</div>
                 </div>
 
                 {/* Step 2: Under Review */}
@@ -1400,7 +1412,7 @@ const Reports = () => {
                     <div key={update.update_id} style={{ padding: '10px', background: 'rgba(15, 23, 42, 0.02)', border: '1px solid rgba(15, 23, 42, 0.04)', borderRadius: '6px', fontSize: '0.8rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                         <span>Updated by: {update.updated_by_name}</span>
-                        <span>{new Date(update.updated_at).toLocaleString()}</span>
+                        <span>{formatDateDMY(update.updated_at)} {new Date(update.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <p>
                         Status changed from <strong>{update.old_status}</strong> to <strong>{update.new_status}</strong>.
