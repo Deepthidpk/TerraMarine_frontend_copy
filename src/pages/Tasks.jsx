@@ -20,7 +20,7 @@ const Tasks = () => {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('Active');
 
   // Task Creation Form State (Authority only)
   const [selectedReportId, setSelectedReportId] = useState('');
@@ -377,6 +377,42 @@ const Tasks = () => {
     }
   };
 
+  const [proofFormErrors, setProofFormErrors] = useState({});
+
+  const validateProofModalField = (fieldName, value, extraFile) => {
+    switch (fieldName) {
+      case 'completionNotes': {
+        const val = (value !== undefined ? value : completionNotes || '').trim();
+        if (!val) return 'Completion notes are required. Describe the cleanup work done.';
+        if (!/[a-zA-Z0-9]/.test(val) || !/^[a-zA-Z0-9\s.,()'-]+$/.test(val)) {
+          return 'Special characters are not allowed. Please enter letters and numbers only.';
+        }
+        if (val.length < 10) return 'Completion notes must be at least 10 characters long (e.g. Cleaned 5 bags of net waste).';
+        if (val.length > 500) return 'Completion notes cannot exceed 500 characters.';
+        return null;
+      }
+      case 'afterImage': {
+        const file = extraFile !== undefined ? extraFile : afterImage;
+        const existingImage = activeTaskDetails?.after_image;
+        if (!file && !existingImage) {
+          return 'An after-cleanup proof photo is required to submit task completion.';
+        }
+        if (file) {
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+          if (!allowedTypes.includes(file.type.toLowerCase())) {
+            return 'Invalid file format. Please upload a valid image file (JPG, PNG, WEBP).';
+          }
+          if (file.size > 5 * 1024 * 1024) {
+            return 'Image file size is too large (maximum allowed size is 5 MB).';
+          }
+        }
+        return null;
+      }
+      default:
+        return null;
+    }
+  };
+
   const handleOpenUpdateModal = async (taskId) => {
     try {
       const res = await authFetch(`/tasks/${taskId}`);
@@ -384,6 +420,7 @@ const Tasks = () => {
         const data = await res.json();
         setActiveTaskDetails(data.task);
         setCompletionNotes(data.task.completion_notes || '');
+        setProofFormErrors({});
         setShowUpdateModal(true);
       }
     } catch (err) {
@@ -392,21 +429,56 @@ const Tasks = () => {
   };
 
   const handleFileChange = (e) => {
-    setAfterImage(e.target.files[0]);
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type.toLowerCase())) {
+        const err = 'Invalid file format. Please upload a valid image file (JPG, PNG, WEBP).';
+        setProofFormErrors(prev => ({ ...prev, afterImage: err }));
+        setAfterImage(null);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        const err = 'Image file size is too large (maximum allowed size is 5 MB).';
+        setProofFormErrors(prev => ({ ...prev, afterImage: err }));
+        setAfterImage(null);
+        return;
+      }
+      setAfterImage(file);
+      setProofFormErrors(prev => ({ ...prev, afterImage: null }));
+    } else {
+      setAfterImage(null);
+      const err = validateProofModalField('afterImage', null, null);
+      setProofFormErrors(prev => ({ ...prev, afterImage: err }));
+    }
   };
 
   const handleVolunteerSubmitProof = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    const notesErr = validateProofModalField('completionNotes', completionNotes);
+    const imageErr = validateProofModalField('afterImage', null, afterImage);
+
+    const activeErrors = {};
+    if (notesErr) activeErrors.completionNotes = notesErr;
+    if (imageErr) activeErrors.afterImage = imageErr;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setProofFormErrors(activeErrors);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.append('status', 'Completed');
-      formData.append('completion_notes', completionNotes);
+      formData.append('completion_notes', completionNotes.trim());
       if (afterImage) {
         formData.append('image', afterImage);
+        formData.append('after_image', afterImage);
       }
 
       const res = await authFetch(`/tasks/${activeTaskDetails.task_id}/status`, {
@@ -423,6 +495,7 @@ const Tasks = () => {
       setShowUpdateModal(false);
       setAfterImage(null);
       setCompletionNotes('');
+      setProofFormErrors({});
       fetchTasksData();
     } catch (err) {
       setError(err.message || 'Error submitting task completion.');
@@ -483,6 +556,10 @@ const Tasks = () => {
       const workerMatch = t.worker_name?.toLowerCase().includes(q);
       const campaignMatch = t.campaign_name?.toLowerCase().includes(q);
       if (!titleMatch && !locMatch && !workerMatch && !campaignMatch) return false;
+    }
+
+    if (statusFilter === 'Active') {
+      return t.status !== 'Verified' && t.status !== 'Completed';
     }
 
     if (statusFilter !== 'All' && t.status !== statusFilter) {
@@ -719,15 +796,16 @@ const Tasks = () => {
                 fontWeight: '600'
               }}
             >
-              <option value="All">All Statuses</option>
+              <option value="Active">Active Tasks (Hide Completed)</option>
+              <option value="All">All Statuses Ledger</option>
               <option value="Pending">Pending</option>
               <option value="Completed">Completed (Proof Uploaded)</option>
-              <option value="Verified">Verified</option>
+              <option value="Verified">Verified Tasks</option>
             </select>
 
-            {(searchQuery || statusFilter !== 'All') && (
+            {(searchQuery || statusFilter !== 'Active') && (
               <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                onClick={() => { setSearchQuery(''); setStatusFilter('Active'); }}
                 style={{
                   background: 'rgba(239, 68, 68, 0.1)',
                   color: 'var(--danger)',
@@ -1326,26 +1404,56 @@ const Tasks = () => {
                 <h4 style={{ fontSize: '1rem', color: '#00e5ff', marginBottom: '12px' }}>Submit Cleanup Verification Proof</h4>
                 
                 <div className="form-group">
-                  <label className="form-label">Completion Notes *</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Completion Notes *</label>
+                    <span style={{ fontSize: '0.72rem', color: completionNotes.trim().length > 500 ? '#ff4d4d' : '#94a3b8', fontWeight: '600' }}>
+                      {completionNotes.trim().length}/500
+                    </span>
+                  </div>
                   <textarea 
                     className="form-control" 
                     placeholder="Enter observations on total bags cleaned, volunteers involved, or leftover tasks." 
                     rows="2"
                     value={completionNotes}
-                    onChange={(e) => setCompletionNotes(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCompletionNotes(val);
+                      const err = validateProofModalField('completionNotes', val);
+                      setProofFormErrors(prev => ({ ...prev, completionNotes: err }));
+                    }}
+                    onBlur={(e) => {
+                      const err = validateProofModalField('completionNotes', e.target.value);
+                      setProofFormErrors(prev => ({ ...prev, completionNotes: err }));
+                    }}
+                    style={{
+                      border: proofFormErrors.completionNotes ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: proofFormErrors.completionNotes ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                    }}
                   />
+                  {proofFormErrors.completionNotes && (
+                    <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                      ⚠️ {proofFormErrors.completionNotes}
+                    </span>
+                  )}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">After Image File *</label>
+                  <label className="form-label">After Image File * (JPG, PNG, max 5MB)</label>
                   <input 
                     type="file" 
                     className="form-control" 
                     accept="image/*"
                     onChange={handleFileChange}
-                    required
+                    style={{
+                      border: proofFormErrors.afterImage ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: proofFormErrors.afterImage ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                    }}
                   />
+                  {proofFormErrors.afterImage && (
+                    <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                      ⚠️ {proofFormErrors.afterImage}
+                    </span>
+                  )}
                 </div>
 
                 <button 

@@ -28,6 +28,7 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const fetchWorkerData = async () => {
     setLoading(true);
@@ -80,16 +81,67 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
     }
   };
 
+  const validateProofField = (fieldName, value, extraFile) => {
+    switch (fieldName) {
+      case 'completionNotes': {
+        const val = (value !== undefined ? value : completionNotes || '').trim();
+        if (!val) return 'Completion notes are required. Describe the cleanup work done.';
+        if (!/[a-zA-Z0-9]/.test(val) || !/^[a-zA-Z0-9\s.,()'-]+$/.test(val)) {
+          return 'Special characters are not allowed. Please enter letters and numbers only.';
+        }
+        if (val.length < 10) return 'Completion notes must be at least 10 characters long (e.g. Cleaned 5 bags of net waste).';
+        if (val.length > 500) return 'Completion notes cannot exceed 500 characters.';
+        return null;
+      }
+      case 'afterImage': {
+        const file = extraFile !== undefined ? extraFile : afterImage;
+        const existingImage = selectedTask?.after_image;
+        if (!file && !existingImage) {
+          return 'An after-cleanup proof photo is required to submit task completion.';
+        }
+        if (file) {
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+          if (!allowedTypes.includes(file.type.toLowerCase())) {
+            return 'Invalid file format. Please upload a valid image file (JPG, PNG, WEBP).';
+          }
+          if (file.size > 5 * 1024 * 1024) {
+            return 'Image file size is too large (maximum allowed size is 5 MB).';
+          }
+        }
+        return null;
+      }
+      default:
+        return null;
+    }
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setFormError('Image file size must be less than 10MB.');
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type.toLowerCase())) {
+        const err = 'Invalid file format. Please upload a valid image file (JPG, PNG, WEBP).';
+        setFieldErrors(prev => ({ ...prev, afterImage: err }));
+        setAfterImage(null);
+        setPreviewUrl('');
         return;
       }
+      if (file.size > 5 * 1024 * 1024) {
+        const err = 'Image file size is too large (maximum allowed size is 5 MB).';
+        setFieldErrors(prev => ({ ...prev, afterImage: err }));
+        setAfterImage(null);
+        setPreviewUrl('');
+        return;
+      }
+
       setAfterImage(file);
       setPreviewUrl(URL.createObjectURL(file));
-      setFormError('');
+      setFieldErrors(prev => ({ ...prev, afterImage: null }));
+    } else {
+      setAfterImage(null);
+      setPreviewUrl(selectedTask?.after_image || '');
+      const err = validateProofField('afterImage', null, null);
+      setFieldErrors(prev => ({ ...prev, afterImage: err }));
     }
   };
 
@@ -99,17 +151,23 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
     setAfterImage(null);
     setPreviewUrl(task.after_image ? task.after_image : '');
     setFormError('');
+    setFieldErrors({});
     setShowCompleteModal(true);
   };
 
   const handleSubmitProof = async (e) => {
     e.preventDefault();
-    if (!afterImage && !selectedTask?.after_image) {
-      setFormError('Please upload an after-cleanup proof photo.');
-      return;
-    }
-    if (!completionNotes.trim()) {
-      setFormError('Please provide completion notes describing the cleanup work done.');
+    setFormError('');
+
+    const notesErr = validateProofField('completionNotes', completionNotes);
+    const imageErr = validateProofField('afterImage', null, afterImage);
+
+    const activeErrors = {};
+    if (notesErr) activeErrors.completionNotes = notesErr;
+    if (imageErr) activeErrors.afterImage = imageErr;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
       return;
     }
 
@@ -121,6 +179,7 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
       formData.append('status', 'Completed');
       formData.append('completion_notes', completionNotes.trim());
       if (afterImage) {
+        formData.append('image', afterImage);
         formData.append('after_image', afterImage);
       }
 
@@ -136,6 +195,7 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
 
       setSuccessMsg('Cleanup task completed! Proof submitted for Municipal Authority verification.');
       setShowCompleteModal(false);
+      setFieldErrors({});
       fetchWorkerData();
     } catch (err) {
       setFormError(err.message || 'Error submitting proof.');
@@ -160,6 +220,10 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
 
   // Filtered assigned tasks computation
   const filteredMyTasks = myTasks.filter((t) => {
+    if (activeTab === 'my_tasks' && (t.status === 'Completed' || t.status === 'Verified')) {
+      return false;
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = t.report_title?.toLowerCase().includes(q);
@@ -667,32 +731,70 @@ const WorkerDashboard = ({ user, authFetch, navigate }) => {
 
             <form onSubmit={handleSubmitProof} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Completion Notes / Remarks *</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600', margin: 0 }}>Completion Notes / Remarks *</label>
+                  <span style={{ fontSize: '0.72rem', color: completionNotes.trim().length > 500 ? '#ff4d4d' : '#94a3b8', fontWeight: '600' }}>
+                    {completionNotes.trim().length}/500
+                  </span>
+                </div>
                 <textarea
                   className="form-control"
                   rows="3"
                   placeholder="Describe the waste collected, volume cleaned, and current site condition..."
                   value={completionNotes}
-                  onChange={(e) => setCompletionNotes(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)', resize: 'vertical' }}
-                  required
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCompletionNotes(val);
+                    const err = validateProofField('completionNotes', val);
+                    setFieldErrors(prev => ({ ...prev, completionNotes: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateProofField('completionNotes', e.target.value);
+                    setFieldErrors(prev => ({ ...prev, completionNotes: err }));
+                  }}
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.completionNotes ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)', 
+                    boxShadow: fieldErrors.completionNotes ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none',
+                    resize: 'vertical' 
+                  }}
                 />
+                {fieldErrors.completionNotes && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {fieldErrors.completionNotes}
+                  </span>
+                )}
               </div>
 
               <div>
-                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Upload After-Cleanup Image *</label>
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Upload After-Cleanup Image * (JPG, PNG, max 5MB)</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
-                  style={{ display: 'block', margin: '8px 0', color: '#cbd5e1' }}
+                  style={{ 
+                    display: 'block', 
+                    margin: '8px 0', 
+                    color: '#cbd5e1',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.afterImage ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.afterImage ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                  }}
                 />
+                {fieldErrors.afterImage && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {fieldErrors.afterImage}
+                  </span>
+                )}
                 {previewUrl && (
-                  <div style={{ marginTop: '10px', textCenter: 'center' }}>
+                  <div style={{ marginTop: '10px', textAlign: 'center' }}>
                     <img
                       src={previewUrl}
                       alt="Proof Preview"
-                      style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '12px', border: '2px solid #00e5ff', objectFit: 'cover' }}
+                      style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '12px', border: '2px solid #00e5ff', objectFit: 'cover' }}
                     />
                   </div>
                 )}
