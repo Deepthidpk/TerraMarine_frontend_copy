@@ -994,8 +994,8 @@ const Tasks = () => {
                   )}
                 </div>
 
-                {/* Worker Availability Status Summary */}
-                {workers.length > 0 && (() => {
+                {/* Worker Availability Status Summary (Only shown AFTER selecting deadline date) */}
+                {workers.length > 0 && deadline ? (() => {
                   const freeCount = workers.filter(w => !checkWorkerBusyOnDate(w, deadline)).length;
                   const busyCount = workers.length - freeCount;
 
@@ -1031,7 +1031,11 @@ const Tasks = () => {
                       )}
                     </div>
                   );
-                })()}
+                })() : workers.length > 0 ? (
+                  <div style={{ padding: '8px 12px', background: 'rgba(0, 229, 255, 0.06)', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.2)', fontSize: '0.78rem', color: '#00e5ff', marginBottom: '10px', fontWeight: '600' }}>
+                    📅 Select a Completion Deadline above to check worker availability.
+                  </div>
+                ) : null}
 
                 {workers.length === 0 ? (
                   <div style={{ color: '#94a3b8', fontSize: '0.84rem', fontStyle: 'italic', padding: '8px' }}>
@@ -1051,7 +1055,7 @@ const Tasks = () => {
                     boxShadow: taskFormErrors.selectedWorkerIds ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
                   }}>
                     {workers.map(w => {
-                      const isBusyOnDate = checkWorkerBusyOnDate(w, deadline);
+                      const isBusyOnDate = deadline ? checkWorkerBusyOnDate(w, deadline) : false;
 
                       return (
                         <label 
@@ -1069,7 +1073,7 @@ const Tasks = () => {
                             borderRadius: '8px',
                             background: isBusyOnDate ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 255, 255, 0.03)',
                             border: isBusyOnDate ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)',
-                            opacity: isBusyOnDate ? 0.75 : 1
+                            opacity: isBusyOnDate ? 0.65 : 1
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1091,38 +1095,40 @@ const Tasks = () => {
                             </div>
                           </div>
 
-                          {/* Availability Badge */}
-                          {isBusyOnDate ? (
-                            <span 
-                              title={w.active_task_names ? `Assigned tasks: ${w.active_task_names}` : `Worker is locked and busy`}
-                              style={{ 
-                                background: 'rgba(239, 68, 68, 0.25)', 
-                                color: '#ff4d4d', 
-                                border: '1px solid rgba(239, 68, 68, 0.6)', 
-                                padding: '3px 10px', 
-                                borderRadius: '12px', 
-                                fontSize: '0.74rem', 
-                                fontWeight: '700', 
-                                whiteSpace: 'nowrap' 
-                              }}
-                            >
-                              🔴 Busy
-                            </span>
-                          ) : (
-                            <span 
-                              style={{ 
-                                background: 'rgba(16, 185, 129, 0.15)', 
-                                color: '#10b981', 
-                                border: '1px solid rgba(16, 185, 129, 0.4)', 
-                                padding: '3px 10px', 
-                                borderRadius: '12px', 
-                                fontSize: '0.74rem', 
-                                fontWeight: '700', 
-                                whiteSpace: 'nowrap' 
-                              }}
-                            >
-                              🟢 Free
-                            </span>
+                          {/* Availability Badge: Only displayed AFTER deadline date is selected */}
+                          {deadline && (
+                            isBusyOnDate ? (
+                              <span 
+                                title={w.active_task_names ? `Assigned tasks: ${w.active_task_names}` : `Worker is locked and busy on ${deadline}`}
+                                style={{ 
+                                  background: 'rgba(239, 68, 68, 0.25)', 
+                                  color: '#ff4d4d', 
+                                  border: '1px solid rgba(239, 68, 68, 0.6)', 
+                                  padding: '3px 10px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '0.74rem', 
+                                  fontWeight: '700', 
+                                  whiteSpace: 'nowrap' 
+                                }}
+                              >
+                                🔴 Busy
+                              </span>
+                            ) : (
+                              <span 
+                                style={{ 
+                                  background: 'rgba(16, 185, 129, 0.15)', 
+                                  color: '#10b981', 
+                                  border: '1px solid rgba(16, 185, 129, 0.4)', 
+                                  padding: '3px 10px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '0.74rem', 
+                                  fontWeight: '700', 
+                                  whiteSpace: 'nowrap' 
+                                }}
+                              >
+                                🟢 Free
+                              </span>
+                            )
                           )}
                         </label>
                       );
