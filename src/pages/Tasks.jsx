@@ -140,14 +140,39 @@ const Tasks = () => {
     }
   }, [user]);
 
+  // Helper to accurately check worker availability on a given deadline date
+  const checkWorkerBusyOnDate = (worker, targetDeadline) => {
+    if (!worker || !targetDeadline) return false;
+    let target = targetDeadline.trim().slice(0, 10);
+    if (target.includes('/')) {
+      const parts = target.split('/');
+      if (parts.length === 3) {
+        if (parts[2].length === 4) {
+          target = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        } else if (parts[0].length === 4) {
+          target = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+      }
+    }
+
+    const busyDates = (worker.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+    if (busyDates.some(b => b === target || b.slice(0, 10) === target)) {
+      return true;
+    }
+
+    if (worker.active_task_names && worker.active_task_names.includes(target)) {
+      return true;
+    }
+
+    return false;
+  };
+
   useEffect(() => {
     if (deadline && selectedWorkerIds.length > 0) {
       const validWorkerIds = selectedWorkerIds.filter(wId => {
         const worker = workers.find(w => w.user_id === wId);
         if (!worker) return false;
-        const busyDateList = (worker.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
-        const isBusyOnDate = Boolean(busyDateList.includes(deadline));
-        return !isBusyOnDate;
+        return !checkWorkerBusyOnDate(worker, deadline);
       });
       if (validWorkerIds.length !== selectedWorkerIds.length) {
         setSelectedWorkerIds(validWorkerIds);
@@ -170,8 +195,7 @@ const Tasks = () => {
 
     const worker = workers.find(w => w.user_id === wId);
     if (worker) {
-      const busyDateList = (worker.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
-      const isBusyOnDate = Boolean(busyDateList.includes(deadline));
+      const isBusyOnDate = checkWorkerBusyOnDate(worker, deadline);
       if (isBusyOnDate && !selectedWorkerIds.includes(wId)) {
         setTaskFormErrors(p => ({ 
           ...p, 
@@ -198,11 +222,7 @@ const Tasks = () => {
       return;
     }
 
-    const freeWorkers = workers.filter(w => {
-      const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
-      const isBusyDate = Boolean(busyDateList.includes(deadline));
-      return !isBusyDate;
-    });
+    const freeWorkers = workers.filter(w => !checkWorkerBusyOnDate(w, deadline));
 
     if (selectedWorkerIds.length >= freeWorkers.length && freeWorkers.length > 0) {
       setSelectedWorkerIds([]);
@@ -513,7 +533,7 @@ const Tasks = () => {
 
             <button
               type="button"
-              onClick={() => { setTaskFormErrors({}); setShowAssignModal(true); }}
+              onClick={() => { setTaskFormErrors({}); fetchTasksData(); setShowAssignModal(true); }}
               style={{
                 background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                 color: 'white',
@@ -974,160 +994,139 @@ const Tasks = () => {
                   )}
                 </div>
 
-                {/* Worker Availability Filter Bar (Only shown AFTER selecting deadline) */}
-                {workers.length > 0 && deadline ? (() => {
-                  const freeCount = workers.filter(w => {
-                    const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
-                    const isBusyDate = Boolean(deadline && busyDateList.includes(deadline));
-                    return !isBusyDate;
-                  }).length;
+                {/* Worker Availability Status Summary */}
+                {workers.length > 0 && (() => {
+                  const freeCount = workers.filter(w => !checkWorkerBusyOnDate(w, deadline)).length;
+                  const busyCount = workers.length - freeCount;
 
                   return (
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setWorkerAvailabilityFilter('free_only')}
+                      <span
                         style={{
-                          padding: '4px 10px',
-                          fontSize: '0.74rem',
-                          borderRadius: '6px',
+                          padding: '5px 12px',
+                          fontSize: '0.76rem',
+                          borderRadius: '8px',
                           fontWeight: '700',
-                          border: workerAvailabilityFilter === 'free_only' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)',
-                          background: workerAvailabilityFilter === 'free_only' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)',
-                          color: workerAvailabilityFilter === 'free_only' ? '#10b981' : '#94a3b8',
-                          cursor: 'pointer'
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10b981'
                         }}
                       >
-                        🟢 Free Workers Only ({freeCount})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setWorkerAvailabilityFilter('all')}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: '0.74rem',
-                          borderRadius: '6px',
-                          fontWeight: '700',
-                          border: workerAvailabilityFilter === 'all' ? '1px solid #00e5ff' : '1px solid rgba(255,255,255,0.15)',
-                          background: workerAvailabilityFilter === 'all' ? 'rgba(0,229,255,0.2)' : 'rgba(255,255,255,0.05)',
-                          color: workerAvailabilityFilter === 'all' ? '#00e5ff' : '#94a3b8',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        All Workers ({workers.length})
-                      </button>
+                        🟢 {freeCount} Free
+                      </span>
+                      {busyCount > 0 && (
+                        <span
+                          style={{
+                            padding: '5px 12px',
+                            fontSize: '0.76rem',
+                            borderRadius: '8px',
+                            fontWeight: '700',
+                            border: '1px solid rgba(239, 68, 68, 0.5)',
+                            background: 'rgba(239, 68, 68, 0.2)',
+                            color: '#ff4d4d'
+                          }}
+                        >
+                          🔴 {busyCount} Busy
+                        </span>
+                      )}
                     </div>
                   );
-                })() : workers.length > 0 ? (
-                  <div style={{ padding: '8px 12px', background: 'rgba(0, 229, 255, 0.08)', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.25)', fontSize: '0.78rem', color: '#00e5ff', marginBottom: '10px', fontWeight: '600' }}>
-                    📅 Please select a Completion Deadline above first to check worker availability for that date.
-                  </div>
-                ) : null}
+                })()}
 
                 {workers.length === 0 ? (
                   <div style={{ color: '#94a3b8', fontSize: '0.84rem', fontStyle: 'italic', padding: '8px' }}>
-                    No municipal workers registered yet. Click "+ Add New Worker" to register worker accounts.
+                    No municipal workers registered yet. Click "+ Add Worker" to register worker accounts.
                   </div>
                 ) : (
                   <div style={{
-                    maxHeight: '180px',
+                    maxHeight: '200px',
                     overflowY: 'auto',
-                    background: 'rgba(8, 20, 42, 0.8)',
-                    borderRadius: '10px',
+                    background: 'rgba(8, 20, 42, 0.85)',
+                    borderRadius: '12px',
                     border: taskFormErrors.selectedWorkerIds ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
                     padding: '10px 14px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '10px',
+                    gap: '8px',
                     boxShadow: taskFormErrors.selectedWorkerIds ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
                   }}>
-                    {(() => {
-                      if (!deadline) {
-                        return workers.map(w => (
-                          <label key={w.user_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer', userSelect: 'none', gap: '10px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <input
-                                type="checkbox"
-                                checked={selectedWorkerIds.includes(w.user_id)}
-                                onChange={() => handleToggleWorker(w.user_id)}
-                                style={{ width: '16px', height: '16px', accentColor: '#00e5ff', cursor: 'pointer' }}
-                              />
-                              <div>
-                                <span style={{ fontWeight: '600' }}>{w.full_name}</span>
-                                <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '6px' }}>({w.email})</span>
-                              </div>
+                    {workers.map(w => {
+                      const isBusyOnDate = checkWorkerBusyOnDate(w, deadline);
+
+                      return (
+                        <label 
+                          key={w.user_id} 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between', 
+                            fontSize: '0.85rem', 
+                            color: isBusyOnDate ? '#94a3b8' : '#ffffff', 
+                            cursor: isBusyOnDate ? 'not-allowed' : 'pointer', 
+                            userSelect: 'none', 
+                            gap: '10px',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: isBusyOnDate ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                            border: isBusyOnDate ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)',
+                            opacity: isBusyOnDate ? 0.75 : 1
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedWorkerIds.includes(w.user_id)}
+                              disabled={isBusyOnDate}
+                              onChange={() => handleToggleWorker(w.user_id)}
+                              style={{ 
+                                width: '16px', 
+                                height: '16px', 
+                                accentColor: '#00e5ff', 
+                                cursor: isBusyOnDate ? 'not-allowed' : 'pointer' 
+                              }}
+                            />
+                            <div>
+                              <span style={{ fontWeight: '600' }}>{w.full_name}</span>
+                              <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '6px' }}>({w.email})</span>
                             </div>
-                          </label>
-                        ));
-                      }
-
-                      const visibleWorkers = workers.filter(w => {
-                        const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
-                        const isBusyDate = Boolean(deadline && busyDateList.includes(deadline));
-                        if (workerAvailabilityFilter === 'free_only') {
-                          return !isBusyDate;
-                        }
-                        return true;
-                      });
-
-                      if (visibleWorkers.length === 0) {
-                        return (
-                          <div style={{ color: '#ffb703', fontSize: '0.82rem', padding: '6px', textAlign: 'center', fontWeight: '600' }}>
-                            ⚠️ No free workers available on {deadline}. Click "All Workers" to view worker status.
                           </div>
-                        );
-                      }
 
-                      return visibleWorkers.map(w => {
-                        const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
-                        const isBusyOnDate = Boolean(deadline && busyDateList.includes(deadline));
-
-                        return (
-                          <label 
-                            key={w.user_id} 
-                            style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'space-between', 
-                              fontSize: '0.85rem', 
-                              color: isBusyOnDate ? '#94a3b8' : '#ffffff', 
-                              cursor: isBusyOnDate ? 'not-allowed' : 'pointer', 
-                              userSelect: 'none', 
-                              gap: '10px',
-                              opacity: isBusyOnDate ? 0.55 : 1
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <input
-                                type="checkbox"
-                                checked={selectedWorkerIds.includes(w.user_id)}
-                                disabled={isBusyOnDate}
-                                onChange={() => handleToggleWorker(w.user_id)}
-                                style={{ width: '16px', height: '16px', accentColor: '#00e5ff', cursor: isBusyOnDate ? 'not-allowed' : 'pointer' }}
-                              />
-                              <div>
-                                <span style={{ fontWeight: '600' }}>{w.full_name}</span>
-                                <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '6px' }}>({w.email})</span>
-                              </div>
-                            </div>
-
-                            {/* Availability Badge ONLY shown after selecting deadline */}
-                            {isBusyOnDate ? (
-                              <span 
-                                title={w.active_task_names ? `Assigned on ${deadline}: ${w.active_task_names}` : `Already assigned to a task on ${deadline}`}
-                                style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ff4d4d', border: '1px solid rgba(239, 68, 68, 0.5)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: '700', whiteSpace: 'nowrap' }}
-                              >
-                                🔒 🔴 Busy on {deadline}
-                              </span>
-                            ) : (
-                              <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                                🟢 Free
-                              </span>
-                            )}
-                          </label>
-                        );
-                      });
-                    })()}
+                          {/* Availability Badge */}
+                          {isBusyOnDate ? (
+                            <span 
+                              title={w.active_task_names ? `Assigned tasks: ${w.active_task_names}` : `Worker is locked and busy`}
+                              style={{ 
+                                background: 'rgba(239, 68, 68, 0.25)', 
+                                color: '#ff4d4d', 
+                                border: '1px solid rgba(239, 68, 68, 0.6)', 
+                                padding: '3px 10px', 
+                                borderRadius: '12px', 
+                                fontSize: '0.74rem', 
+                                fontWeight: '700', 
+                                whiteSpace: 'nowrap' 
+                              }}
+                            >
+                              🔴 Busy
+                            </span>
+                          ) : (
+                            <span 
+                              style={{ 
+                                background: 'rgba(16, 185, 129, 0.15)', 
+                                color: '#10b981', 
+                                border: '1px solid rgba(16, 185, 129, 0.4)', 
+                                padding: '3px 10px', 
+                                borderRadius: '12px', 
+                                fontSize: '0.74rem', 
+                                fontWeight: '700', 
+                                whiteSpace: 'nowrap' 
+                              }}
+                            >
+                              🟢 Free
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
 
