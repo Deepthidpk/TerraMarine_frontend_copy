@@ -26,6 +26,7 @@ const Tasks = () => {
   const [selectedReportId, setSelectedReportId] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
   const [selectedWorkerIds, setSelectedWorkerIds] = useState([]);
+  const [workerAvailabilityFilter, setWorkerAvailabilityFilter] = useState('free_only'); // 'free_only' | 'all'
   const [deadline, setDeadline] = useState('');
   
   // Add Worker Modal State (Authority / Admin)
@@ -139,7 +140,47 @@ const Tasks = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (deadline && selectedWorkerIds.length > 0) {
+      const validWorkerIds = selectedWorkerIds.filter(wId => {
+        const worker = workers.find(w => w.user_id === wId);
+        if (!worker) return false;
+        const busyDateList = (worker.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+        const isBusyOnDate = Boolean(busyDateList.includes(deadline));
+        return !isBusyOnDate;
+      });
+      if (validWorkerIds.length !== selectedWorkerIds.length) {
+        setSelectedWorkerIds(validWorkerIds);
+        setTaskFormErrors(p => ({
+          ...p,
+          selectedWorkerIds: 'Workers assigned on the selected date are locked and cannot be chosen.'
+        }));
+      }
+    }
+  }, [deadline]);
+
   const handleToggleWorker = (wId) => {
+    if (!deadline) {
+      setTaskFormErrors(p => ({ 
+        ...p, 
+        selectedWorkerIds: 'Please select a Completion Deadline date above first before selecting workers.' 
+      }));
+      return;
+    }
+
+    const worker = workers.find(w => w.user_id === wId);
+    if (worker) {
+      const busyDateList = (worker.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+      const isBusyOnDate = Boolean(busyDateList.includes(deadline));
+      if (isBusyOnDate && !selectedWorkerIds.includes(wId)) {
+        setTaskFormErrors(p => ({ 
+          ...p, 
+          selectedWorkerIds: `Cannot select ${worker.full_name}: Worker is locked and already assigned to a task on ${deadline}.` 
+        }));
+        return;
+      }
+    }
+
     setSelectedWorkerIds(prev => {
       const next = prev.includes(wId) ? prev.filter(id => id !== wId) : [...prev, wId];
       const err = validateTaskField('selectedWorkerIds', next);
@@ -149,12 +190,26 @@ const Tasks = () => {
   };
 
   const handleToggleSelectAllWorkers = () => {
-    if (selectedWorkerIds.length === workers.length) {
+    if (!deadline) {
+      setTaskFormErrors(p => ({ 
+        ...p, 
+        selectedWorkerIds: 'Please select a Completion Deadline date above first before selecting workers.' 
+      }));
+      return;
+    }
+
+    const freeWorkers = workers.filter(w => {
+      const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+      const isBusyDate = Boolean(busyDateList.includes(deadline));
+      return !isBusyDate;
+    });
+
+    if (selectedWorkerIds.length >= freeWorkers.length && freeWorkers.length > 0) {
       setSelectedWorkerIds([]);
       setTaskFormErrors(p => ({ ...p, selectedWorkerIds: 'At least one municipal worker must be selected.' }));
     } else {
-      const allIds = workers.map(w => w.user_id);
-      setSelectedWorkerIds(allIds);
+      const freeIds = freeWorkers.map(w => w.user_id);
+      setSelectedWorkerIds(freeIds);
       setTaskFormErrors(p => ({ ...p, selectedWorkerIds: null }));
     }
   };
@@ -876,58 +931,6 @@ const Tasks = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Assign Workers * (Select 1 or more)</span>
-                  {workers.length > 0 && (
-                    <span 
-                      onClick={handleToggleSelectAllWorkers}
-                      style={{ fontSize: '0.75rem', color: '#00e5ff', cursor: 'pointer', fontWeight: '700' }}
-                    >
-                      {selectedWorkerIds.length === workers.length ? 'Deselect All' : 'Select All Workers'}
-                    </span>
-                  )}
-                </label>
-
-                {workers.length === 0 ? (
-                  <div style={{ color: '#94a3b8', fontSize: '0.84rem', fontStyle: 'italic', padding: '8px' }}>
-                    No municipal workers registered yet. Click "+ Add New Worker" to register worker accounts.
-                  </div>
-                ) : (
-                  <div style={{
-                    maxHeight: '160px',
-                    overflowY: 'auto',
-                    background: 'rgba(8, 20, 42, 0.8)',
-                    borderRadius: '10px',
-                    border: taskFormErrors.selectedWorkerIds ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
-                    padding: '10px 14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    boxShadow: taskFormErrors.selectedWorkerIds ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
-                  }}>
-                    {workers.map(w => (
-                      <label key={w.user_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer', userSelect: 'none' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedWorkerIds.includes(w.user_id)}
-                          onChange={() => handleToggleWorker(w.user_id)}
-                          style={{ width: '16px', height: '16px', accentColor: '#00e5ff', cursor: 'pointer' }}
-                        />
-                        <span style={{ fontWeight: '600' }}>{w.full_name}</span>
-                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>({w.email})</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {taskFormErrors.selectedWorkerIds && (
-                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
-                    ⚠️ {taskFormErrors.selectedWorkerIds}
-                  </span>
-                )}
-              </div>
-
-              <div className="form-group">
                 <label className="form-label">Completion Deadline *</label>
                 <input 
                   type="date" 
@@ -954,6 +957,193 @@ const Tasks = () => {
                 {taskFormErrors.deadline && (
                   <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
                     ⚠️ {taskFormErrors.deadline}
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ margin: 0 }}>Assign Workers * (Check availability)</label>
+                  {workers.length > 0 && (
+                    <span 
+                      onClick={handleToggleSelectAllWorkers}
+                      style={{ fontSize: '0.75rem', color: '#00e5ff', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      {selectedWorkerIds.length > 0 ? 'Deselect All' : 'Select All'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Worker Availability Filter Bar (Only shown AFTER selecting deadline) */}
+                {workers.length > 0 && deadline ? (() => {
+                  const freeCount = workers.filter(w => {
+                    const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+                    const isBusyDate = Boolean(deadline && busyDateList.includes(deadline));
+                    return !isBusyDate;
+                  }).length;
+
+                  return (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setWorkerAvailabilityFilter('free_only')}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '0.74rem',
+                          borderRadius: '6px',
+                          fontWeight: '700',
+                          border: workerAvailabilityFilter === 'free_only' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)',
+                          background: workerAvailabilityFilter === 'free_only' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)',
+                          color: workerAvailabilityFilter === 'free_only' ? '#10b981' : '#94a3b8',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🟢 Free Workers Only ({freeCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWorkerAvailabilityFilter('all')}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '0.74rem',
+                          borderRadius: '6px',
+                          fontWeight: '700',
+                          border: workerAvailabilityFilter === 'all' ? '1px solid #00e5ff' : '1px solid rgba(255,255,255,0.15)',
+                          background: workerAvailabilityFilter === 'all' ? 'rgba(0,229,255,0.2)' : 'rgba(255,255,255,0.05)',
+                          color: workerAvailabilityFilter === 'all' ? '#00e5ff' : '#94a3b8',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        All Workers ({workers.length})
+                      </button>
+                    </div>
+                  );
+                })() : workers.length > 0 ? (
+                  <div style={{ padding: '8px 12px', background: 'rgba(0, 229, 255, 0.08)', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.25)', fontSize: '0.78rem', color: '#00e5ff', marginBottom: '10px', fontWeight: '600' }}>
+                    📅 Please select a Completion Deadline above first to check worker availability for that date.
+                  </div>
+                ) : null}
+
+                {workers.length === 0 ? (
+                  <div style={{ color: '#94a3b8', fontSize: '0.84rem', fontStyle: 'italic', padding: '8px' }}>
+                    No municipal workers registered yet. Click "+ Add New Worker" to register worker accounts.
+                  </div>
+                ) : (
+                  <div style={{
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    borderRadius: '10px',
+                    border: taskFormErrors.selectedWorkerIds ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    boxShadow: taskFormErrors.selectedWorkerIds ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                  }}>
+                    {(() => {
+                      if (!deadline) {
+                        return workers.map(w => (
+                          <label key={w.user_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer', userSelect: 'none', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedWorkerIds.includes(w.user_id)}
+                                onChange={() => handleToggleWorker(w.user_id)}
+                                style={{ width: '16px', height: '16px', accentColor: '#00e5ff', cursor: 'pointer' }}
+                              />
+                              <div>
+                                <span style={{ fontWeight: '600' }}>{w.full_name}</span>
+                                <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '6px' }}>({w.email})</span>
+                              </div>
+                            </div>
+                          </label>
+                        ));
+                      }
+
+                      const visibleWorkers = workers.filter(w => {
+                        const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+                        const isBusyDate = Boolean(deadline && busyDateList.includes(deadline));
+                        if (workerAvailabilityFilter === 'free_only') {
+                          return !isBusyDate;
+                        }
+                        return true;
+                      });
+
+                      if (visibleWorkers.length === 0) {
+                        return (
+                          <div style={{ color: '#ffb703', fontSize: '0.82rem', padding: '6px', textAlign: 'center', fontWeight: '600' }}>
+                            ⚠️ No free workers available on {deadline}. Click "All Workers" to view worker status.
+                          </div>
+                        );
+                      }
+
+                      return visibleWorkers.map(w => {
+                        const busyDateList = (w.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+                        const isBusyOnDate = Boolean(deadline && busyDateList.includes(deadline));
+
+                        return (
+                          <label 
+                            key={w.user_id} 
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between', 
+                              fontSize: '0.85rem', 
+                              color: isBusyOnDate ? '#94a3b8' : '#ffffff', 
+                              cursor: isBusyOnDate ? 'not-allowed' : 'pointer', 
+                              userSelect: 'none', 
+                              gap: '10px',
+                              opacity: isBusyOnDate ? 0.55 : 1
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedWorkerIds.includes(w.user_id)}
+                                disabled={isBusyOnDate}
+                                onChange={() => handleToggleWorker(w.user_id)}
+                                style={{ width: '16px', height: '16px', accentColor: '#00e5ff', cursor: isBusyOnDate ? 'not-allowed' : 'pointer' }}
+                              />
+                              <div>
+                                <span style={{ fontWeight: '600' }}>{w.full_name}</span>
+                                <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '6px' }}>({w.email})</span>
+                              </div>
+                            </div>
+
+                            {/* Availability Badge ONLY shown after selecting deadline */}
+                            {isBusyOnDate ? (
+                              <span 
+                                title={w.active_task_names ? `Assigned on ${deadline}: ${w.active_task_names}` : `Already assigned to a task on ${deadline}`}
+                                style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ff4d4d', border: '1px solid rgba(239, 68, 68, 0.5)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: '700', whiteSpace: 'nowrap' }}
+                              >
+                                🔒 🔴 Busy on {deadline}
+                              </span>
+                            ) : (
+                              <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                                🟢 Free
+                              </span>
+                            )}
+                          </label>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+
+                {/* Worker Busy Notice */}
+                {selectedWorkerIds.some(id => {
+                  const w = workers.find(item => item.user_id === id);
+                  return w && (parseInt(w.active_tasks_count) || 0) > 0;
+                }) && (
+                  <div style={{ marginTop: '8px', padding: '8px 12px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', fontSize: '0.76rem', color: '#ff4d4d', fontWeight: '600' }}>
+                    ⚠️ Availability Warning: Selected worker is currently busy with an active task.
+                  </div>
+                )}
+
+                {taskFormErrors.selectedWorkerIds && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {taskFormErrors.selectedWorkerIds}
                   </span>
                 )}
               </div>
