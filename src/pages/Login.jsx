@@ -316,6 +316,43 @@ const Login = () => {
 
         {/* Card Content Container */}
         <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Back Arrow */}
+          <Link 
+            to="/" 
+            style={{
+              position: 'absolute',
+              top: '-12px',
+              left: '-8px',
+              color: '#94a3b8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              transition: 'all 0.2s ease',
+              textDecoration: 'none'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#00e5ff';
+              e.currentTarget.style.background = 'rgba(0, 229, 255, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.25)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            }}
+            title="Back to Landing Page"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </Link>
+
           {/* Top Brand Header */}
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
             <img 

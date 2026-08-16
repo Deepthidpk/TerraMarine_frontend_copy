@@ -208,7 +208,7 @@ const Sidebar = () => {
       links.push({ to: '/biodiversity', label: 'Biodiversity', icon: <Map size={18} /> });
     }
 
-    if (['Authority', 'Volunteer', 'Worker'].includes(user.role)) {
+    if (['Authority', 'Worker'].includes(user.role)) {
       links.push({ to: '/payments', label: 'Rewards & Payments', icon: <Award size={18} /> });
     }
 

@@ -5,6 +5,7 @@ import LeafletMap from '../components/LeafletMap';
 import UserApproval from './UserApproval';
 import FishermanDashboard from '../components/FishermanDashboard';
 import WorkerDashboard from '../components/WorkerDashboard';
+import NGODashboard from '../components/NGODashboard';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -184,6 +185,20 @@ const Dashboard = () => {
   // Worker Municipal Cleanup Control Center
   if (user?.role === 'Worker') {
     return <WorkerDashboard user={user} authFetch={authFetch} navigate={navigate} />;
+  }
+
+  // NGO Organization Control Center
+  if (user?.role === 'NGO') {
+    return (
+      <NGODashboard 
+        user={user} 
+        reports={reports} 
+        campaigns={campaigns} 
+        alerts={alerts} 
+        notifications={notifications} 
+        navigate={navigate} 
+      />
+    );
   }
 
   const summary = stats?.summary || {
