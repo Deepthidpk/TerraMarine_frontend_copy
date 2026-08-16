@@ -297,7 +297,7 @@ const Tasks = () => {
         if (!val) return 'Worker full name is required.';
         if (val.length < 3) return 'Full name must be at least 3 characters long.';
         if (val.length > 50) return 'Full name cannot exceed 50 characters.';
-        if (!/^[a-zA-Z\s.'-]+$/.test(val)) return 'Full name can only contain letters, spaces, dots, and hyphens (no numbers or special characters).';
+        if (!/^[a-zA-Z0-9\s]+$/.test(val)) return 'Full name can only contain letters, digits, and spaces.';
         return null;
 
       case 'workerEmail':
@@ -307,13 +307,7 @@ const Tasks = () => {
 
       case 'workerPhone': {
         if (!val) return 'Phone number is required.';
-        const digitsOnly = val.replace(/\D/g, '');
-        if (digitsOnly.length < 10 || digitsOnly.length > 13) {
-          return 'Phone number must contain a valid 10-digit mobile number.';
-        }
-        if (!/^\+?[0-9\s-]{10,15}$/.test(val)) {
-          return 'Please enter a valid phone number format (e.g. +91 9876543210 or 9876543210).';
-        }
+        if (!/^[6-9]\d{9}$/.test(val)) return 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
         return null;
       }
 
