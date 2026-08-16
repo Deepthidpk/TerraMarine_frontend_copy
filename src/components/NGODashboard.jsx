@@ -39,27 +39,7 @@ const NGODashboard = ({
             {user.organization_name || user.full_name}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button 
-            onClick={() => navigate('/campaigns')}
-            className="btn btn-primary"
-            style={{ 
-              padding: '10px 20px', 
-              borderRadius: '10px', 
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', 
-              color: '#ffffff', 
-              fontWeight: 700, 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              boxShadow: '0 4px 15px rgba(0, 229, 255, 0.25)',
-              border: '1px solid rgba(0, 229, 255, 0.4)'
-            }}
-          >
-            <PlusCircle size={18} />
-            Organize Campaign
-          </button>
-        </div>
+
       </div>
 
       {/* Weather & Coastal Warnings Alert Banner */}
@@ -205,49 +185,7 @@ const NGODashboard = ({
           </div>
         </div>
 
-        {/* Unresolved Reports List (Opportunity for new campaigns) */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#ffffff', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={18} color="#ffb703" />
-              Community Incident Feed
-            </h3>
-            <button 
-              onClick={() => navigate('/reports')}
-              style={{ background: 'none', border: 'none', color: '#00e5ff', fontSize: '0.85rem', cursor: 'pointer', fontWeight: '600' }}
-            >
-              View Map
-            </button>
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-            {pendingReports.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 20px', color: '#94a3b8', background: 'rgba(8, 20, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                <CheckCircle size={32} style={{ marginBottom: '10px', opacity: 0.5, color: '#00f5d4' }} />
-                <p style={{ margin: 0, fontSize: '0.9rem' }}>No pending pollution reports found in the area.</p>
-              </div>
-            ) : (
-              pendingReports.map(report => (
-                <div key={report.report_id} style={{ padding: '14px', background: 'rgba(8, 20, 42, 0.6)', borderRadius: '12px', border: '1px solid rgba(255, 183, 3, 0.15)', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <img 
-                    src={report.image_url || 'https://images.unsplash.com/photo-1621451537084-482c73073e0f'} 
-                    alt={report.title} 
-                    style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: '0 0 4px 0', color: '#ffffff', fontSize: '0.9rem' }}>{report.title}</h4>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MapPin size={12} color="#00e5ff" /> {report.location_name}
-                    </p>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#cbd5e1' }}>
-                      <strong style={{ color: '#ffb703' }}>Waste:</strong> {report.waste_type}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+
 
       </div>
     </div>
