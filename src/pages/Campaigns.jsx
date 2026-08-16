@@ -31,6 +31,7 @@ const Campaigns = () => {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [maxVolunteers, setMaxVolunteers] = useState('');
+  const [visibility, setVisibility] = useState('Public');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -258,7 +259,8 @@ const Campaigns = () => {
           location: location.trim(),
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude),
-          maximum_volunteers: parseInt(maxVolunteers)
+          maximum_volunteers: parseInt(maxVolunteers),
+          visibility: visibility
         })
       });
 
@@ -279,6 +281,7 @@ const Campaigns = () => {
       setLongitude('');
       setSelectedCoords(null);
       setMaxVolunteers('');
+      setVisibility('Public');
       setFormErrors({});
       setModalError('');
       setShowFormModal(false);
@@ -307,11 +310,14 @@ const Campaigns = () => {
           throw new Error(data.error || 'Could not join campaign.');
         }
       } else {
+        const isPrivate = campaigns.find(c => c.campaign_id === campaignId)?.visibility === 'Private';
+        const regStatus = isPrivate ? 'Pending' : 'Approved';
         setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
-        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true, volunteer_count: (parseInt(c.volunteer_count) || 0) + 1 } : c));
-        setSuccess('You have registered for the cleanup drive successfully!');
+        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true, registration_status: regStatus, volunteer_count: isPrivate ? c.volunteer_count : (parseInt(c.volunteer_count) || 0) + 1 } : c));
+        setSuccess(data.message || 'Successfully registered for campaign.');
       }
 
+      // Also trigger a refresh from the server to ensure absolute sync
       fetchCampaigns();
     } catch (err) {
       if (err.message && err.message.includes('already registered')) {
@@ -442,6 +448,21 @@ const Campaigns = () => {
     }
   };
 
+  const handleUpdateVolunteerStatus = async (campaignId, volunteerId, status) => {
+    try {
+      const res = await authFetch(`/campaigns/${campaignId}/volunteers/${volunteerId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        handleOpenDetails(campaignId);
+        fetchCampaigns();
+      }
+    } catch (err) {
+      console.error('Error updating volunteer status:', err);
+    }
+  };
+
   const getDynamicStatus = (camp) => {
     if (camp.status === 'Completed') return 'Completed';
     if (!camp.campaign_date) return camp.status || 'Upcoming';
@@ -525,27 +546,53 @@ const Campaigns = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          <button
-            onClick={handleOpenHistory}
-            style={{
-              background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
-              color: '#00e5ff',
-              border: '1px solid rgba(0, 229, 255, 0.5)',
-              padding: '12px 20px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.9rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Award size={18} color="#00e5ff" />
-            My Certificates
-          </button>
+          {isOrganizeRole && (
+            <button
+              onClick={() => alert('Assign Volunteer functionality coming soon!')}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 245, 212, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
+                color: '#00f5d4',
+                border: '1px solid rgba(0, 245, 212, 0.5)',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 245, 212, 0.25)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Users size={18} color="#00f5d4" />
+              Assign Volunteer
+            </button>
+          )}
+
+          {!isOrganizeRole && (
+            <button
+              onClick={handleOpenHistory}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
+                color: '#00e5ff',
+                border: '1px solid rgba(0, 229, 255, 0.5)',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Award size={18} color="#00e5ff" />
+              My Certificates
+            </button>
+          )}
 
           {isOrganizeRole && (
             <button
@@ -832,9 +879,16 @@ const Campaigns = () => {
                   return (
                     <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
                       <td style={{ padding: '8px 10px' }}>
-                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3' }}>{camp.campaign_name}</div>
+                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                          {camp.campaign_name}
+                          {camp.visibility === 'Private' && (
+                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ff4d4d', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                              🔒 Private
+                            </span>
+                          )}
+                        </div>
                         {camp.description && (
-                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', lineHeight: '1.25', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px', lineHeight: '1.25', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {camp.description}
                           </div>
                         )}
@@ -912,9 +966,9 @@ const Campaigns = () => {
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '4px',
-                                background: 'rgba(16, 185, 129, 0.2)',
-                                color: '#00f5d4',
-                                border: '1px solid rgba(0, 245, 212, 0.4)',
+                                background: camp.registration_status === 'Pending' ? 'rgba(255, 183, 3, 0.15)' : 'rgba(16, 185, 129, 0.2)',
+                                color: camp.registration_status === 'Pending' ? '#ffb703' : '#00f5d4',
+                                border: `1px solid ${camp.registration_status === 'Pending' ? 'rgba(255, 183, 3, 0.4)' : 'rgba(0, 245, 212, 0.4)'}`,
                                 fontWeight: '700',
                                 cursor: 'default',
                                 width: '100%',
@@ -922,7 +976,8 @@ const Campaigns = () => {
                                 justifyContent: 'center'
                               }}
                             >
-                              <Check size={12} /> Joined
+                              {camp.registration_status === 'Pending' ? <Clock size={12} /> : <Check size={12} />}
+                              {camp.registration_status === 'Pending' ? 'Pending' : 'Joined'}
                             </button>
                           ) : (
                             ['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
@@ -939,12 +994,12 @@ const Campaigns = () => {
                                   fontWeight: '700',
                                   boxShadow: '0 3px 10px rgba(0, 229, 255, 0.35)',
                                   width: '100%',
-                                  maxWidth: '75px',
+                                  maxWidth: '85px',
                                   justifyContent: 'center'
                                 }}
                               >
                                 <Users size={12} />
-                                Join
+                                {camp.visibility === 'Private' ? 'Request' : 'Join'}
                               </button>
                             )
                           )}
@@ -1147,7 +1202,7 @@ const Campaigns = () => {
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Latitude *</label>
                       <input 
@@ -1214,6 +1269,19 @@ const Campaigns = () => {
                           ⚠️ {formErrors.maxVolunteers}
                         </span>
                       )}
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Visibility *</label>
+                      <select 
+                        className="form-control"
+                        value={visibility}
+                        onChange={(e) => setVisibility(e.target.value)}
+                        style={{ padding: '8px 10px', border: '1px solid rgba(0, 229, 255, 0.2)', backgroundColor: 'transparent' }}
+                      >
+                        <option value="Public" style={{ color: '#000' }}>Public (Open)</option>
+                        <option value="Private" style={{ color: '#000' }}>Private (Invite Only)</option>
+                      </select>
                     </div>
                   </div>
 
@@ -1341,6 +1409,60 @@ const Campaigns = () => {
             {/* Volunteer Attendance & Certification */}
             {isOrganizeRole && (
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--card-border)', paddingTop: '20px' }}>
+                
+                {/* Pending Requests Section for Private Campaigns */}
+                {activeCampaignDetails.campaign.visibility === 'Private' && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '1.05rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', color: '#ffb703' }}>
+                      <Clock size={20} />
+                      Pending Join Requests
+                    </h4>
+                    
+                    {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Pending').length === 0 ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No pending requests.</p>
+                    ) : (
+                      <div className="table-container">
+                        <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+                          <thead>
+                            <tr>
+                              <th>Volunteer Name</th>
+                              <th>Email</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Pending').map((vol) => (
+                              <tr key={vol.user_id}>
+                                <td style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                                  <img src={vol.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'} alt="" style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
+                                  {vol.full_name}
+                                </td>
+                                <td>{vol.email}</td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      onClick={() => handleUpdateVolunteerStatus(activeCampaignDetails.campaign.campaign_id, vol.user_id, 'Approved')}
+                                      style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#00f5d4', border: '1px solid rgba(0, 245, 212, 0.4)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateVolunteerStatus(activeCampaignDetails.campaign.campaign_id, vol.user_id, 'Rejected')}
+                                      style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ff4d4d', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <h4 style={{ fontSize: '1.05rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
                   <Award size={20} color="#0284c7" />
                   Registered Volunteers Attendance & Certificates
@@ -1366,8 +1488,8 @@ const Campaigns = () => {
                   </div>
                 )}
 
-                {activeCampaignDetails.volunteers.length === 0 ? (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No volunteers have signed up for this campaign yet.</p>
+                {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Approved').length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No approved volunteers yet.</p>
                 ) : (
                   <div className="table-container">
                     <table className="custom-table" style={{ fontSize: '0.85rem' }}>
@@ -1380,7 +1502,7 @@ const Campaigns = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {activeCampaignDetails.volunteers.map((vol) => (
+                        {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Approved').map((vol) => (
                           <tr key={vol.user_id}>
                             <td style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
                               <img src={vol.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'} alt="" style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
