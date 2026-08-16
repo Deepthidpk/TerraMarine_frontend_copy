@@ -40,6 +40,14 @@ const Campaigns = () => {
   const [selectedCoords, setSelectedCoords] = useState(null);
   const [formErrors, setFormErrors] = useState({});
 
+  // Assign Volunteer State
+  const [showAssignVolunteerModal, setShowAssignVolunteerModal] = useState(false);
+  const [volunteerName, setVolunteerName] = useState('');
+  const [volunteerEmail, setVolunteerEmail] = useState('');
+  const [volunteerPhone, setVolunteerPhone] = useState('');
+  const [volunteerFormErrors, setVolunteerFormErrors] = useState({});
+  const [addingVolunteer, setAddingVolunteer] = useState(false);
+  const [volunteerError, setVolunteerError] = useState('');
   // Volunteer History & Certificates State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [myHistory, setMyHistory] = useState([]);
@@ -86,6 +94,24 @@ const Campaigns = () => {
           if (value.trim().length < 10) return 'Must be at least 10 characters if provided.';
         }
         return null;
+
+      case 'volunteerName':
+        if (!value || !value.trim()) return 'Full name is required.';
+        if (value.trim().length < 3) return 'Full name must be at least 3 characters long.';
+        if (value.trim().length > 50) return 'Full name cannot exceed 50 characters.';
+        if (!/^[a-zA-Z0-9\s]+$/.test(value.trim())) return 'Full name can only contain letters, digits, and spaces.';
+        return null;
+
+      case 'volunteerEmail':
+        if (!value || !value.trim()) return 'Email address is required.';
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value.trim())) return 'Please enter a valid email address (e.g. volunteer@example.com).';
+        return null;
+
+      case 'volunteerPhone': {
+        if (!value || !value.trim()) return 'Phone number is required.';
+        if (!/^[6-9]\d{9}$/.test(value.trim())) return 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
+        return null;
+      }
 
       case 'campaignDate':
         if (!value) return 'Campaign date is required.';
@@ -265,33 +291,89 @@ const Campaigns = () => {
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create campaign.');
-      }
-
-      setSuccess('Cleanup campaign organized successfully!');
-      // Reset form & close modal
-      setCampaignName('');
-      setDescription('');
-      setCampaignDate('');
-      setStartTime('');
-      setEndTime('');
-      setLocation('');
-      setLatitude('');
-      setLongitude('');
       setSelectedCoords(null);
       setMaxVolunteers('');
       setVisibility('Public');
       setFormErrors({});
       setModalError('');
-      setShowFormModal(false);
-
-      fetchCampaigns();
+      if (!res.ok) {
+        setModalError(data.error || 'Failed to create campaign.');
+      } else {
+        setSuccess('Campaign created successfully!');
+        setShowFormModal(false);
+        resetForm();
+        fetchCampaigns();
+      }
     } catch (err) {
-      setModalError(err.message || 'Error occurred while saving campaign.');
+      setModalError('Server error creating campaign. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleAssignVolunteerSubmit = async (e) => {
+    e.preventDefault();
+    setVolunteerError('');
+    setError('');
+    setSuccess('');
+
+    const errors = {
+      name: validateField('volunteerName', volunteerName),
+      email: validateField('volunteerEmail', volunteerEmail),
+      phone: validateField('volunteerPhone', volunteerPhone)
+    };
+
+    const activeErrors = {};
+    if (errors.name) activeErrors.name = errors.name;
+    if (errors.email) activeErrors.email = errors.email;
+    if (errors.phone) activeErrors.phone = errors.phone;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setVolunteerFormErrors(activeErrors);
+      return;
+    }
+
+    setAddingVolunteer(true);
+    try {
+      const res = await authFetch('/campaigns/assign-volunteer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: volunteerName.trim(),
+          email: volunteerEmail.trim(),
+          phone: volunteerPhone.trim()
+        })
+      });
+
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setVolunteerError(data.error || 'Failed to assign volunteer.');
+      } else {
+        setSuccess(`Volunteer "${volunteerName.trim()}" registered successfully! Login details sent to ${volunteerEmail.trim()}.`);
+        setVolunteerName('');
+        setVolunteerEmail('');
+        setVolunteerPhone('');
+        setVolunteerFormErrors({});
+        setShowAssignVolunteerModal(false);
+      }
+    } catch (err) {
+      setVolunteerError('Server error assigning volunteer. Please try again later.');
+    } finally {
+      setAddingVolunteer(false);
+    }
+  };
+
+  const resetForm = () => {
+    setCampaignName('');
+    setDescription('');
+    setCampaignDate('');
+    setStartTime('');
+    setEndTime('');
+    setLocation('');
+    setLatitude('');
+    setLongitude('');
   };
 
   const handleJoinCampaign = async (campaignId) => {
@@ -546,9 +628,9 @@ const Campaigns = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {isOrganizeRole && (
+          {user.role === 'NGO' && (
             <button
-              onClick={() => alert('Assign Volunteer functionality coming soon!')}
+              onClick={() => setShowAssignVolunteerModal(true)}
               style={{
                 background: 'linear-gradient(135deg, rgba(0, 245, 212, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
                 color: '#00f5d4',
@@ -1685,6 +1767,169 @@ const Campaigns = () => {
           certificate={selectedCert}
           onClose={() => setSelectedCert(null)}
         />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ASSIGN NEW VOLUNTEER */}
+      {/* ========================================================================= */}
+      {showAssignVolunteerModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '540px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            position: 'relative',
+            padding: '28px',
+            margin: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Users size={24} color="#00e5ff" />
+                <h2 style={{ fontSize: '1.3rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                  Assign New Volunteer
+                </h2>
+              </div>
+              <button 
+                onClick={() => setShowAssignVolunteerModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Error / Success Alerts */}
+            {volunteerError && (
+              <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ff4d4d', borderRadius: '8px', color: '#ff4d4d', marginBottom: '16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={18} /> {volunteerError}
+              </div>
+            )}
+            
+            {success && success.includes('Login details sent') && (
+              <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', borderRadius: '8px', color: '#10b981', marginBottom: '16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={18} /> {success}
+              </div>
+            )}
+
+            <form onSubmit={handleAssignVolunteerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Volunteer Full Name *
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Rahul Kumar"
+                  value={volunteerName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerName(val);
+                    const err = validateField('volunteerName', val);
+                    setVolunteerFormErrors(prev => ({...prev, name: err}));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateField('volunteerName', e.target.value);
+                    setVolunteerFormErrors(prev => ({...prev, name: err}));
+                  }}
+                  className={`form-input ${volunteerFormErrors.name ? 'error' : ''}`}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${volunteerFormErrors.name ? '#ff4d4d' : 'rgba(0, 229, 255, 0.2)'}`, color: 'white', fontSize: '0.95rem', boxShadow: volunteerFormErrors.name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none' }}
+                />
+                {volunteerFormErrors.name && <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginTop: '4px' }}>{volunteerFormErrors.name}</div>}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Email Address *
+                </label>
+                <input 
+                  type="email"
+                  placeholder="e.g. volunteer@example.com"
+                  value={volunteerEmail}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerEmail(val);
+                    const err = validateField('volunteerEmail', val);
+                    setVolunteerFormErrors(prev => ({...prev, email: err}));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateField('volunteerEmail', e.target.value);
+                    setVolunteerFormErrors(prev => ({...prev, email: err}));
+                  }}
+                  className={`form-input ${volunteerFormErrors.email ? 'error' : ''}`}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${volunteerFormErrors.email ? '#ff4d4d' : 'rgba(0, 229, 255, 0.2)'}`, color: 'white', fontSize: '0.95rem', boxShadow: volunteerFormErrors.email ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none' }}
+                />
+                {volunteerFormErrors.email && <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginTop: '4px' }}>{volunteerFormErrors.email}</div>}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Phone Number *
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. +91 9876543210"
+                  value={volunteerPhone}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerPhone(val);
+                    const err = validateField('volunteerPhone', val);
+                    setVolunteerFormErrors(prev => ({...prev, phone: err}));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateField('volunteerPhone', e.target.value);
+                    setVolunteerFormErrors(prev => ({...prev, phone: err}));
+                  }}
+                  className={`form-input ${volunteerFormErrors.phone ? 'error' : ''}`}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${volunteerFormErrors.phone ? '#ff4d4d' : 'rgba(0, 229, 255, 0.2)'}`, color: 'white', fontSize: '0.95rem', boxShadow: volunteerFormErrors.phone ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none' }}
+                />
+                {volunteerFormErrors.phone && <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginTop: '4px' }}>{volunteerFormErrors.phone}</div>}
+              </div>
+
+              <div style={{ marginTop: '10px', background: 'rgba(0, 229, 255, 0.05)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.15)' }}>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0, lineHeight: '1.5' }}>
+                  💡 An automated welcome email containing their login details and portal link will be dispatched upon registration.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button 
+                  type="button"
+                  onClick={() => setShowAssignVolunteerModal(false)}
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, padding: '12px', background: 'rgba(255, 255, 255, 0.05)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)', color: '#041126', border: 'none', borderRadius: '10px', fontWeight: 'bold' }}
+                  disabled={addingVolunteer}
+                >
+                  {addingVolunteer ? 'Registering...' : 'Assign Volunteer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
