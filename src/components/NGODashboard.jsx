@@ -65,77 +65,85 @@ const NGODashboard = ({
       )}
 
       {/* 4 Metric Stats Cards Across Top (NGO Specific) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        {/* Card 1: Total Campaigns */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+        {/* Card 1: Total Campaigns (RED THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
           border: '1px solid rgba(255, 77, 77, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)',
-          position: 'relative', overflow: 'hidden', padding: '20px', borderRadius: '16px'
+          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
         }}>
-          <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(255, 77, 77, 0.2)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
-              <Calendar size={24} color="#ff4d4d" />
-            </div>
-            <div>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Campaigns</span>
-              <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff', lineHeight: '1.2' }}>{myCampaigns.length}</div>
-            </div>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+            <Calendar size={24} color="#ff4d4d" />
           </div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Total Campaigns</span>
+            <div className="stat-val">{myCampaigns.length}</div>
+          </div>
+          <img 
+            src="/images/red_coral_card_bg.png" 
+            alt="Red Coral" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        {/* Card 2: Active Cleanups */}
+        {/* Card 2: Active Cleanups (CYAN BLUE THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
           border: '1px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)',
-          position: 'relative', overflow: 'hidden', padding: '20px', borderRadius: '16px'
+          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
         }}>
-          <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(0, 229, 255, 0.2)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
-              <Clock size={24} color="#00e5ff" />
-            </div>
-            <div>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Cleanups</span>
-              <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff', lineHeight: '1.2' }}>{activeMyCampaigns.length}</div>
-            </div>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+            <Clock size={24} color="#00e5ff" />
           </div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Active Cleanups</span>
+            <div className="stat-val">{activeMyCampaigns.length}</div>
+          </div>
+          <img 
+            src="/images/cyan_cleanups_corner.png" 
+            alt="Cyan Cleanups Coral" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        {/* Card 3: Volunteers Mobilized */}
+        {/* Card 3: Volunteers Mobilized (EMERALD TEAL THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
           border: '1px solid rgba(0, 245, 212, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)',
-          position: 'relative', overflow: 'hidden', padding: '20px', borderRadius: '16px'
+          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
         }}>
-          <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(0, 245, 212, 0.2)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
-              <Users size={24} color="#00f5d4" />
-            </div>
-            <div>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Volunteers Mobilized</span>
-              <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff', lineHeight: '1.2' }}>{totalVolunteersMobilized}</div>
-            </div>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
+            <Users size={24} color="#00f5d4" />
           </div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Volunteers Mobilized</span>
+            <div className="stat-val">{totalVolunteersMobilized}</div>
+          </div>
+          <img 
+            src="/images/green_teal_campaigns_bg.png" 
+            alt="Emerald Sea Kelp" 
+            className="card-artwork-blend"
+          />
         </div>
 
-        {/* Card 4: Completed Campaigns */}
+        {/* Card 4: Completed Campaigns (PURPLE THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
           border: '1px solid rgba(157, 78, 221, 0.35)',
-          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)',
-          position: 'relative', overflow: 'hidden', padding: '20px', borderRadius: '16px'
+          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
         }}>
-          <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(157, 78, 221, 0.2)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
-              <Globe size={24} color="#9d4edd" />
-            </div>
-            <div>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completed Drives</span>
-              <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff', lineHeight: '1.2' }}>{completedMyCampaigns.length}</div>
-            </div>
+          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
+            <Globe size={24} color="#9d4edd" />
           </div>
+          <div className="stat-content-wrapper">
+            <span className="stat-lbl">Completed Drives</span>
+            <div className="stat-val">{completedMyCampaigns.length}</div>
+          </div>
+          <img 
+            src="/images/purple_coral_card_bg.png" 
+            alt="Purple Coral" 
+            className="card-artwork-blend"
+          />
         </div>
       </div>
 
