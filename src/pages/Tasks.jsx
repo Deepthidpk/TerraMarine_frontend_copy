@@ -1005,7 +1005,7 @@ const Tasks = () => {
                   style={{ color: selectedReportId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedReportId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedReportId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 >
                   <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Choose Incident Report --</option>
-                  {reports.filter(rep => rep.status !== 'Completed').map(rep => {
+                  {reports.filter(rep => rep.status === 'Verified' && !rep.assigned_workers).map(rep => {
                     const workerSuffix = rep.assigned_workers ? ` - ${rep.assigned_workers}` : '';
                     return (
                       <option key={rep.report_id} value={rep.report_id} style={{ color: '#cbd5e1' }}>
