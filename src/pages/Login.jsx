@@ -76,6 +76,8 @@ const Login = () => {
         errorMsg = 'Password is required.';
       } else if (value.length < 6) {
         errorMsg = 'Password must be at least 6 characters.';
+      } else if (!/[A-Za-z]/.test(value) || !/\d/.test(value) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(value)) {
+        errorMsg = 'Password must contain letters, digits, and special characters.';
       }
     }
     setFieldErrors((prev) => ({
@@ -102,6 +104,9 @@ const Login = () => {
       hasErrors = true;
     } else if (password.length < 6) {
       errors.password = 'Password must be at least 6 characters.';
+      hasErrors = true;
+    } else if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+      errors.password = 'Password must contain letters, digits, and special characters.';
       hasErrors = true;
     }
     
