@@ -286,7 +286,7 @@ const Campaigns = () => {
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude),
           maximum_volunteers: parseInt(maxVolunteers),
-          visibility: visibility
+          visibility: user?.role === 'NGO' ? visibility : 'Public'
         })
       });
 
@@ -1284,7 +1284,7 @@ const Campaigns = () => {
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'NGO' ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Latitude *</label>
                       <input 
@@ -1353,18 +1353,20 @@ const Campaigns = () => {
                       )}
                     </div>
 
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Visibility *</label>
-                      <select 
-                        className="form-control"
-                        value={visibility}
-                        onChange={(e) => setVisibility(e.target.value)}
-                        style={{ padding: '8px 10px', border: '1px solid rgba(0, 229, 255, 0.2)', backgroundColor: 'transparent' }}
-                      >
-                        <option value="Public" style={{ color: '#000' }}>Public (Open)</option>
-                        <option value="Private" style={{ color: '#000' }}>Private (Invite Only)</option>
-                      </select>
-                    </div>
+                    {user?.role === 'NGO' && (
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Visibility *</label>
+                        <select 
+                          className="form-control"
+                          value={visibility}
+                          onChange={(e) => setVisibility(e.target.value)}
+                          style={{ padding: '8px 10px', border: '1px solid rgba(0, 229, 255, 0.2)', backgroundColor: 'transparent' }}
+                        >
+                          <option value="Public" style={{ color: '#000' }}>Public (Open)</option>
+                          <option value="Private" style={{ color: '#000' }}>Private (Invite Only)</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {formErrors.coordinates && (
