@@ -23,8 +23,7 @@ const NGODashboard = ({
   
   const totalVolunteersMobilized = myCampaigns.reduce((acc, curr) => acc + (parseInt(curr.volunteer_count) || 0), 0);
 
-  // Unresolved pollution reports (can be viewed by NGO to plan campaigns)
-  const pendingReports = safeReports.filter(r => r.status === 'Pending' || r.status === 'Verified').slice(0, 5);
+  const pendingReports = safeReports.filter(r => r.status === 'Pending').slice(0, 5);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>

@@ -543,6 +543,7 @@ const Tasks = () => {
 
   // Filtered tasks computation
   const filteredTasks = tasks.filter((t) => {
+    if (t.status === 'Verified') return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = t.report_title?.toLowerCase().includes(q);

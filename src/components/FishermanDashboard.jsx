@@ -226,7 +226,7 @@ const FishermanDashboard = ({
   };
 
   // Fisherman's own active reported items (exclude completed cleanups)
-  const myReports = reports.filter(r => r.reported_by === user?.user_id && r.status !== 'Completed');
+  const myReports = reports.filter(r => r.reported_by === user?.user_id && r.status === 'Pending');
   const activeAlerts = alerts.length > 0 ? alerts : [
     { 
       alert_id: 101, 
@@ -252,7 +252,7 @@ const FishermanDashboard = ({
     }
   ];
 
-  const activeComplaintsCount = Math.max(0, (reports.length || 7) - (reports.filter(r => r.status === 'Completed' || r.status === 'Resolved').length || 1));
+  const activeComplaintsCount = reports.filter(r => r.status === 'Pending').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
