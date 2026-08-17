@@ -628,29 +628,7 @@ const Campaigns = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {user.role === 'NGO' && (
-            <button
-              onClick={() => setShowAssignVolunteerModal(true)}
-              style={{
-                background: 'linear-gradient(135deg, rgba(0, 245, 212, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
-                color: '#00f5d4',
-                border: '1px solid rgba(0, 245, 212, 0.5)',
-                padding: '12px 20px',
-                borderRadius: '12px',
-                fontWeight: '700',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 8px 24px rgba(0, 245, 212, 0.25)',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <Users size={18} color="#00f5d4" />
-              Assign Volunteer
-            </button>
-          )}
+
 
           {!isOrganizeRole && (
             <button
