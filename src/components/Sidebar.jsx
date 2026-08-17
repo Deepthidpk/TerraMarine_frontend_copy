@@ -65,6 +65,7 @@ const Sidebar = () => {
     state: '',
     profile_image: ''
   });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -76,6 +77,39 @@ const Sidebar = () => {
     navigate('/login');
   };
 
+  const validateField = (name, value) => {
+    let errorMsg = '';
+    if (name === 'full_name') {
+      if (!value || !value.trim()) {
+        errorMsg = 'Full name is required.';
+      } else if (value.trim().length < 3) {
+        errorMsg = 'Full name must be at least 3 characters.';
+      } else if (!/^[A-Za-z\s]+$/.test(value)) {
+        errorMsg = 'Full name can only contain letters and spaces.';
+      }
+    } else if (name === 'phone') {
+      if (value && !/^[6-9][0-9]{9}$/.test(value)) {
+        errorMsg = 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
+      }
+    } else if (name === 'district') {
+      if (value && !/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'District can only contain letters, digits, and spaces.';
+      }
+    } else if (name === 'state') {
+      if (value && !/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'State can only contain letters, digits, and spaces.';
+      }
+    } else if (name === 'address') {
+      if (value && value.trim().length < 5) {
+        errorMsg = 'Address must be at least 5 characters.';
+      } else if (value && !/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Address can only contain letters, digits, and spaces.';
+      }
+    }
+    setFieldErrors(prev => ({ ...prev, [name]: errorMsg }));
+    return errorMsg;
+  };
+
   const handleOpenEditModal = () => {
     setProfileForm({
       full_name: user.full_name || '',
@@ -85,6 +119,7 @@ const Sidebar = () => {
       state: user.state || '',
       profile_image: user.profile_image || ''
     });
+    setFieldErrors({});
     setProfileError('');
     setProfileSuccess('');
     setShowEditModal(true);
@@ -130,9 +165,19 @@ const Sidebar = () => {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (!profileForm.full_name || profileForm.full_name.trim().length < 2) {
-      return setProfileError('Full name must be at least 2 characters.');
+    
+    // Validate all fields first
+    const errFullName = validateField('full_name', profileForm.full_name);
+    const errPhone = validateField('phone', profileForm.phone);
+    const errDistrict = validateField('district', profileForm.district);
+    const errState = validateField('state', profileForm.state);
+    const errAddress = validateField('address', profileForm.address);
+    
+    if (errFullName || errPhone || errDistrict || errState || errAddress) {
+      setProfileError('Please correct the highlighted validation errors before saving.');
+      return;
     }
+
     setSavingProfile(true);
     setProfileError('');
     setProfileSuccess('');
@@ -470,10 +515,22 @@ const Sidebar = () => {
                   type="text" 
                   className="form-control" 
                   value={profileForm.full_name} 
-                  onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, full_name: e.target.value });
+                    validateField('full_name', e.target.value);
+                  }}
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.full_name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                  }}
                   required
                 />
+                {fieldErrors.full_name && (
+                  <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                    {fieldErrors.full_name}
+                  </span>
+                )}
               </div>
 
               {/* Phone */}
@@ -483,10 +540,22 @@ const Sidebar = () => {
                   type="tel" 
                   className="form-control" 
                   value={profileForm.phone} 
-                  onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                  placeholder="e.g. +91 9876543210"
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, phone: e.target.value });
+                    validateField('phone', e.target.value);
+                  }}
+                  placeholder="e.g. 9876543210"
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.phone ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                  }}
                 />
+                {fieldErrors.phone && (
+                  <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                    {fieldErrors.phone}
+                  </span>
+                )}
               </div>
 
               {/* District & State Row */}
@@ -497,10 +566,22 @@ const Sidebar = () => {
                     type="text" 
                     className="form-control" 
                     value={profileForm.district} 
-                    onChange={(e) => setProfileForm({ ...profileForm, district: e.target.value })}
+                    onChange={(e) => {
+                      setProfileForm({ ...profileForm, district: e.target.value });
+                      validateField('district', e.target.value);
+                    }}
                     placeholder="e.g. Ernakulam"
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    style={{ 
+                      color: '#ffffff', 
+                      background: 'rgba(8, 20, 42, 0.8)', 
+                      border: fieldErrors.district ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                    }}
                   />
+                  {fieldErrors.district && (
+                    <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                      {fieldErrors.district}
+                    </span>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>State</label>
@@ -508,10 +589,22 @@ const Sidebar = () => {
                     type="text" 
                     className="form-control" 
                     value={profileForm.state} 
-                    onChange={(e) => setProfileForm({ ...profileForm, state: e.target.value })}
+                    onChange={(e) => {
+                      setProfileForm({ ...profileForm, state: e.target.value });
+                      validateField('state', e.target.value);
+                    }}
                     placeholder="e.g. Kerala"
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    style={{ 
+                      color: '#ffffff', 
+                      background: 'rgba(8, 20, 42, 0.8)', 
+                      border: fieldErrors.state ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                    }}
                   />
+                  {fieldErrors.state && (
+                    <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                      {fieldErrors.state}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -522,10 +615,23 @@ const Sidebar = () => {
                   className="form-control" 
                   rows="2"
                   value={profileForm.address} 
-                  onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, address: e.target.value });
+                    validateField('address', e.target.value);
+                  }}
                   placeholder="Enter full address"
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)', resize: 'vertical' }}
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.address ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)', 
+                    resize: 'vertical' 
+                  }}
                 />
+                {fieldErrors.address && (
+                  <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                    {fieldErrors.address}
+                  </span>
+                )}
               </div>
 
               {/* Action Buttons */}
