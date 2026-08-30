@@ -6,6 +6,7 @@ import UserApproval from './UserApproval';
 import FishermanDashboard from '../components/FishermanDashboard';
 import WorkerDashboard from '../components/WorkerDashboard';
 import NGODashboard from '../components/NGODashboard';
+import ResearcherDashboard from '../components/ResearcherDashboard';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -197,6 +198,22 @@ const Dashboard = () => {
         alerts={alerts} 
         notifications={notifications} 
         navigate={navigate} 
+      />
+    );
+  }
+
+  // Researcher Coastal Research & Marine Intelligence Workspace
+  if (user?.role === 'Researcher') {
+    return (
+      <ResearcherDashboard 
+        user={user} 
+        reports={reports} 
+        campaigns={campaigns} 
+        alerts={alerts} 
+        notifications={notifications} 
+        authFetch={authFetch}
+        navigate={navigate}
+        fetchDashboardData={fetchDashboardData}
       />
     );
   }

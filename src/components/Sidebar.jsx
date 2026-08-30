@@ -26,7 +26,14 @@ import {
   User,
   X,
   Bell,
-  History
+  History,
+  Compass,
+  Layers,
+  FolderOpen,
+  Database,
+  FileText,
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -194,11 +201,16 @@ const Sidebar = () => {
     }
   };
 
-  // Check if a sidebar item is active for System Admin
-  const isTabActive = (targetTab) => {
+  // Check if a sidebar item is active for System Admin & Researcher
+  const isTabActive = (tabKey) => {
     const searchParams = new URLSearchParams(location.search);
-    const currentTab = searchParams.get('tab') || 'organizations';
-    return location.pathname === '/dashboard' && currentTab === targetTab;
+    const currentTab = searchParams.get('tab');
+    if (!currentTab) {
+      if (user.role === 'Admin') return tabKey === 'organizations';
+      if (user.role === 'Researcher') return tabKey === 'dashboard';
+      return false;
+    }
+    return currentTab === tabKey;
   };
 
   // Define sidebar links based on role
@@ -219,7 +231,25 @@ const Sidebar = () => {
       ];
     }
 
-    // 2. WORKER ROLE SIDEBAR (Municipal Cleanup Task Worker)
+    // 2. RESEARCHER ROLE SIDEBAR (Coastal Research & Marine Intelligence Workspace)
+    if (user.role === 'Researcher') {
+      return [
+        { to: '/dashboard?tab=dashboard', tabKey: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+        { to: '/dashboard?tab=ocean-intelligence', tabKey: 'ocean-intelligence', label: 'Ocean Intelligence', icon: <Map size={18} /> },
+        { to: '/dashboard?tab=species-explorer', tabKey: 'species-explorer', label: 'Species Explorer', icon: <Compass size={18} /> },
+        { to: '/dashboard?tab=biodiversity-hotspots', tabKey: 'biodiversity-hotspots', label: 'Biodiversity', icon: <Layers size={18} /> },
+        { to: '/dashboard?tab=pollution-analysis', tabKey: 'pollution-analysis', label: 'Pollution Analysis', icon: <BarChart3 size={18} /> },
+        { to: '/dashboard?tab=water-quality', tabKey: 'water-quality', label: 'Water Quality', icon: <Sliders size={18} /> },
+        { to: '/dashboard?tab=research-projects', tabKey: 'research-projects', label: 'Research Projects', icon: <FolderOpen size={18} /> },
+        { to: '/dashboard?tab=my-observations', tabKey: 'my-observations', label: 'My Observations', icon: <Camera size={18} /> },
+        { to: '/dashboard?tab=datasets', tabKey: 'datasets', label: 'Datasets', icon: <Database size={18} /> },
+        { to: '/dashboard?tab=research-reports', tabKey: 'research-reports', label: 'Research Reports', icon: <FileText size={18} /> },
+        { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Research Assistant', icon: <MessageSquare size={18} /> },
+        { to: '/dashboard?tab=research-alerts', tabKey: 'research-alerts', label: 'Research Alerts', icon: <AlertCircle size={18} /> }
+      ];
+    }
+
+    // 3. WORKER ROLE SIDEBAR (Municipal Cleanup Task Worker)
     if (user.role === 'Worker') {
       return [
         { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -229,7 +259,7 @@ const Sidebar = () => {
       ];
     }
 
-    // 3. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, Researcher, NGO)
+    // 4. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, NGO)
     const links = [];
     if (user.role !== 'Citizen') {
       links.push({ to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> });
@@ -248,8 +278,6 @@ const Sidebar = () => {
     if (['Authority', 'Worker'].includes(user.role)) {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
     }
-
-
 
     if (['Authority', 'Worker'].includes(user.role)) {
       links.push({ to: '/payments', label: 'Rewards & Payments', icon: <Award size={18} /> });
@@ -335,7 +363,7 @@ const Sidebar = () => {
         }}
       >
         {navLinks.map((link) => {
-          const active = isAdmin ? isTabActive(link.tabKey) : location.pathname === link.to;
+          const active = ['Admin', 'Researcher'].includes(user.role) ? isTabActive(link.tabKey) : location.pathname === link.to;
           const unreadCount = link.isNotification && notifications ? notifications.filter(n => !n.is_read).length : 0;
 
           return (
