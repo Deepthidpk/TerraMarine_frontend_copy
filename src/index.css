@@ -514,6 +514,10 @@ button, input, select, textarea {
   z-index: 1;
 }
 
+.leaflet-tile-container img {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) !important;
+}
+
 .leaflet-container img,
 .leaflet-container .leaflet-tile-pane img,
 .leaflet-container img.leaflet-tile,

@@ -1057,8 +1057,8 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                 <MapContainer center={mapCenter} zoom={12} style={{ width: '100%', height: '100%' }}>
                   <MapResizer />
                   <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                   {simulatedSensors.map((s, idx) => (
                     <Marker key={idx} position={[s.lat, s.lng]} icon={mapIcons.waterQuality}>
@@ -1176,8 +1176,8 @@ I can query environmental indicators, water sensor history, pollution logs, and 
               <MapContainer center={mapCenter} zoom={13} style={{ width: '100%', height: '100%' }}>
                 <MapResizer />
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 
                 {/* Click listener to fetch coordinates detail */}
