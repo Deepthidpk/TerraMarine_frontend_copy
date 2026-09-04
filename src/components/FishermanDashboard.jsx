@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Anchor, ShieldAlert, AlertOctagon, Camera, MapPin, Calendar, 
   Wind, Compass, Bell, CheckCircle, Clock, Info, X, Radio, Navigation, Eye, CheckCircle2, ChevronRight,
-  RefreshCw, Send, AlertTriangle, Layers, Droplet, Fish, AlertCircle, FileText, Check
+  RefreshCw, Send, AlertTriangle, Layers, Droplet, Fish, AlertCircle, FileText, Check, Filter, ExternalLink
 } from 'lucide-react';
 
 const FishermanDashboard = ({ 
@@ -33,11 +33,38 @@ const FishermanDashboard = ({
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
 
+  // Dynamic categories & waste types
+  const [categoriesList, setCategoriesList] = useState(['Pollution', 'Emergency']);
+  const [wasteTypesList, setWasteTypesList] = useState(['Plastic', 'Glass', 'Fishing Nets', 'Oil Spill', 'Dead Marine Life', 'General Litter']);
+
+  useEffect(() => {
+    const fetchCats = async () => {
+      try {
+        const res = await authFetch('/categories');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.categories && data.categories.length > 0) setCategoriesList(data.categories.map(c => c.name));
+        }
+      } catch (err) {}
+    };
+    const fetchWastes = async () => {
+      try {
+        const res = await authFetch('/waste-types');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.wasteTypes && data.wasteTypes.length > 0) setWasteTypesList(data.wasteTypes.map(w => w.name));
+        }
+      } catch (err) {}
+    };
+    fetchCats();
+    fetchWastes();
+  }, []);
+
   // 2. REPORT DETAILS & TRACKING STEPPER MODAL STATE
   const [activeReportDetails, setActiveReportDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  // 3. WEATHER ALERT DETAIL MODAL STATE
+  // 3. ENVIRONMENTAL ALERT DETAIL MODAL STATE (TerraMarine Alerts)
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [showAlertModal, setShowAlertModal] = useState(false);
 
@@ -48,6 +75,55 @@ const FishermanDashboard = ({
   // 5. JOINED CAMPAIGNS TRACKING STATE
   const [joinedCampaignIds, setJoinedCampaignIds] = useState(new Set());
   const [joiningCampaignId, setJoiningCampaignId] = useState(null);
+
+  // 6. REAL-DATA IMD MARINE & COASTAL SAFETY STATE
+  const [selectedLayer, setSelectedLayer] = useState('All');
+  const [marineStatus, setMarineStatus] = useState(null);
+  const [seaBulletins, setSeaBulletins] = useState([]);
+  const [coastalBulletins, setCoastalBulletins] = useState([]);
+  const [activeOfficialWarnings, setActiveOfficialWarnings] = useState([]);
+  const [availableLayers, setAvailableLayers] = useState([]);
+  const [marineLoading, setMarineLoading] = useState(true);
+  const [marineError, setMarineError] = useState('');
+  const [marineLastUpdated, setMarineLastUpdated] = useState(null);
+  const [selectedBulletin, setSelectedBulletin] = useState(null);
+  const [showBulletinModal, setShowBulletinModal] = useState(false);
+
+  const fetchMarineData = async (layer = selectedLayer, forceRefresh = false) => {
+    setMarineLoading(true);
+    setMarineError('');
+    try {
+      let url = `/fisherman/marine/status`;
+      const queryParams = [];
+      if (layer && layer !== 'All') queryParams.push(`layer=${encodeURIComponent(layer)}`);
+      if (forceRefresh) queryParams.push(`refresh=true`);
+      if (queryParams.length > 0) url += `?${queryParams.join('&')}`;
+
+      const res = await authFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setMarineStatus(data.status);
+        setSeaBulletins(data.seaBulletins || []);
+        setCoastalBulletins(data.coastalBulletins || []);
+        setActiveOfficialWarnings(data.activeOfficialWarnings || []);
+        setMarineLastUpdated(data.lastUpdated);
+        if (data.availableLayers && data.availableLayers.length > 0) {
+          setAvailableLayers(data.availableLayers);
+        }
+      } else {
+        setMarineError('Unable to retrieve the latest IMD marine information.');
+      }
+    } catch (err) {
+      console.error('Error fetching IMD marine safety data:', err);
+      setMarineError('Unable to retrieve the latest IMD marine information.');
+    } finally {
+      setMarineLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMarineData(selectedLayer);
+  }, [selectedLayer]);
 
   // Auto-detect GPS coordinates
   const handleDetectGPS = () => {
@@ -198,34 +274,10 @@ const FishermanDashboard = ({
     }
   };
 
-  // Fisherman's own reported items
-  const myReports = reports.filter(r => r.reported_by === user?.user_id);
-  const activeAlerts = alerts.length > 0 ? alerts : [
-    { 
-      alert_id: 101, 
-      title: 'Coastal High Wave & Wind Advisory', 
-      description: 'Monsoon sea surge expected along Kerala coast. Wind speeds 18-24 knots NW. Exercise caution.', 
-      severity: 'High', 
-      radius_km: 25, 
-      latitude: 9.9312, 
-      longitude: 76.2673,
-      issued_time: new Date().toISOString(),
-      issuer_name: 'Municipal Maritime Authority'
-    },
-    { 
-      alert_id: 102, 
-      title: 'Floating Debris Safety Watch', 
-      description: 'Reports of loose fishing gear drifting 4 NM offshore. Navigation advisory active.', 
-      severity: 'Medium', 
-      radius_km: 15, 
-      latitude: 9.9650, 
-      longitude: 76.2420,
-      issued_time: new Date().toISOString(),
-      issuer_name: 'Coast Guard Station'
-    }
-  ];
-
-  const activeComplaintsCount = Math.max(0, (reports.length || 7) - (reports.filter(r => r.status === 'Completed' || r.status === 'Resolved').length || 1));
+  // Fisherman's own active reported items
+  const myReports = reports.filter(r => r.reported_by === user?.user_id && r.status === 'Pending');
+  // TerraMarine environmental alerts (user/system submitted)
+  const envAlerts = alerts || [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -236,8 +288,8 @@ const FishermanDashboard = ({
           <h1 style={{ fontSize: '1.85rem', color: '#ffffff', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>
             Welcome back, <span style={{ color: '#00e5ff' }}>{user.full_name}</span>!
           </h1>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Anchor size={14} color="#00e5ff" /> Coastal Observer Station | License: <strong style={{ color: '#ffffff' }}>{user?.fisherman_license_no || 'Verified Observer'}</strong>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#94a3b8' }}>
+            Real-time Coastal Safety & Floating Marine Pollution Monitoring Workspace
           </p>
         </div>
 
@@ -279,167 +331,390 @@ const FishermanDashboard = ({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              boxShadow: '0 4px 16px rgba(239, 68, 68, 0.35)',
+              boxShadow: '0 4px 16px rgba(255, 77, 77, 0.3)',
               border: 'none'
             }}
           >
-            <ShieldAlert size={16} />
-            <span>+ Report Emergency</span>
+            <AlertOctagon size={16} />
+            <span>+ Report Emergency Sighting</span>
           </button>
         </div>
       </div>
 
-      {/* 2. 4 METRIC STAT CARDS ACROSS TOP (EXACT STAT-CARD-MARINE DESIGN) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+      {/* 2. REAL-DATA IMD MARINE & COASTAL SAFETY MODULE (PROMINENT SECTION) */}
+      <div className="glass-panel" style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(8, 24, 48, 0.95) 0%, rgba(5, 18, 38, 0.98) 100%)', border: '1px solid rgba(0, 229, 255, 0.3)' }}>
         
-        {/* Card 1: Active Complaints (RED THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
-          border: '1px solid rgba(255, 77, 77, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
-            <AlertOctagon size={24} color="#ff4d4d" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Active Complaints</span>
-            <div className="stat-val">{activeComplaintsCount}</div>
-          </div>
-          <img 
-            src="/images/red_coral_card_bg.png" 
-            alt="Red Coral" 
-            className="card-artwork-blend"
-          />
-        </div>
-
-        {/* Card 2: Completed Cleanups (CYAN BLUE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
-          border: '1px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
-            <CheckCircle size={24} color="#00e5ff" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Completed Cleanups</span>
-            <div className="stat-val">{reports.filter(r => r.status === 'Completed' || r.status === 'Resolved').length || 1}</div>
-          </div>
-          <img 
-            src="/images/cyan_cleanups_corner.png" 
-            alt="Cyan Cleanups Coral" 
-            className="card-artwork-blend"
-          />
-        </div>
-
-        {/* Card 3: Active Campaigns (EMERALD TEAL THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
-          border: '1px solid rgba(0, 245, 212, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
-            <Calendar size={24} color="#00f5d4" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Active Campaigns</span>
-            <div className="stat-val">{campaigns.length || 2}</div>
-          </div>
-          <img 
-            src="/images/green_teal_campaigns_bg.png" 
-            alt="Emerald Sea Kelp" 
-            className="card-artwork-blend"
-          />
-        </div>
-
-        {/* Card 4: Weather Advisories (PURPLE VIOLET THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
-          border: '1px solid rgba(157, 78, 221, 0.35)',
-          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
-            <Wind size={24} color="#9d4edd" />
-          </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Sea Weather Advisories</span>
-            <div className="stat-val">{activeAlerts.length}</div>
-          </div>
-          <img 
-            src="/images/purple_coral_card_bg.png" 
-            alt="Purple Coral" 
-            className="card-artwork-blend"
-          />
-        </div>
-
-      </div>
-
-      {/* 3. MAIN SPLIT CONTENT ROW (2 COLS : 1 COL) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-        
-        {/* LEFT COLUMN: WEATHER ALERTS + NEARBY CAMPAIGNS */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* FUNCTIONALITY 1: WEATHER & MARINE ALERTS PANEL */}
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Wind size={20} color="#ffb703" />
-                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#ffffff', fontWeight: '700' }}>
-                  Live Marine Weather & Safety Advisories
-                </h3>
+        {/* Module Header Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', borderBottom: '1px solid rgba(0, 229, 255, 0.2)', paddingBottom: '16px', marginBottom: '20px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ padding: '8px', background: 'rgba(0, 229, 255, 0.12)', borderRadius: '10px' }}>
+                <Compass size={22} color="#00e5ff" />
               </div>
-              <button 
-                onClick={fetchDashboardData}
-                style={{ background: 'none', border: 'none', color: '#ffb703', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.35rem', color: '#ffffff', fontWeight: '800', letterSpacing: '-0.01em' }}>
+                  🌊 Marine & Coastal Safety Module
+                </h2>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <span>Source: <strong>India Meteorological Department (IMD)</strong></span>
+                  <span>•</span>
+                  <span>Govt. of India Official Forecast</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Location / Region Filter Dropdown */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 12px', borderRadius: '10px', border: '1px solid rgba(0, 229, 255, 0.25)' }}>
+              <Filter size={14} color="#00e5ff" />
+              <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: '600' }}>Coastal Region:</span>
+              <select
+                value={selectedLayer}
+                onChange={(e) => setSelectedLayer(e.target.value)}
+                style={{
+                  background: 'transparent',
+                  color: '#00e5ff',
+                  border: 'none',
+                  fontSize: '0.82rem',
+                  fontWeight: '700',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
               >
-                <RefreshCw size={13} /> Refresh Feed
-              </button>
+                <option value="All" style={{ background: '#0f172a', color: '#ffffff' }}>All Coastal Regions</option>
+                {availableLayers.map((layer) => (
+                  <option key={layer} value={layer} style={{ background: '#0f172a', color: '#ffffff' }}>
+                    {layer}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {activeAlerts.map((alt) => (
-                <div 
-                  key={alt.alert_id} 
-                  onClick={() => { setSelectedAlert(alt); setShowAlertModal(true); }}
-                  style={{
-                    padding: '14px 16px',
-                    borderRadius: '12px',
-                    background: alt.severity === 'High' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 183, 3, 0.1)',
-                    border: alt.severity === 'High' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255, 183, 3, 0.3)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '12px',
-                    flexWrap: 'wrap',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s ease'
-                  }}
-                >
+            <button
+              onClick={() => fetchMarineData(selectedLayer, true)}
+              disabled={marineLoading}
+              style={{
+                padding: '7px 14px',
+                borderRadius: '10px',
+                background: 'rgba(0, 229, 255, 0.1)',
+                border: '1px solid rgba(0, 229, 255, 0.3)',
+                color: '#00e5ff',
+                fontSize: '0.8rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <RefreshCw size={13} className={marineLoading ? 'spin' : ''} />
+              <span>{marineLoading ? 'Refreshing...' : 'Refresh IMD Data'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Marine Safety Status Indicator Banner */}
+        {marineError ? (
+          <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(148, 163, 184, 0.1)', border: '1px solid rgba(148, 163, 184, 0.3)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <AlertCircle size={20} color="#94a3b8" />
+            <div>
+              <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#cbd5e1', fontWeight: '700' }}>Information Unavailable</h4>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>{marineError}</p>
+            </div>
+          </div>
+        ) : marineStatus ? (
+          <div style={{
+            padding: '16px 20px',
+            borderRadius: '14px',
+            background: marineStatus.statusCode === 'WARNING_ACTIVE' ? 'rgba(239, 68, 68, 0.12)' : marineStatus.statusCode === 'ADVISORY_CAUTION' ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+            border: `1px solid ${marineStatus.badgeColor}50`,
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '14px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                backgroundColor: marineStatus.badgeColor,
+                boxShadow: `0 0 12px ${marineStatus.badgeColor}`
+              }} />
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800' }}>
+                    Status: <span style={{ color: marineStatus.badgeColor }}>{marineStatus.statusText}</span>
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', background: `${marineStatus.badgeColor}25`, color: marineStatus.badgeColor, fontWeight: '700' }}>
+                    OFFICIAL IMD CLASSIFICATION
+                  </span>
+                </div>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                  {marineStatus.message}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'right' }}>
+              <div>IMD Issued: <strong style={{ color: '#ffffff' }}>{marineLastUpdated ? new Date(marineLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}</strong></div>
+              <div>Validity: <strong style={{ color: '#00e5ff' }}>12 Hours</strong></div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Official Warnings Card Banner (If Warning is Active) */}
+        {activeOfficialWarnings.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '0.92rem', color: '#ff4d4d', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShieldAlert size={18} color="#ff4d4d" />
+              OFFICIAL IMD MARINE WARNINGS ACTIVE ({activeOfficialWarnings.length})
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {activeOfficialWarnings.map((warn, idx) => (
+                <div key={idx} style={{
+                  padding: '14px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <ShieldAlert size={16} color={alt.severity === 'High' ? '#ff4d4d' : '#ffb703'} />
-                      <h5 style={{ margin: 0, fontSize: '0.92rem', color: '#ffffff', fontWeight: '700' }}>{alt.title}</h5>
-                      <span className={`badge ${alt.severity === 'High' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.7rem' }}>
-                        {alt.severity || 'Medium'} Severity
-                      </span>
+                    <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#ffffff', marginBottom: '2px' }}>
+                      Region: <span style={{ color: '#ff4d4d' }}>{warn.layer}</span> | Issued By: {warn.issuedBy || 'IMD'}
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#cbd5e1' }}>{alt.description}</p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {alt.radius_km && (
-                      <span style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                        📍 Radius: <strong style={{ color: '#00e5ff' }}>{alt.radius_km} km</strong>
-                      </span>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#fca5a5' }}>
+                      ⚠️ <strong>Warning Detail:</strong> {warn.warning}
+                    </p>
+                    {warn.validFrom && (
+                      <div style={{ fontSize: '0.76rem', color: '#cbd5e1', marginTop: '4px' }}>
+                        📅 Valid: {warn.validFrom}
+                      </div>
                     )}
-                    <ChevronRight size={16} color="#94a3b8" />
                   </div>
+                  <span style={{ fontSize: '0.72rem', background: 'rgba(239, 68, 68, 0.3)', color: '#ffffff', padding: '4px 10px', borderRadius: '6px', fontWeight: '700' }}>
+                    IMD OFFICIAL WARNING
+                  </span>
                 </div>
               ))}
             </div>
           </div>
+        )}
 
-          {/* FUNCTIONALITY 5: NEARBY CLEANUP CAMPAIGNS */}
+        {/* Bulletins Section: Sea Area & Coastal Bulletins */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          
+          {/* Sea Area Bulletins Card */}
+          <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '10px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Wind size={18} color="#00e5ff" />
+                <h4 style={{ margin: 0, fontSize: '1rem', color: '#ffffff', fontWeight: '700' }}>
+                  Sea Area Bulletins ({seaBulletins.length})
+                </h4>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: '700' }}>IMD Official</span>
+            </div>
+
+            {seaBulletins.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '20px' }}>
+                No Sea Area bulletins match the selected region.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {seaBulletins.map((bulletin, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => { setSelectedBulletin(bulletin); setShowBulletinModal(true); }}
+                    style={{
+                      padding: '14px',
+                      borderRadius: '10px',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid rgba(0, 229, 255, 0.25)',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.2s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#ffffff' }}>
+                        📍 {bulletin.layer}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                        {bulletin.issuedBy}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '8px' }}>
+                      <div>💨 <strong>Wind:</strong> {bulletin.wind || 'N/A'}</div>
+                      <div>🌊 <strong>Sea:</strong> {bulletin.seaCondition || 'N/A'}</div>
+                      <div>🌧️ <strong>Weather:</strong> {bulletin.weather || 'N/A'}</div>
+                      <div>👁️ <strong>Visibility:</strong> {bulletin.visibility || 'N/A'}</div>
+                    </div>
+
+                    {bulletin.warning && bulletin.warning !== 'NIL' && (
+                      <div style={{ fontSize: '0.76rem', color: '#ffb703', background: 'rgba(255, 183, 3, 0.1)', padding: '6px', borderRadius: '6px', marginTop: '4px' }}>
+                        ⚠️ <strong>Warning:</strong> {bulletin.warning}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', pt: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.72rem', color: '#64748b' }}>
+                      <span>Source: India Meteorological Department</span>
+                      <span style={{ color: '#00e5ff', display: 'flex', alignItems: 'center', gap: '2px' }}>View Details <ChevronRight size={12} /></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Coastal Bulletins Card */}
+          <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '10px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Navigation size={18} color="#00f5d4" />
+                <h4 style={{ margin: 0, fontSize: '1rem', color: '#ffffff', fontWeight: '700' }}>
+                  Coastal Bulletins ({coastalBulletins.length})
+                </h4>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: '#00f5d4', fontWeight: '700' }}>IMD Official</span>
+            </div>
+
+            {coastalBulletins.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '20px' }}>
+                No Coastal bulletins match the selected region.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {coastalBulletins.map((bulletin, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => { setSelectedBulletin(bulletin); setShowBulletinModal(true); }}
+                    style={{
+                      padding: '14px',
+                      borderRadius: '10px',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid rgba(0, 245, 212, 0.25)',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.2s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#ffffff' }}>
+                        ⚓ {bulletin.layer}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                        {bulletin.issuedBy}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '8px' }}>
+                      <div>💨 <strong>Wind:</strong> {bulletin.wind || 'N/A'}</div>
+                      <div>🌊 <strong>Sea:</strong> {bulletin.seaCondition || 'N/A'}</div>
+                      <div>🌧️ <strong>Weather:</strong> {bulletin.weather || 'N/A'}</div>
+                      <div>🚩 <strong>Port Signal:</strong> {bulletin.portSignal || 'NIL'}</div>
+                    </div>
+
+                    {bulletin.warning && bulletin.warning !== 'NIL' && bulletin.warning !== 'NIL.' && (
+                      <div style={{ fontSize: '0.76rem', color: '#ffb703', background: 'rgba(255, 183, 3, 0.1)', padding: '6px', borderRadius: '6px', marginTop: '4px' }}>
+                        ⚠️ <strong>Warning:</strong> {bulletin.warning}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', pt: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.72rem', color: '#64748b' }}>
+                      <span>Source: India Meteorological Department</span>
+                      <span style={{ color: '#00f5d4', display: 'flex', alignItems: 'center', gap: '2px' }}>View Details <ChevronRight size={12} /></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* 3. MAIN SPLIT CONTENT ROW: TERRAMARINE ENVIRONMENTAL ALERTS & NEARBY CAMPAIGNS */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+        
+        {/* LEFT COLUMN: TERRAMARINE USER ENVIRONMENTAL ALERTS + NEARBY CAMPAIGNS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* TERRAMARINE PLATFORM ENVIRONMENTAL ALERTS (SEPARATE FROM GOVT IMD ALERTS) */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShieldAlert size={20} color="#00e5ff" />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#ffffff', fontWeight: '700' }}>
+                    TerraMarine User & Platform Incident Alerts
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Source: TerraMarine Observers & Coastal Reports</span>
+                </div>
+              </div>
+              <button 
+                onClick={fetchDashboardData}
+                style={{ background: 'none', border: 'none', color: '#00e5ff', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <RefreshCw size={13} /> Refresh
+              </button>
+            </div>
+
+            {envAlerts.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', textAlign: 'center', padding: '20px' }}>
+                No active environmental hazards or debris warnings reported on TerraMarine platform.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {envAlerts.map((alt) => (
+                  <div 
+                    key={alt.alert_id} 
+                    onClick={() => { setSelectedAlert(alt); setShowAlertModal(true); }}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      background: alt.severity === 'High' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(0, 229, 255, 0.08)',
+                      border: alt.severity === 'High' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(0, 229, 255, 0.3)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px',
+                      flexWrap: 'wrap',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s ease'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <AlertTriangle size={16} color={alt.severity === 'High' ? '#ff4d4d' : '#00e5ff'} />
+                        <h5 style={{ margin: 0, fontSize: '0.92rem', color: '#ffffff', fontWeight: '700' }}>{alt.title}</h5>
+                        <span className={`badge ${alt.severity === 'High' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.7rem' }}>
+                          {alt.severity || 'Medium'} Severity
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#cbd5e1' }}>{alt.description}</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {alt.radius_km && (
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                          📍 Radius: <strong style={{ color: '#00e5ff' }}>{alt.radius_km} km</strong>
+                        </span>
+                      )}
+                      <ChevronRight size={16} color="#94a3b8" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* NEARBY CLEANUP CAMPAIGNS */}
           <div className="glass-panel" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -522,103 +797,8 @@ const FishermanDashboard = ({
 
         </div>
 
-        {/* RIGHT COLUMN: NOTIFICATIONS WITH OCTOPUS ARTWORK + MY OBSERVER REPORTS */}
+        {/* RIGHT COLUMN: MY OBSERVER REPORTS & NOTIFICATIONS */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* FUNCTIONALITY 4: RECEIVE COASTAL SAFETY NOTIFICATIONS (EXACT DASHBOARD OCTOPUS ARTWORK STYLE) */}
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', position: 'relative', minHeight: '320px', overflow: 'hidden' }}>
-            
-            {/* Seamless Pale Background Octopus Artwork */}
-            <img 
-              src="/images/cute_octopus_marine.png" 
-              alt="Underwater Octopus Background" 
-              style={{ 
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                opacity: 0.22,
-                mixBlendMode: 'screen',
-                filter: 'brightness(1.1) contrast(0.95)',
-                pointerEvents: 'none',
-                zIndex: 1,
-                WebkitMaskImage: 'radial-gradient(circle at 50% 55%, rgba(0,0,0,1) 20%, rgba(0,0,0,0.5) 60%, transparent 95%)',
-                maskImage: 'radial-gradient(circle at 50% 55%, rgba(0,0,0,1) 20%, rgba(0,0,0,0.5) 60%, transparent 95%)'
-              }} 
-            />
-
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              borderBottom: '1px solid rgba(0, 229, 255, 0.15)', 
-              paddingBottom: '12px',
-              marginBottom: '16px',
-              position: 'relative',
-              zIndex: 10
-            }}>
-              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: '#ffffff', fontWeight: '700' }}>
-                <Bell size={18} color="#00e5ff" />
-                Notifications
-              </h3>
-              {notifications.length > 0 && (
-                <button 
-                  onClick={handleClearAllNotifications} 
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.78rem', cursor: 'pointer' }}
-                >
-                  Clear all
-                </button>
-              )}
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', maxHeight: '250px', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative', zIndex: 10 }}>
-              {notifications.length === 0 ? (
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  height: '210px', 
-                }}>
-                  <span style={{ fontSize: '0.92rem', color: '#ffffff', fontWeight: '600', textShadow: '0 2px 8px rgba(0, 0, 0, 0.85)' }}>
-                    No new notifications
-                  </span>
-                </div>
-              ) : (
-                notifications.map((notif) => (
-                  <div 
-                    key={notif.notification_id} 
-                    style={{
-                      padding: '12px',
-                      borderRadius: '10px',
-                      background: 'rgba(8, 20, 42, 0.75)',
-                      border: '1px solid rgba(0, 229, 255, 0.2)',
-                      backdropFilter: 'blur(12px)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: '12px'
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <h5 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff', margin: 0 }}>{notif.title}</h5>
-                      <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px', margin: '4px 0 0 0' }}>
-                        {notif.message}
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => handleDismissNotification(notif.notification_id)}
-                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
 
           {/* MY FILED OBSERVER REPORTS & TRACKING */}
           <div className="glass-panel" style={{ padding: '20px' }}>
@@ -674,11 +854,66 @@ const FishermanDashboard = ({
             )}
           </div>
 
+          {/* MARITIME NOTIFICATIONS */}
+          <div className="glass-panel" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bell size={18} color="#00e5ff" />
+                <h3 style={{ margin: 0, fontSize: '1rem', color: '#ffffff', fontWeight: '700' }}>
+                  Safety & IMD Broadcasts
+                </h3>
+              </div>
+              {notifications.length > 0 && (
+                <button 
+                  onClick={handleClearAllNotifications}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.72rem', cursor: 'pointer' }}
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {notifications.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '20px 10px' }}>
+                No active notifications right now.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {notifications.slice(0, 5).map((notif) => (
+                  <div key={notif.notification_id} style={{
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: notif.reference_type === 'IMD_Marine_Bulletin' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(8, 20, 42, 0.8)',
+                    border: notif.reference_type === 'IMD_Marine_Bulletin' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(0, 229, 255, 0.2)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: '8px'
+                  }}>
+                    <div>
+                      <h5 style={{ margin: 0, fontSize: '0.82rem', color: '#ffffff', fontWeight: '700' }}>{notif.title}</h5>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '0.76rem', color: '#cbd5e1' }}>{notif.message}</p>
+                      <span style={{ fontSize: '0.68rem', color: '#64748b' }}>{new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDismissNotification(notif.notification_id)}
+                      style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0 }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
 
       </div>
 
-      {/* 4. QUICK REPORT CREATION MODAL WITH PRESETS */}
+      {/* --- PORTAL MODALS --- */}
+
+      {/* 4. OBSERVER REPORT LOGGING MODAL */}
       {showReportModal && createPortal(
         <div style={{
           position: 'fixed',
@@ -686,7 +921,7 @@ const FishermanDashboard = ({
           left: 0,
           width: '100vw',
           height: '100vh',
-          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backgroundColor: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(12px)',
           display: 'flex',
           justifyContent: 'center',
@@ -695,125 +930,85 @@ const FishermanDashboard = ({
           padding: '20px'
         }}>
           <div className="glass-panel" style={{
-            maxWidth: '640px',
+            maxWidth: '560px',
             width: '100%',
-            maxHeight: '92vh',
+            maxHeight: '90vh',
             overflowY: 'auto',
             background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
             borderRadius: '20px',
-            border: modalCategory === 'Emergency' ? '1px solid rgba(255, 77, 77, 0.4)' : '1px solid rgba(0, 229, 255, 0.3)',
-            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
-            position: 'relative',
-            padding: '24px'
+            border: modalCategory === 'Emergency' ? '1px solid rgba(255, 77, 77, 0.4)' : '1px solid rgba(0, 229, 255, 0.4)',
+            padding: '24px',
+            position: 'relative'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {modalCategory === 'Emergency' ? <ShieldAlert size={22} color="#ff4d4d" /> : <Camera size={22} color="#00e5ff" />}
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#ffffff', fontWeight: '800' }}>
-                  {modalCategory === 'Emergency' ? 'Report Emergency Incident at Sea' : 'Report Floating Marine Waste'}
-                </h3>
-              </div>
-              <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
+            <button onClick={() => setShowReportModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              {modalCategory === 'Emergency' ? <AlertOctagon size={24} color="#ff4d4d" /> : <Camera size={24} color="#00e5ff" />}
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#ffffff', fontWeight: '800' }}>
+                {modalCategory === 'Emergency' ? 'Log Marine Emergency Encounter' : 'Log Floating Waste Sighting'}
+              </h3>
             </div>
 
-            {/* Quick Sighting Presets */}
-            <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(0, 229, 255, 0.06)', borderRadius: '12px', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
-              <span style={{ fontSize: '0.76rem', color: '#00e5ff', fontWeight: '700', display: 'block', marginBottom: '8px' }}>⚡ Quick Sighting Presets (1-Click Fill)</span>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => handleApplyPreset('plastic')} style={{ padding: '5px 10px', fontSize: '0.74rem', borderRadius: '6px', border: '1px solid rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.1)', color: '#ffffff', cursor: 'pointer' }}>🍾 Floating Plastics</button>
-                <button type="button" onClick={() => handleApplyPreset('nets')} style={{ padding: '5px 10px', fontSize: '0.74rem', borderRadius: '6px', border: '1px solid rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.1)', color: '#ffffff', cursor: 'pointer' }}>🕸️ Ghost Nets</button>
-                <button type="button" onClick={() => handleApplyPreset('oil')} style={{ padding: '5px 10px', fontSize: '0.74rem', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.15)', color: '#ff4d4d', cursor: 'pointer' }}>⛽ Oil Spill</button>
-                <button type="button" onClick={() => handleApplyPreset('dead_life')} style={{ padding: '5px 10px', fontSize: '0.74rem', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.15)', color: '#ff4d4d', cursor: 'pointer' }}>🐋 Dead Marine Life</button>
-              </div>
-            </div>
+            {formError && <div className="alert alert-danger" style={{ fontSize: '0.8rem', padding: '8px 12px', marginBottom: '12px' }}>{formError}</div>}
+            {formSuccess && <div className="alert alert-success" style={{ fontSize: '0.8rem', padding: '8px 12px', marginBottom: '12px' }}>{formSuccess}</div>}
 
-            {formSuccess && <div style={{ padding: '10px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', borderRadius: '8px', fontSize: '0.84rem', marginBottom: '14px' }}>{formSuccess}</div>}
-            {formError && <div style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', borderRadius: '8px', fontSize: '0.84rem', marginBottom: '14px' }}>{formError}</div>}
-
-            <form onSubmit={handleSubmitReport} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleSubmitReport} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incident / Sighting Title *</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Title</label>
                 <input 
-                  type="text"
-                  className="form-control"
-                  placeholder="e.g. Floating Plastic Oil Drum / Oil Slick Sighting"
-                  value={reportTitle}
-                  onChange={(e) => setReportTitle(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
-                  required
+                  type="text" 
+                  className="form-control" 
+                  value={reportTitle} 
+                  onChange={(e) => setReportTitle(e.target.value)} 
+                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} 
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Category *</label>
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Category</label>
                   <select 
-                    className="form-control"
-                    value={modalCategory}
+                    className="form-control" 
+                    value={modalCategory} 
                     onChange={(e) => setModalCategory(e.target.value)}
                     style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
                   >
-                    <option value="Pollution" style={{ background: '#08142a' }}>Pollution (Floating Debris, Nets)</option>
-                    <option value="Emergency" style={{ background: '#08142a' }}>Emergency (Oil Spill, Toxic Leaks, Dead Life)</option>
+                    {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Waste / Hazard Type *</label>
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incident Type</label>
                   <select 
-                    className="form-control"
-                    value={modalWasteType}
+                    className="form-control" 
+                    value={modalWasteType} 
                     onChange={(e) => setModalWasteType(e.target.value)}
                     style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
                   >
-                    <option value="Plastic" style={{ background: '#08142a' }}>Plastic Debris / Bottles</option>
-                    <option value="Fishing Nets" style={{ background: '#08142a' }}>Fishing Nets / Line</option>
-                    <option value="Oil Spill" style={{ background: '#08142a' }}>Oil Slick / Fuel Spill</option>
-                    <option value="Dead Marine Life" style={{ background: '#08142a' }}>Dead Marine Organism</option>
-                    <option value="General Litter" style={{ background: '#08142a' }}>General Waste</option>
+                    {wasteTypesList.map(w => <option key={w} value={w}>{w}</option>)}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Coastal Location Name / Fishing Route *</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Location / Coastal Zone</label>
                 <input 
-                  type="text"
-                  className="form-control"
-                  placeholder="e.g. 5 NM off Kochi Harbour"
-                  value={locationName}
-                  onChange={(e) => setLocationName(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
-                  required
+                  type="text" 
+                  className="form-control" 
+                  value={locationName} 
+                  onChange={(e) => setLocationName(e.target.value)} 
+                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} 
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Latitude *</label>
-                  <input 
-                    type="text"
-                    className="form-control"
-                    placeholder="Auto-detected or enter"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
-                    required
-                  />
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Latitude</label>
+                  <input type="text" className="form-control" value={latitude} onChange={(e) => setLatitude(e.target.value)} style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Longitude *</label>
-                  <input 
-                    type="text"
-                    className="form-control"
-                    placeholder="Auto-detected or enter"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
-                    required
-                  />
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Longitude</label>
+                  <input type="text" className="form-control" value={longitude} onChange={(e) => setLongitude(e.target.value)} style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} />
                 </div>
               </div>
 
@@ -862,7 +1057,7 @@ const FishermanDashboard = ({
         document.body
       )}
 
-      {/* 5. WEATHER ALERT DETAIL MODAL */}
+      {/* 5. TERRAMARINE ENVIRONMENTAL ALERT DETAIL MODAL */}
       {showAlertModal && selectedAlert && createPortal(
         <div style={{
           position: 'fixed',
@@ -883,7 +1078,7 @@ const FishermanDashboard = ({
             width: '100%',
             background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
             borderRadius: '20px',
-            border: selectedAlert.severity === 'High' ? '1px solid rgba(255, 77, 77, 0.4)' : '1px solid rgba(255, 183, 3, 0.4)',
+            border: selectedAlert.severity === 'High' ? '1px solid rgba(255, 77, 77, 0.4)' : '1px solid rgba(0, 229, 255, 0.4)',
             padding: '24px',
             position: 'relative'
           }}>
@@ -891,23 +1086,104 @@ const FishermanDashboard = ({
               <X size={20} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-              <ShieldAlert size={24} color={selectedAlert.severity === 'High' ? '#ff4d4d' : '#ffb703'} />
+              <ShieldAlert size={24} color={selectedAlert.severity === 'High' ? '#ff4d4d' : '#00e5ff'} />
               <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#ffffff', fontWeight: '800' }}>{selectedAlert.title}</h3>
             </div>
             <p style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: '1.5' }}>{selectedAlert.description}</p>
             <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(0, 229, 255, 0.08)', borderRadius: '10px', fontSize: '0.82rem', color: '#00e5ff' }}>
               <p style={{ margin: '0 0 4px 0' }}>📍 <strong>Safety Radius:</strong> {selectedAlert.radius_km || 20} km</p>
-              <p style={{ margin: 0 }}>🏛️ <strong>Issued By:</strong> {selectedAlert.issuer_name || 'Coast Guard Maritime Station'}</p>
+              <p style={{ margin: 0 }}>🏛️ <strong>Issuer:</strong> {selectedAlert.issuer_name || 'TerraMarine Observer Network'}</p>
             </div>
             <button onClick={() => setShowAlertModal(false)} className="btn btn-secondary" style={{ width: '100%', marginTop: '20px' }}>
-              Close Safety Advisory
+              Close Alert
             </button>
           </div>
         </div>,
         document.body
       )}
 
-      {/* 6. CAMPAIGN DETAIL MODAL */}
+      {/* 6. IMD BULLETIN DETAILED INSPECTION MODAL */}
+      {showBulletinModal && selectedBulletin && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '680px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(8, 24, 48, 0.98) 0%, rgba(5, 18, 38, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(0, 229, 255, 0.4)',
+            padding: '24px',
+            position: 'relative'
+          }}>
+            <button onClick={() => setShowBulletinModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <Compass size={24} color="#00e5ff" />
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#ffffff', fontWeight: '800' }}>
+                  {selectedBulletin.bulletinType === 'SEA_AREA' ? 'Sea Area Bulletin' : 'Coastal Bulletin'} — {selectedBulletin.layer}
+                </h3>
+                <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
+                  Issued By: {selectedBulletin.issuedBy} | Source: India Meteorological Department (IMD)
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '16px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '12px', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '16px' }}>
+              <div>💨 <strong>Wind:</strong> {selectedBulletin.wind || 'N/A'}</div>
+              <div>🌊 <strong>Sea Condition:</strong> {selectedBulletin.seaCondition || 'N/A'}</div>
+              <div>🌧️ <strong>Weather:</strong> {selectedBulletin.weather || 'N/A'}</div>
+              <div>👁️ <strong>Visibility:</strong> {selectedBulletin.visibility || 'N/A'}</div>
+              {selectedBulletin.portSignal && <div>🚩 <strong>Port Signal:</strong> {selectedBulletin.portSignal}</div>}
+              {selectedBulletin.validFrom && <div style={{ gridColumn: 'span 2' }}>📅 <strong>Validity:</strong> {selectedBulletin.validFrom}</div>}
+            </div>
+
+            {selectedBulletin.warning && selectedBulletin.warning !== 'NIL' && (
+              <div style={{ padding: '12px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', marginBottom: '16px' }}>
+                <h5 style={{ margin: '0 0 4px 0', fontSize: '0.88rem', color: '#ff4d4d', fontWeight: '800' }}>⚠️ Official Warning Details</h5>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: '#fca5a5' }}>{selectedBulletin.warning}</p>
+              </div>
+            )}
+
+            {selectedBulletin.synopticSituation && selectedBulletin.synopticSituation !== 'NIL' && (
+              <div style={{ padding: '12px', borderRadius: '10px', background: 'rgba(0, 229, 255, 0.08)', border: '1px solid rgba(0, 229, 255, 0.2)', marginBottom: '16px' }}>
+                <h5 style={{ margin: '0 0 4px 0', fontSize: '0.88rem', color: '#00e5ff', fontWeight: '800' }}>🌀 Synoptic Situation</h5>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.4' }}>{selectedBulletin.synopticSituation}</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#94a3b8' }}>
+              <span>Updated: {selectedBulletin.updateTime || 'Latest Broadcast'}</span>
+              <a href="https://mausam.imd.gov.in/responsive/marine_forecast.php" target="_blank" rel="noopener noreferrer" style={{ color: '#00e5ff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                View on IMD Portal <ExternalLink size={12} />
+              </a>
+            </div>
+
+            <button onClick={() => setShowBulletinModal(false)} className="btn btn-secondary" style={{ width: '100%', marginTop: '20px' }}>
+              Close Bulletin Details
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 7. CAMPAIGN DETAIL MODAL */}
       {showCampaignModal && selectedCampaign && createPortal(
         <div style={{
           position: 'fixed',
@@ -961,7 +1237,7 @@ const FishermanDashboard = ({
         document.body
       )}
 
-      {/* 7. DETAILS & LIVE STATUS TRACKING STEPPER MODAL */}
+      {/* 8. DETAILS & LIVE STATUS TRACKING STEPPER MODAL */}
       {showDetailsModal && activeReportDetails && createPortal(
         <div style={{
           position: 'fixed',

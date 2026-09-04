@@ -113,8 +113,8 @@ const LeafletMap = ({
         </Marker>
       )}
 
-      {/* Render Pollution Reports */}
-      {reports.map((report) => {
+      {/* Render Pollution Reports (Exclude completed cleanups) */}
+      {reports.filter(report => report && report.status !== 'Completed').map((report) => {
         if (!report.latitude || !report.longitude) return null;
         
         let iconType = icons.Pending;

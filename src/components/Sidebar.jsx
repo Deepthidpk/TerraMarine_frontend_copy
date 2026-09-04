@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -24,15 +24,46 @@ import {
   Edit3,
   Camera,
   User,
-  X
+  X,
+  Bell,
+  History,
+  Compass,
+  Layers,
+  FolderOpen,
+  Database,
+  FileText,
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 
 const Sidebar = () => {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile, notifications, authFetch } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [pendingReportsCount, setPendingReportsCount] = useState(0);
+
+  useEffect(() => {
+    if (user && ['Authority', 'Admin'].includes(user.role)) {
+      const checkPendingReports = async () => {
+        try {
+          const res = await authFetch('/reports');
+          if (res.ok) {
+            const data = await res.json();
+            const pendingCount = (data.reports || []).filter(r => r.status === 'Pending').length;
+            setPendingReportsCount(pendingCount);
+          }
+        } catch (e) {
+          // Silent catch
+        }
+      };
+      checkPendingReports();
+      const interval = setInterval(checkPendingReports, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
   const [profileForm, setProfileForm] = useState({
     full_name: '',
     phone: '',
@@ -41,6 +72,7 @@ const Sidebar = () => {
     state: '',
     profile_image: ''
   });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -52,6 +84,39 @@ const Sidebar = () => {
     navigate('/login');
   };
 
+  const validateField = (name, value) => {
+    let errorMsg = '';
+    if (name === 'full_name') {
+      if (!value || !value.trim()) {
+        errorMsg = 'Full name is required.';
+      } else if (value.trim().length < 3) {
+        errorMsg = 'Full name must be at least 3 characters.';
+      } else if (!/^[A-Za-z\s]+$/.test(value)) {
+        errorMsg = 'Full name can only contain letters and spaces.';
+      }
+    } else if (name === 'phone') {
+      if (value && !/^[6-9][0-9]{9}$/.test(value)) {
+        errorMsg = 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
+      }
+    } else if (name === 'district') {
+      if (value && !/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'District can only contain letters, digits, and spaces.';
+      }
+    } else if (name === 'state') {
+      if (value && !/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'State can only contain letters, digits, and spaces.';
+      }
+    } else if (name === 'address') {
+      if (value && value.trim().length < 5) {
+        errorMsg = 'Address must be at least 5 characters.';
+      } else if (value && !/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Address can only contain letters, digits, and spaces.';
+      }
+    }
+    setFieldErrors(prev => ({ ...prev, [name]: errorMsg }));
+    return errorMsg;
+  };
+
   const handleOpenEditModal = () => {
     setProfileForm({
       full_name: user.full_name || '',
@@ -61,6 +126,7 @@ const Sidebar = () => {
       state: user.state || '',
       profile_image: user.profile_image || ''
     });
+    setFieldErrors({});
     setProfileError('');
     setProfileSuccess('');
     setShowEditModal(true);
@@ -106,9 +172,19 @@ const Sidebar = () => {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (!profileForm.full_name || profileForm.full_name.trim().length < 2) {
-      return setProfileError('Full name must be at least 2 characters.');
+    
+    // Validate all fields first
+    const errFullName = validateField('full_name', profileForm.full_name);
+    const errPhone = validateField('phone', profileForm.phone);
+    const errDistrict = validateField('district', profileForm.district);
+    const errState = validateField('state', profileForm.state);
+    const errAddress = validateField('address', profileForm.address);
+    
+    if (errFullName || errPhone || errDistrict || errState || errAddress) {
+      setProfileError('Please correct the highlighted validation errors before saving.');
+      return;
     }
+
     setSavingProfile(true);
     setProfileError('');
     setProfileSuccess('');
@@ -125,11 +201,16 @@ const Sidebar = () => {
     }
   };
 
-  // Check if a sidebar item is active for System Admin
-  const isTabActive = (targetTab) => {
+  // Check if a sidebar item is active for System Admin & Researcher
+  const isTabActive = (tabKey) => {
     const searchParams = new URLSearchParams(location.search);
-    const currentTab = searchParams.get('tab') || 'organizations';
-    return location.pathname === '/dashboard' && currentTab === targetTab;
+    const currentTab = searchParams.get('tab');
+    if (!currentTab) {
+      if (user.role === 'Admin') return tabKey === 'organizations';
+      if (user.role === 'Researcher') return tabKey === 'dashboard';
+      return false;
+    }
+    return currentTab === tabKey;
   };
 
   // Define sidebar links based on role
@@ -145,30 +226,68 @@ const Sidebar = () => {
         { to: '/dashboard?tab=audit', tabKey: 'audit', label: 'System Audit Logs', icon: <ShieldCheck size={18} /> },
         { to: '/dashboard?tab=backup', tabKey: 'backup', label: 'Backup & Recovery', icon: <HardDriveDownload size={18} /> },
         { to: '/dashboard?tab=reports', tabKey: 'reports', label: 'Platform Reports', icon: <BarChart3 size={18} /> },
+        { to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> },
         { to: '/dashboard?tab=support', tabKey: 'support', label: 'Technical Support', icon: <LifeBuoy size={18} /> }
       ];
     }
 
-    // 2. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, Researcher, NGO)
-    const links = [
-      { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-      { to: '/reports', label: 'Pollution Reports & Tracking', icon: <AlertTriangle size={18} /> },
-      { to: '/campaigns', label: 'Cleanup Campaigns', icon: <Calendar size={18} /> }
-    ];
+    // 2. RESEARCHER ROLE SIDEBAR (Coastal Research & Marine Intelligence Workspace)
+    if (user.role === 'Researcher') {
+      return [
+        { to: '/dashboard?tab=dashboard', tabKey: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+        { to: '/dashboard?tab=ocean-intelligence', tabKey: 'ocean-intelligence', label: 'Ocean Intelligence', icon: <Map size={18} /> },
+        { to: '/dashboard?tab=species-explorer', tabKey: 'species-explorer', label: 'Species Explorer', icon: <Compass size={18} /> },
+        { to: '/dashboard?tab=biodiversity-hotspots', tabKey: 'biodiversity-hotspots', label: 'Biodiversity', icon: <Layers size={18} /> },
+        { to: '/dashboard?tab=pollution-analysis', tabKey: 'pollution-analysis', label: 'Pollution Analysis', icon: <BarChart3 size={18} /> },
+        { to: '/dashboard?tab=water-quality', tabKey: 'water-quality', label: 'Water Quality', icon: <Sliders size={18} /> },
+        { to: '/dashboard?tab=research-projects', tabKey: 'research-projects', label: 'Research Projects', icon: <FolderOpen size={18} /> },
+        { to: '/dashboard?tab=my-observations', tabKey: 'my-observations', label: 'My Observations', icon: <Camera size={18} /> },
+        { to: '/dashboard?tab=datasets', tabKey: 'datasets', label: 'Datasets', icon: <Database size={18} /> },
+        { to: '/dashboard?tab=research-reports', tabKey: 'research-reports', label: 'Research Reports', icon: <FileText size={18} /> },
+        { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Research Assistant', icon: <MessageSquare size={18} /> },
+        { to: '/dashboard?tab=research-alerts', tabKey: 'research-alerts', label: 'Research Alerts', icon: <AlertCircle size={18} /> }
+      ];
+    }
 
-    if (['Authority', 'Volunteer'].includes(user.role)) {
+    // 3. WORKER ROLE SIDEBAR (Municipal Cleanup Task Worker)
+    if (user.role === 'Worker') {
+      return [
+        { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+        { to: '/participations', label: 'My Participations', icon: <History size={18} /> },
+        { to: '/payments', label: 'Rewards & Earnings', icon: <Award size={18} /> },
+        { to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> }
+      ];
+    }
+
+    // 4. OPERATIONAL ROLES SIDEBAR (Municipal Authority, Volunteer, Citizen, NGO)
+    const links = [];
+    if (user.role !== 'Citizen') {
+      links.push({ to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> });
+    }
+    links.push(
+      { to: '/reports', label: 'Pollution Reports & Tracking', icon: <AlertTriangle size={18} /> }
+    );
+    if (user.role !== 'Volunteer') {
+      links.push({ to: '/campaigns', label: 'Cleanup Campaigns', icon: <Calendar size={18} /> });
+    }
+
+    if (['Volunteer', 'Worker'].includes(user.role)) {
+      links.push({ to: '/participations', label: 'My Participations', icon: <History size={18} /> });
+    }
+
+    if (['Authority', 'Worker'].includes(user.role)) {
       links.push({ to: '/tasks', label: 'Cleanup Tasks', icon: <CheckSquare size={18} /> });
     }
 
-    links.push({ to: '/biodiversity', label: 'Biodiversity', icon: <Map size={18} /> });
-
-    if (['Authority', 'Volunteer'].includes(user.role)) {
+    if (['Authority', 'Worker'].includes(user.role)) {
       links.push({ to: '/payments', label: 'Rewards & Payments', icon: <Award size={18} /> });
     }
 
     if (user.role === 'Authority') {
       links.push({ to: '/user-approval', label: 'User Approvals', icon: <Shield size={18} /> });
     }
+
+    links.push({ to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> });
 
     return links;
   };
@@ -244,16 +363,62 @@ const Sidebar = () => {
         }}
       >
         {navLinks.map((link) => {
-          const active = isAdmin ? isTabActive(link.tabKey) : location.pathname === link.to;
+          const active = ['Admin', 'Researcher'].includes(user.role) ? isTabActive(link.tabKey) : location.pathname === link.to;
+          const unreadCount = link.isNotification && notifications ? notifications.filter(n => !n.is_read).length : 0;
 
           return (
             <Link
               key={link.to}
               to={link.to}
               className={`sidebar-nav-item ${active ? 'active' : ''}`}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
-              {link.icon}
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{link.label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                {link.icon}
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{link.label}</span>
+              </div>
+              {link.isNotification && unreadCount > 0 && (
+                <span style={{
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  color: '#ffffff',
+                  fontSize: '0.72rem',
+                  fontWeight: '800',
+                  padding: '1px 7px',
+                  borderRadius: '10px',
+                  boxShadow: '0 0 10px rgba(239, 68, 68, 0.6)',
+                  flexShrink: 0
+                }}>
+                  {unreadCount}
+                </span>
+              )}
+              {link.to === '/reports' && pendingReportsCount > 0 && ['Authority', 'Admin'].includes(user?.role) && (
+                <span 
+                  title={`${pendingReportsCount} new complaint(s) awaiting approval`}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.35) 100%)',
+                    border: '1px solid #10b981',
+                    color: '#10b981',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    boxShadow: '0 0 10px rgba(16, 185, 129, 0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    flexShrink: 0
+                  }}
+                >
+                  <span style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    boxShadow: '0 0 8px #10b981'
+                  }} />
+                  {pendingReportsCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -378,10 +543,22 @@ const Sidebar = () => {
                   type="text" 
                   className="form-control" 
                   value={profileForm.full_name} 
-                  onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, full_name: e.target.value });
+                    validateField('full_name', e.target.value);
+                  }}
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.full_name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                  }}
                   required
                 />
+                {fieldErrors.full_name && (
+                  <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                    {fieldErrors.full_name}
+                  </span>
+                )}
               </div>
 
               {/* Phone */}
@@ -391,10 +568,22 @@ const Sidebar = () => {
                   type="tel" 
                   className="form-control" 
                   value={profileForm.phone} 
-                  onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                  placeholder="e.g. +91 9876543210"
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, phone: e.target.value });
+                    validateField('phone', e.target.value);
+                  }}
+                  placeholder="e.g. 9876543210"
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.phone ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                  }}
                 />
+                {fieldErrors.phone && (
+                  <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                    {fieldErrors.phone}
+                  </span>
+                )}
               </div>
 
               {/* District & State Row */}
@@ -405,10 +594,22 @@ const Sidebar = () => {
                     type="text" 
                     className="form-control" 
                     value={profileForm.district} 
-                    onChange={(e) => setProfileForm({ ...profileForm, district: e.target.value })}
+                    onChange={(e) => {
+                      setProfileForm({ ...profileForm, district: e.target.value });
+                      validateField('district', e.target.value);
+                    }}
                     placeholder="e.g. Ernakulam"
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    style={{ 
+                      color: '#ffffff', 
+                      background: 'rgba(8, 20, 42, 0.8)', 
+                      border: fieldErrors.district ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                    }}
                   />
+                  {fieldErrors.district && (
+                    <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                      {fieldErrors.district}
+                    </span>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>State</label>
@@ -416,10 +617,22 @@ const Sidebar = () => {
                     type="text" 
                     className="form-control" 
                     value={profileForm.state} 
-                    onChange={(e) => setProfileForm({ ...profileForm, state: e.target.value })}
+                    onChange={(e) => {
+                      setProfileForm({ ...profileForm, state: e.target.value });
+                      validateField('state', e.target.value);
+                    }}
                     placeholder="e.g. Kerala"
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    style={{ 
+                      color: '#ffffff', 
+                      background: 'rgba(8, 20, 42, 0.8)', 
+                      border: fieldErrors.state ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' 
+                    }}
                   />
+                  {fieldErrors.state && (
+                    <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                      {fieldErrors.state}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -430,10 +643,23 @@ const Sidebar = () => {
                   className="form-control" 
                   rows="2"
                   value={profileForm.address} 
-                  onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, address: e.target.value });
+                    validateField('address', e.target.value);
+                  }}
                   placeholder="Enter full address"
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)', resize: 'vertical' }}
+                  style={{ 
+                    color: '#ffffff', 
+                    background: 'rgba(8, 20, 42, 0.8)', 
+                    border: fieldErrors.address ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)', 
+                    resize: 'vertical' 
+                  }}
                 />
+                {fieldErrors.address && (
+                  <span style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                    {fieldErrors.address}
+                  </span>
+                )}
               </div>
 
               {/* Action Buttons */}

@@ -7,6 +7,7 @@ import {
 import LeafletMap from '../components/LeafletMap';
 import CustomTimePicker from '../components/CustomTimePicker';
 import CustomDatePicker from '../components/CustomDatePicker';
+import CertificateModal from '../components/CertificateModal';
 
 const Campaigns = () => {
   const { user, authFetch } = useAuth();
@@ -30,6 +31,7 @@ const Campaigns = () => {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [maxVolunteers, setMaxVolunteers] = useState('');
+  const [visibility, setVisibility] = useState('Public');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -37,6 +39,22 @@ const Campaigns = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+
+  // Assign Volunteer State
+  const [showAssignVolunteerModal, setShowAssignVolunteerModal] = useState(false);
+  const [volunteerName, setVolunteerName] = useState('');
+  const [volunteerEmail, setVolunteerEmail] = useState('');
+  const [volunteerPhone, setVolunteerPhone] = useState('');
+  const [volunteerFormErrors, setVolunteerFormErrors] = useState({});
+  const [addingVolunteer, setAddingVolunteer] = useState(false);
+  const [volunteerError, setVolunteerError] = useState('');
+  // Volunteer History & Certificates State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [myHistory, setMyHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedCert, setSelectedCert] = useState(null);
+  const [joinedCampaignIds, setJoinedCampaignIds] = useState(new Set());
+  const [certWarning, setCertWarning] = useState('');
 
   const toMinutes = (timeStr) => {
     if (!timeStr) return 0;
@@ -76,6 +94,24 @@ const Campaigns = () => {
           if (value.trim().length < 10) return 'Must be at least 10 characters if provided.';
         }
         return null;
+
+      case 'volunteerName':
+        if (!value || !value.trim()) return 'Full name is required.';
+        if (value.trim().length < 3) return 'Full name must be at least 3 characters long.';
+        if (value.trim().length > 50) return 'Full name cannot exceed 50 characters.';
+        if (!/^[a-zA-Z0-9\s]+$/.test(value.trim())) return 'Full name can only contain letters, digits, and spaces.';
+        return null;
+
+      case 'volunteerEmail':
+        if (!value || !value.trim()) return 'Email address is required.';
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value.trim())) return 'Please enter a valid email address (e.g. volunteer@example.com).';
+        return null;
+
+      case 'volunteerPhone': {
+        if (!value || !value.trim()) return 'Phone number is required.';
+        if (!/^[6-9]\d{9}$/.test(value.trim())) return 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
+        return null;
+      }
 
       case 'campaignDate':
         if (!value) return 'Campaign date is required.';
@@ -166,6 +202,17 @@ const Campaigns = () => {
         const data = await res.json();
         setCampaigns(data.campaigns);
       }
+
+      try {
+        const historyRes = await authFetch('/campaigns/my-history');
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          const joinedIds = new Set((historyData.history || []).map(h => h.campaign_id));
+          setJoinedCampaignIds(joinedIds);
+        }
+      } catch (hErr) {
+        console.error('History fetch warning:', hErr);
+      }
     } catch (err) {
       console.error('Error fetching campaigns:', err);
     } finally {
@@ -174,8 +221,10 @@ const Campaigns = () => {
   };
 
   useEffect(() => {
-    fetchCampaigns();
-  }, []);
+    if (user) {
+      fetchCampaigns();
+    }
+  }, [user]);
 
   const handleMapClick = (lat, lng) => {
     const latStr = lat.toFixed(6);
@@ -186,19 +235,15 @@ const Campaigns = () => {
 
     const latErr = validateField('latitude', latStr);
     const lngErr = validateField('longitude', lngStr);
-
-    setFormErrors(prev => ({ 
-      ...prev, 
-      coordinates: null, 
-      latitude: latErr, 
-      longitude: lngErr 
+    setFormErrors(prev => ({
+      ...prev,
+      latitude: latErr,
+      longitude: lngErr
     }));
-    setModalError('');
   };
 
   const handleCreateCampaignSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setModalError('');
     setSuccess('');
 
@@ -215,19 +260,14 @@ const Campaigns = () => {
       maxVolunteers: validateField('maxVolunteers', maxVolunteers)
     };
 
-    // Filter out nulls
     const activeErrors = {};
     Object.keys(errors).forEach(k => {
       if (errors[k]) activeErrors[k] = errors[k];
     });
 
-    if (!latitude || !longitude) {
-      activeErrors.coordinates = 'Please click map on the right to select coordinates.';
-    }
-
     if (Object.keys(activeErrors).length > 0) {
       setFormErrors(activeErrors);
-      setModalError('Please fix all highlighted red field errors before submitting.');
+      setModalError('Please fix validation errors before submitting.');
       return;
     }
 
@@ -245,37 +285,95 @@ const Campaigns = () => {
           location: location.trim(),
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude),
-          maximum_volunteers: parseInt(maxVolunteers)
+          maximum_volunteers: parseInt(maxVolunteers),
+          visibility: user?.role === 'NGO' ? visibility : 'Public'
         })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create campaign.');
-      }
-
-      setSuccess('Cleanup campaign organized successfully!');
-      // Reset form & close modal
-      setCampaignName('');
-      setDescription('');
-      setCampaignDate('');
-      setStartTime('');
-      setEndTime('');
-      setLocation('');
-      setLatitude('');
-      setLongitude('');
       setSelectedCoords(null);
       setMaxVolunteers('');
+      setVisibility('Public');
       setFormErrors({});
       setModalError('');
-      setShowFormModal(false);
-
-      fetchCampaigns();
+      if (!res.ok) {
+        setModalError(data.error || 'Failed to create campaign.');
+      } else {
+        setSuccess('Campaign created successfully!');
+        setShowFormModal(false);
+        resetForm();
+        fetchCampaigns();
+      }
     } catch (err) {
-      setModalError(err.message || 'Error occurred while saving campaign.');
+      setModalError('Server error creating campaign. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleAssignVolunteerSubmit = async (e) => {
+    e.preventDefault();
+    setVolunteerError('');
+    setError('');
+    setSuccess('');
+
+    const errors = {
+      name: validateField('volunteerName', volunteerName),
+      email: validateField('volunteerEmail', volunteerEmail),
+      phone: validateField('volunteerPhone', volunteerPhone)
+    };
+
+    const activeErrors = {};
+    if (errors.name) activeErrors.name = errors.name;
+    if (errors.email) activeErrors.email = errors.email;
+    if (errors.phone) activeErrors.phone = errors.phone;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setVolunteerFormErrors(activeErrors);
+      return;
+    }
+
+    setAddingVolunteer(true);
+    try {
+      const res = await authFetch('/campaigns/assign-volunteer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: volunteerName.trim(),
+          email: volunteerEmail.trim(),
+          phone: volunteerPhone.trim()
+        })
+      });
+
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setVolunteerError(data.error || 'Failed to assign volunteer.');
+      } else {
+        setSuccess(`Volunteer "${volunteerName.trim()}" registered successfully! Login details sent to ${volunteerEmail.trim()}.`);
+        setVolunteerName('');
+        setVolunteerEmail('');
+        setVolunteerPhone('');
+        setVolunteerFormErrors({});
+        setShowAssignVolunteerModal(false);
+      }
+    } catch (err) {
+      setVolunteerError('Server error assigning volunteer. Please try again later.');
+    } finally {
+      setAddingVolunteer(false);
+    }
+  };
+
+  const resetForm = () => {
+    setCampaignName('');
+    setDescription('');
+    setCampaignDate('');
+    setStartTime('');
+    setEndTime('');
+    setLocation('');
+    setLatitude('');
+    setLongitude('');
   };
 
   const handleJoinCampaign = async (campaignId) => {
@@ -284,17 +382,88 @@ const Campaigns = () => {
     try {
       const res = await authFetch(`/campaigns/${campaignId}/join`, { method: 'POST' });
       const data = await res.json();
+
       if (!res.ok) {
-        throw new Error(data.error || 'Could not join campaign.');
+        if (data.error && data.error.includes('already registered')) {
+          setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+          setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
+          setError('You have already registered for this campaign.');
+        } else {
+          throw new Error(data.error || 'Could not join campaign.');
+        }
+      } else {
+        const isPrivate = campaigns.find(c => c.campaign_id === campaignId)?.visibility === 'Private';
+        const regStatus = isPrivate ? 'Pending' : 'Approved';
+        setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true, registration_status: regStatus, volunteer_count: isPrivate ? c.volunteer_count : (parseInt(c.volunteer_count) || 0) + 1 } : c));
+        setSuccess(data.message || 'Successfully registered for campaign.');
       }
-      setSuccess('You have registered for the cleanup drive successfully!');
+
+      // Also trigger a refresh from the server to ensure absolute sync
       fetchCampaigns();
     } catch (err) {
-      setError(err.message || 'Failed to join campaign.');
+      if (err.message && err.message.includes('already registered')) {
+        setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
+        setError('You have already registered for this campaign.');
+      } else {
+        setError(err.message || 'Failed to join campaign.');
+      }
+    }
+  };
+
+  const handleOpenHistory = async () => {
+    setHistoryLoading(true);
+    setShowHistoryModal(true);
+    try {
+      const res = await authFetch('/campaigns/my-history');
+      let historyItems = [];
+      if (res.ok) {
+        const data = await res.json();
+        historyItems = data.history || [];
+      }
+
+      // Also check direct certificate records
+      const certRes = await authFetch('/certificates/my-certificates');
+      if (certRes.ok) {
+        const certData = await certRes.json();
+        const certList = certData.certificates || [];
+        
+        certList.forEach(cert => {
+          const exists = historyItems.find(h => h.campaign_id === cert.campaign_id);
+          if (exists) {
+            exists.certificate_status = true;
+            exists.certificate_id = cert.certificate_id;
+            exists.certificate_url = cert.certificate_url;
+            exists.issued_date = cert.issued_date;
+          } else {
+            historyItems.push({
+              registration_id: cert.certificate_id,
+              campaign_name: cert.campaign_name,
+              location: cert.location,
+              campaign_date: cert.campaign_date,
+              attendance: true,
+              certificate_status: true,
+              certificate_id: cert.certificate_id,
+              certificate_url: cert.certificate_url,
+              issued_date: cert.issued_date,
+              creator_name: cert.creator_name,
+              organization_name: cert.organization_name
+            });
+          }
+        });
+      }
+
+      setMyHistory(historyItems);
+    } catch (err) {
+      console.error('Error fetching my certificates history:', err);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
   const handleOpenDetails = async (campaignId) => {
+    setCertWarning('');
     try {
       const res = await authFetch(`/campaigns/${campaignId}`);
       if (res.ok) {
@@ -305,6 +474,28 @@ const Campaigns = () => {
     } catch (err) {
       console.error('Error fetching campaign details:', err);
     }
+  };
+
+  const handleIssueCertificate = (campaign, vol) => {
+    setCertWarning('');
+
+    // Check 1: Volunteer must be marked as attended
+    if (!vol.attendance) {
+      setCertWarning('Volunteer must be marked as attended before issuing a certificate.');
+      return;
+    }
+
+    // Check 2: Campaign must have ended
+    const campDateStr = new Date(campaign.campaign_date).toISOString().slice(0, 10);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isEnded = campaign.status === 'Completed' || campDateStr < todayStr;
+
+    if (!isEnded) {
+      setCertWarning('Certificates can only be issued after the campaign has ended.');
+      return;
+    }
+
+    handleUpdateAttendance(campaign.campaign_id, vol.user_id, vol.attendance, true);
   };
 
   const handleUpdateAttendance = async (campaignId, volunteerId, attendanceVal, certVal) => {
@@ -339,6 +530,60 @@ const Campaigns = () => {
     }
   };
 
+  const handleUpdateVolunteerStatus = async (campaignId, volunteerId, status) => {
+    try {
+      const res = await authFetch(`/campaigns/${campaignId}/volunteers/${volunteerId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        handleOpenDetails(campaignId);
+        fetchCampaigns();
+      }
+    } catch (err) {
+      console.error('Error updating volunteer status:', err);
+    }
+  };
+
+  const getDynamicStatus = (camp) => {
+    if (camp.status === 'Completed') return 'Completed';
+    if (!camp.campaign_date) return camp.status || 'Upcoming';
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    const campDateObj = new Date(camp.campaign_date);
+    const cYear = campDateObj.getFullYear();
+    const cMonth = String(campDateObj.getMonth() + 1).padStart(2, '0');
+    const cDay = String(campDateObj.getDate()).padStart(2, '0');
+    const campDateStr = `${cYear}-${cMonth}-${cDay}`;
+
+    if (campDateStr < todayStr) return 'Completed';
+
+    if (campDateStr === todayStr) {
+      const curH = today.getHours();
+      const curM = today.getMinutes();
+      const curTotalMin = curH * 60 + curM;
+
+      if (camp.end_time) {
+        const [eh, em] = camp.end_time.split(':').map(Number);
+        if (curTotalMin >= eh * 60 + em) {
+          return 'Completed';
+        }
+      } else if (camp.start_time) {
+        const [sh, sm] = camp.start_time.split(':').map(Number);
+        if (curTotalMin >= sh * 60 + sm + 240) {
+          return 'Completed';
+        }
+      }
+    }
+
+    return camp.status || 'Upcoming';
+  };
+
   // Filtered campaigns
   const filteredCampaigns = campaigns.filter((camp) => {
     if (searchQuery.trim()) {
@@ -349,7 +594,7 @@ const Campaigns = () => {
       if (!nameMatch && !locMatch && !orgMatch) return false;
     }
 
-    if (statusFilter !== 'All' && camp.status !== statusFilter) {
+    if (statusFilter !== 'All' && getDynamicStatus(camp) !== statusFilter) {
       return false;
     }
 
@@ -358,9 +603,9 @@ const Campaigns = () => {
 
   // Calculate Summary Statistics
   const totalDrives = campaigns.length;
-  const upcomingDrives = campaigns.filter(c => c.status === 'Upcoming').length;
+  const upcomingDrives = campaigns.filter(c => getDynamicStatus(c) === 'Upcoming').length;
   const totalVolunteers = campaigns.reduce((sum, c) => sum + (parseInt(c.volunteer_count) || 0), 0);
-  const completedDrives = campaigns.filter(c => c.status === 'Completed').length;
+  const completedDrives = campaigns.filter(c => getDynamicStatus(c) === 'Completed').length;
 
   const isOrganizeRole = ['NGO', 'Authority', 'Admin'].includes(user.role);
 
@@ -382,29 +627,57 @@ const Campaigns = () => {
           </h1>
         </div>
 
-        {isOrganizeRole && (
-          <button
-            onClick={() => setShowFormModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              color: 'white',
-              border: '1px solid rgba(0, 229, 255, 0.4)',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.95rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.3)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <PlusCircle size={20} />
-            Organize Cleanup Campaign
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+
+
+          {!isOrganizeRole && (
+            <button
+              onClick={handleOpenHistory}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%)',
+                color: '#00e5ff',
+                border: '1px solid rgba(0, 229, 255, 0.5)',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Award size={18} color="#00e5ff" />
+              My Certificates
+            </button>
+          )}
+
+          {isOrganizeRole && (
+            <button
+              onClick={() => setShowFormModal(true)}
+              style={{
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: 'white',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.3)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <PlusCircle size={20} />
+              Organize Cleanup Campaign
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Notifications */}
@@ -422,87 +695,89 @@ const Campaigns = () => {
       )}
 
       {/* Overview Statistics Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        {/* Card 1: Total Campaigns (RED THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
-          border: '1px solid rgba(255, 77, 77, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
-            <Calendar size={24} color="#ff4d4d" />
+      {user.role !== 'Citizen' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '20px', marginBottom: '32px' }}>
+          {/* Card 1: Total Campaigns (RED THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+            border: '1px solid rgba(255, 77, 77, 0.35)',
+            boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+              <Calendar size={24} color="#ff4d4d" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Total Campaigns</span>
+              <div className="stat-val">{totalDrives}</div>
+            </div>
+            <img 
+              src="/images/red_coral_card_bg.png" 
+              alt="Red Coral Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Total Campaigns</span>
-            <div className="stat-val">{totalDrives}</div>
-          </div>
-          <img 
-            src="/images/red_coral_card_bg.png" 
-            alt="Red Coral Artwork" 
-            className="card-artwork-blend"
-          />
-        </div>
 
-        {/* Card 2: Upcoming Drives (CYAN BLUE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
-          border: '1px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
-            <Clock size={24} color="#00e5ff" />
+          {/* Card 2: Upcoming Drives (CYAN BLUE THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+            border: '1px solid rgba(0, 229, 255, 0.35)',
+            boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+              <Clock size={24} color="#00e5ff" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Upcoming Drives</span>
+              <div className="stat-val">{upcomingDrives}</div>
+            </div>
+            <img 
+              src="/images/cyan_cleanups_corner.png" 
+              alt="Cyan Coral Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Upcoming Drives</span>
-            <div className="stat-val">{upcomingDrives}</div>
-          </div>
-          <img 
-            src="/images/cyan_cleanups_corner.png" 
-            alt="Cyan Coral Artwork" 
-            className="card-artwork-blend"
-          />
-        </div>
 
-        {/* Card 3: Volunteers Mobilized (EMERALD TEAL THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
-          border: '1px solid rgba(0, 245, 212, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
-            <Users size={24} color="#00f5d4" />
+          {/* Card 3: Volunteers Mobilized (EMERALD TEAL THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
+            border: '1px solid rgba(0, 245, 212, 0.35)',
+            boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
+              <Users size={24} color="#00f5d4" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Volunteers Mobilized</span>
+              <div className="stat-val">{totalVolunteers}</div>
+            </div>
+            <img 
+              src="/images/green_teal_campaigns_bg.png" 
+              alt="Volunteers Mobilized Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Volunteers Mobilized</span>
-            <div className="stat-val">{totalVolunteers}</div>
-          </div>
-          <img 
-            src="/images/green_teal_campaigns_bg.png" 
-            alt="Volunteers Mobilized Artwork" 
-            className="card-artwork-blend"
-          />
-        </div>
 
-        {/* Card 4: Restored Shorelines (PURPLE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
-          border: '1px solid rgba(157, 78, 221, 0.35)',
-          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
-        }}>
-          <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
-            <Compass size={24} color="#9d4edd" />
+          {/* Card 4: Restored Shorelines (PURPLE THEME) */}
+          <div className="stat-card-marine" style={{
+            background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
+            border: '1px solid rgba(157, 78, 221, 0.35)',
+            boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
+          }}>
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
+              <Compass size={24} color="#9d4edd" />
+            </div>
+            <div className="stat-content-wrapper">
+              <span className="stat-lbl">Restored Shorelines</span>
+              <div className="stat-val">{completedDrives}</div>
+            </div>
+            <img 
+              src="/images/purple_coral_card_bg.png" 
+              alt="Restored Shorelines Artwork" 
+              className="card-artwork-blend"
+            />
           </div>
-          <div className="stat-content-wrapper">
-            <span className="stat-lbl">Restored Shorelines</span>
-            <div className="stat-val">{completedDrives}</div>
-          </div>
-          <img 
-            src="/images/purple_coral_card_bg.png" 
-            alt="Restored Shorelines Artwork" 
-            className="card-artwork-blend"
-          />
         </div>
-      </div>
+      )}
 
       {/* Scheduled Campaigns Section */}
       <div className="glass-panel" style={{ 
@@ -645,52 +920,60 @@ const Campaigns = () => {
             <table className="custom-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'rgba(4, 14, 30, 0.9)' }}>
-                  <th style={{ width: '23%', padding: '12px 14px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>CAMPAIGN NAME</th>
-                  <th style={{ width: '15%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>ORGANIZER</th>
-                  <th style={{ width: '15%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>LOCATION</th>
-                  <th style={{ width: '10%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em' }}>DATE</th>
-                  <th style={{ width: '8%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>TIMING</th>
-                  <th style={{ width: '11%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>VOLUNTEERS</th>
-                  <th style={{ width: '10%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>STATUS</th>
-                  <th style={{ width: '8%', padding: '12px 10px', fontSize: '0.78rem', letterSpacing: '0.05em', textAlign: 'center' }}>ACTIONS</th>
+                  <th style={{ width: '23%', padding: '8px 10px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>CAMPAIGN NAME</th>
+                  <th style={{ width: '15%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>ORGANIZER</th>
+                  <th style={{ width: '15%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>LOCATION</th>
+                  <th style={{ width: '10%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em' }}>DATE</th>
+                  <th style={{ width: '8%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>TIMING</th>
+                  <th style={{ width: '11%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>VOLUNTEERS</th>
+                  <th style={{ width: '10%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>STATUS</th>
+                  <th style={{ width: '8%', padding: '8px 8px', fontSize: '0.72rem', letterSpacing: '0.05em', textAlign: 'center' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCampaigns.map((camp) => {
                   const volCount = parseInt(camp.volunteer_count) || 0;
                   const maxVol = camp.maximum_volunteers || null;
+                  const isJoined = Boolean(camp.is_joined) || camp.is_joined === 'true' || camp.is_joined === 't' || camp.is_joined === 1 || joinedCampaignIds.has(camp.campaign_id);
 
                   return (
                     <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
-                      <td style={{ padding: '14px 14px' }}>
-                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.3' }}>{camp.campaign_name}</div>
+                      <td style={{ padding: '8px 10px' }}>
+                        <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                          {camp.campaign_name}
+                          {camp.visibility === 'Private' && (
+                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ff4d4d', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                              🔒 Private
+                            </span>
+                          )}
+                        </div>
                         {camp.description && (
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px', lineHeight: '1.25', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {camp.description}
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '14px 10px', fontWeight: '600', fontSize: '0.82rem', color: '#e2e8f0', lineHeight: '1.3' }}>
+                      <td style={{ padding: '8px 8px', fontWeight: '600', fontSize: '0.78rem', color: '#e2e8f0', lineHeight: '1.3' }}>
                         {camp.organization_name || camp.creator_name}
                       </td>
-                      <td style={{ padding: '14px 10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.3' }}>
+                      <td style={{ padding: '8px 8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: '1.3' }}>
                           <MapPin size={13} color="#00e5ff" style={{ flexShrink: 0, marginTop: '2px' }} />
                           <span>{camp.location}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '14px 10px', fontSize: '0.82rem', fontWeight: '600', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '8px 8px', fontSize: '0.78rem', fontWeight: '600', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {new Date(camp.campaign_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
-                      <td style={{ padding: '14px 10px', fontSize: '0.82rem', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                      <td style={{ padding: '8px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap', textAlign: 'center' }}>
                         {camp.start_time ? (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', lineHeight: '1.2' }}>
-                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.82rem' }}>{camp.start_time.slice(0,5)}</span>
-                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.75rem' }}>to</span>
-                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.82rem' }}>{camp.end_time?.slice(0,5) || 'TBD'}</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.78rem' }}>{camp.start_time.slice(0,5)}</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.7rem' }}>to</span>
+                            <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.78rem' }}>{camp.end_time?.slice(0,5) || 'TBD'}</span>
                           </div>
                         ) : (
-                          <span style={{ color: '#ffffff', fontWeight: '600' }}>All Day</span>
+                          <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.78rem' }}>All Day</span>
                         )}
                       </td>
                       <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
@@ -699,13 +982,18 @@ const Campaigns = () => {
                         </span>
                       </td>
                       <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                        <span className={`badge ${
-                          camp.status === 'Completed' ? 'badge-completed' :
-                          camp.status === 'Upcoming' ? 'badge-pending' :
-                          camp.status === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
-                        }`} style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
-                          {camp.status}
-                        </span>
+                        {(() => {
+                          const displayStatus = getDynamicStatus(camp);
+                          return (
+                            <span className={`badge ${
+                              displayStatus === 'Completed' ? 'badge-completed' :
+                              displayStatus === 'Upcoming' ? 'badge-pending' :
+                              displayStatus === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
+                            }`} style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
+                              {displayStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding: '14px 10px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
@@ -728,27 +1016,52 @@ const Campaigns = () => {
                             Details
                           </button>
 
-                          {['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
+                          {isJoined ? (
                             <button 
-                              onClick={() => handleJoinCampaign(camp.campaign_id)}
-                              className="btn btn-primary" 
-                              style={{ 
-                                padding: '4px 8px', 
-                                fontSize: '0.72rem', 
-                                borderRadius: '6px', 
+                              disabled
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '0.72rem',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
                                 gap: '4px',
-                                background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
-                                color: '#041126',
+                                background: camp.registration_status === 'Pending' ? 'rgba(255, 183, 3, 0.15)' : 'rgba(16, 185, 129, 0.2)',
+                                color: camp.registration_status === 'Pending' ? '#ffb703' : '#00f5d4',
+                                border: `1px solid ${camp.registration_status === 'Pending' ? 'rgba(255, 183, 3, 0.4)' : 'rgba(0, 245, 212, 0.4)'}`,
                                 fontWeight: '700',
-                                boxShadow: '0 3px 10px rgba(0, 229, 255, 0.35)',
+                                cursor: 'default',
                                 width: '100%',
                                 maxWidth: '75px',
                                 justifyContent: 'center'
                               }}
                             >
-                              <Users size={12} />
-                              Join
+                              {camp.registration_status === 'Pending' ? <Clock size={12} /> : <Check size={12} />}
+                              {camp.registration_status === 'Pending' ? 'Pending' : 'Joined'}
                             </button>
+                          ) : (
+                            ['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
+                              <button 
+                                onClick={() => handleJoinCampaign(camp.campaign_id)}
+                                className="btn btn-primary" 
+                                style={{ 
+                                  padding: '4px 8px', 
+                                  fontSize: '0.72rem', 
+                                  borderRadius: '6px', 
+                                  gap: '4px',
+                                  background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                                  color: '#041126',
+                                  fontWeight: '700',
+                                  boxShadow: '0 3px 10px rgba(0, 229, 255, 0.35)',
+                                  width: '100%',
+                                  maxWidth: '85px',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Users size={12} />
+                                {camp.visibility === 'Private' ? 'Request' : 'Join'}
+                              </button>
+                            )
                           )}
                         </div>
                       </td>
@@ -949,7 +1262,7 @@ const Campaigns = () => {
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'NGO' ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Latitude *</label>
                       <input 
@@ -1017,6 +1330,21 @@ const Campaigns = () => {
                         </span>
                       )}
                     </div>
+
+                    {user?.role === 'NGO' && (
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Visibility *</label>
+                        <select 
+                          className="form-control"
+                          value={visibility}
+                          onChange={(e) => setVisibility(e.target.value)}
+                          style={{ padding: '8px 10px', border: '1px solid rgba(0, 229, 255, 0.2)', backgroundColor: 'transparent' }}
+                        >
+                          <option value="Public" style={{ color: '#000' }}>Public (Open)</option>
+                          <option value="Private" style={{ color: '#000' }}>Private (Invite Only)</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {formErrors.coordinates && (
@@ -1143,12 +1471,87 @@ const Campaigns = () => {
             {/* Volunteer Attendance & Certification */}
             {isOrganizeRole && (
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--card-border)', paddingTop: '20px' }}>
+                
+                {/* Pending Requests Section for Private Campaigns */}
+                {activeCampaignDetails.campaign.visibility === 'Private' && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '1.05rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', color: '#ffb703' }}>
+                      <Clock size={20} />
+                      Pending Join Requests
+                    </h4>
+                    
+                    {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Pending').length === 0 ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No pending requests.</p>
+                    ) : (
+                      <div className="table-container">
+                        <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+                          <thead>
+                            <tr>
+                              <th>Volunteer Name</th>
+                              <th>Email</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Pending').map((vol) => (
+                              <tr key={vol.user_id}>
+                                <td style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                                  <img src={vol.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'} alt="" style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
+                                  {vol.full_name}
+                                </td>
+                                <td>{vol.email}</td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      onClick={() => handleUpdateVolunteerStatus(activeCampaignDetails.campaign.campaign_id, vol.user_id, 'Approved')}
+                                      style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#00f5d4', border: '1px solid rgba(0, 245, 212, 0.4)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateVolunteerStatus(activeCampaignDetails.campaign.campaign_id, vol.user_id, 'Rejected')}
+                                      style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ff4d4d', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <h4 style={{ fontSize: '1.05rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
                   <Award size={20} color="#0284c7" />
                   Registered Volunteers Attendance & Certificates
                 </h4>
-                {activeCampaignDetails.volunteers.length === 0 ? (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No volunteers have signed up for this campaign yet.</p>
+
+                {certWarning && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ff4d4d',
+                    color: '#ff4d4d',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    marginBottom: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.25)'
+                  }}>
+                    <AlertCircle size={18} color="#ff4d4d" style={{ flexShrink: 0 }} />
+                    <span>{certWarning}</span>
+                  </div>
+                )}
+
+                {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Approved').length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No approved volunteers yet.</p>
                 ) : (
                   <div className="table-container">
                     <table className="custom-table" style={{ fontSize: '0.85rem' }}>
@@ -1161,7 +1564,7 @@ const Campaigns = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {activeCampaignDetails.volunteers.map((vol) => (
+                        {activeCampaignDetails.volunteers.filter(v => v.registration_status === 'Approved').map((vol) => (
                           <tr key={vol.user_id}>
                             <td style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
                               <img src={vol.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'} alt="" style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
@@ -1175,7 +1578,7 @@ const Campaigns = () => {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleUpdateAttendance(activeCampaignDetails.campaign.campaign_id, vol.user_id, true, vol.certificate_status)}
+                                  onClick={() => { setCertWarning(''); handleUpdateAttendance(activeCampaignDetails.campaign.campaign_id, vol.user_id, true, vol.certificate_status); }}
                                   disabled={attendanceLoading[`${vol.user_id}-att`]}
                                   className="btn btn-secondary"
                                   style={{ padding: '4px 10px', fontSize: '0.75rem' }}
@@ -1191,8 +1594,8 @@ const Campaigns = () => {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleUpdateAttendance(activeCampaignDetails.campaign.campaign_id, vol.user_id, vol.attendance, true)}
-                                  disabled={!vol.attendance || attendanceLoading[`${vol.user_id}-cert`]}
+                                  onClick={() => handleIssueCertificate(activeCampaignDetails.campaign, vol)}
+                                  disabled={attendanceLoading[`${vol.user_id}-cert`]}
                                   className="btn btn-primary"
                                   style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                                 >
@@ -1216,6 +1619,295 @@ const Campaigns = () => {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: MY PARTICIPATION HISTORY & CERTIFICATES (VOLUNTEER) */}
+      {/* ========================================================================= */}
+      {showHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '850px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(0, 245, 212, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75)',
+            padding: '28px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Award size={24} color="#00e5ff" />
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                  My Certificates & Participation History
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowHistoryModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading history...</div>
+            ) : myHistory.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <Award size={48} color="#64748b" style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem' }}>No Certificates Earned Yet</h4>
+                <p style={{ margin: '8px 0 0 0', fontSize: '0.88rem' }}>Join and complete upcoming cleanup drives to earn official participation certificates!</p>
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Campaign Title</th>
+                      <th>Location</th>
+                      <th>Date</th>
+                      <th>Attendance</th>
+                      <th>Certificate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myHistory.map((item) => (
+                      <tr key={item.registration_id}>
+                        <td style={{ fontWeight: '600' }}>{item.campaign_name}</td>
+                        <td>{item.location}</td>
+                        <td>{new Date(item.campaign_date).toLocaleDateString()}</td>
+                        <td>
+                          <span className={`badge ${item.attendance ? 'badge-verified' : 'badge-pending'}`}>
+                            {item.attendance ? 'Attended' : 'Registered'}
+                          </span>
+                        </td>
+                        <td>
+                          {item.certificate_status ? (
+                            <button
+                              onClick={() => setSelectedCert({
+                                certificate_id: item.certificate_id,
+                                volunteer_name: user.full_name,
+                                campaign_name: item.campaign_name,
+                                location: item.location,
+                                campaign_date: item.campaign_date,
+                                issued_date: item.issued_date,
+                                organization_name: item.organization_name || item.creator_name
+                              })}
+                              className="btn btn-primary"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '0.78rem',
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: '#ffffff',
+                                border: '1px solid rgba(16, 185, 129, 0.4)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Award size={14} /> View & Download Certificate
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Pending Verification</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Render Certificate Print / Download Modal */}
+      {selectedCert && (
+        <CertificateModal
+          certificate={selectedCert}
+          onClose={() => setSelectedCert(null)}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ASSIGN NEW VOLUNTEER */}
+      {/* ========================================================================= */}
+      {showAssignVolunteerModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '540px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            position: 'relative',
+            padding: '28px',
+            margin: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Users size={24} color="#00e5ff" />
+                <h2 style={{ fontSize: '1.3rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                  Assign New Volunteer
+                </h2>
+              </div>
+              <button 
+                onClick={() => setShowAssignVolunteerModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Error / Success Alerts */}
+            {volunteerError && (
+              <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ff4d4d', borderRadius: '8px', color: '#ff4d4d', marginBottom: '16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={18} /> {volunteerError}
+              </div>
+            )}
+            
+            {success && success.includes('Login details sent') && (
+              <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', borderRadius: '8px', color: '#10b981', marginBottom: '16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={18} /> {success}
+              </div>
+            )}
+
+            <form onSubmit={handleAssignVolunteerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Volunteer Full Name *
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Rahul Kumar"
+                  value={volunteerName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerName(val);
+                    const err = validateField('volunteerName', val);
+                    setVolunteerFormErrors(prev => ({...prev, name: err}));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateField('volunteerName', e.target.value);
+                    setVolunteerFormErrors(prev => ({...prev, name: err}));
+                  }}
+                  className={`form-input ${volunteerFormErrors.name ? 'error' : ''}`}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${volunteerFormErrors.name ? '#ff4d4d' : 'rgba(0, 229, 255, 0.2)'}`, color: 'white', fontSize: '0.95rem', boxShadow: volunteerFormErrors.name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none' }}
+                />
+                {volunteerFormErrors.name && <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginTop: '4px' }}>{volunteerFormErrors.name}</div>}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Email Address *
+                </label>
+                <input 
+                  type="email"
+                  placeholder="e.g. volunteer@example.com"
+                  value={volunteerEmail}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerEmail(val);
+                    const err = validateField('volunteerEmail', val);
+                    setVolunteerFormErrors(prev => ({...prev, email: err}));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateField('volunteerEmail', e.target.value);
+                    setVolunteerFormErrors(prev => ({...prev, email: err}));
+                  }}
+                  className={`form-input ${volunteerFormErrors.email ? 'error' : ''}`}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${volunteerFormErrors.email ? '#ff4d4d' : 'rgba(0, 229, 255, 0.2)'}`, color: 'white', fontSize: '0.95rem', boxShadow: volunteerFormErrors.email ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none' }}
+                />
+                {volunteerFormErrors.email && <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginTop: '4px' }}>{volunteerFormErrors.email}</div>}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Phone Number *
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. +91 9876543210"
+                  value={volunteerPhone}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVolunteerPhone(val);
+                    const err = validateField('volunteerPhone', val);
+                    setVolunteerFormErrors(prev => ({...prev, phone: err}));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateField('volunteerPhone', e.target.value);
+                    setVolunteerFormErrors(prev => ({...prev, phone: err}));
+                  }}
+                  className={`form-input ${volunteerFormErrors.phone ? 'error' : ''}`}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(2, 6, 23, 0.5)', border: `1px solid ${volunteerFormErrors.phone ? '#ff4d4d' : 'rgba(0, 229, 255, 0.2)'}`, color: 'white', fontSize: '0.95rem', boxShadow: volunteerFormErrors.phone ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none' }}
+                />
+                {volunteerFormErrors.phone && <div style={{ color: '#ff4d4d', fontSize: '0.75rem', marginTop: '4px' }}>{volunteerFormErrors.phone}</div>}
+              </div>
+
+              <div style={{ marginTop: '10px', background: 'rgba(0, 229, 255, 0.05)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.15)' }}>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0, lineHeight: '1.5' }}>
+                  💡 An automated welcome email containing their login details and portal link will be dispatched upon registration.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button 
+                  type="button"
+                  onClick={() => setShowAssignVolunteerModal(false)}
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, padding: '12px', background: 'rgba(255, 255, 255, 0.05)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)', color: '#041126', border: 'none', borderRadius: '10px', fontWeight: 'bold' }}
+                  disabled={addingVolunteer}
+                >
+                  {addingVolunteer ? 'Registering...' : 'Assign Volunteer'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

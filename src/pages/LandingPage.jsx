@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -110,6 +110,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">18,500+</div>
               <div className="stat-label">KG Ocean Plastic Collected</div>
+              <img src="/images/cyan_coral_corner_clean.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="stat-box">
@@ -118,6 +119,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">3,400+</div>
               <div className="stat-label">Active Coastal Volunteers</div>
+              <img src="/images/cyan_marine_cleanups_bg.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="stat-box">
@@ -126,6 +128,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">420+</div>
               <div className="stat-label">Marine Species Tracked</div>
+              <img src="/images/cyan_fish_coral_bg.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="stat-box">
@@ -134,6 +137,7 @@ const LandingPage = () => {
               </div>
               <div className="stat-number">120+</div>
               <div className="stat-label">Protected Coastline Miles</div>
+              <img src="/images/purple_coral_card_bg.png" alt="" className="card-artwork-blend" />
             </div>
           </div>
         </div>
@@ -161,13 +165,14 @@ const LandingPage = () => {
                 <h3>Coastal Cleanup Campaigns</h3>
               </div>
               <p>
-                Organize, fund, and mobilize community beach cleanups with live geotagged volunteer check-ins and debris sorting reports.
+                Mobilize beach cleanups with live GPS check-ins and debris analytics.
               </p>
               <ul className="eco-list">
                 <li><CheckCircle2 size={16} /> Live GPS map locations</li>
                 <li><CheckCircle2 size={16} /> Volunteer reward badges</li>
                 <li><CheckCircle2 size={16} /> Debris weigh-in analytics</li>
               </ul>
+              <img src="/images/cyan_cleanups_corner.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="eco-card">
@@ -178,13 +183,14 @@ const LandingPage = () => {
                 <h3>Marine Biodiversity Tracker</h3>
               </div>
               <p>
-                Empowering marine biologists and citizen scientists to log species sightings, track endangered coral reefs, and map marine life health.
+                Log species sightings, track endangered coral reefs, and map marine health.
               </p>
               <ul className="eco-list">
                 <li><CheckCircle2 size={16} /> Species image recognition</li>
                 <li><CheckCircle2 size={16} /> Coral bleaching indices</li>
                 <li><CheckCircle2 size={16} /> Wildlife protection alerts</li>
               </ul>
+              <img src="/images/emerald_teal_reef_bg.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="eco-card">
@@ -195,13 +201,14 @@ const LandingPage = () => {
                 <h3>Incident & Hazard Alerts</h3>
               </div>
               <p>
-                Instant emergency reporting for oil spills, illegally dumped marine waste, stranded marine life, and coastal hazards.
+                Instant emergency reporting for oil spills, marine waste, and hazards.
               </p>
               <ul className="eco-list">
                 <li><CheckCircle2 size={16} /> Rapid authority dispatch</li>
                 <li><CheckCircle2 size={16} /> Real-time status updates</li>
                 <li><CheckCircle2 size={16} /> Community verification</li>
               </ul>
+              <img src="/images/red_coral_card_bg.png" alt="" className="card-artwork-blend" />
             </div>
           </div>
         </div>
@@ -225,24 +232,28 @@ const LandingPage = () => {
               <div className="feature-num">01</div>
               <h4>Interactive GIS Mapping</h4>
               <p>Explore high-resolution spatial maps tracking pollution hot spots, volunteer deployment, and marine protected areas.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="feature-item">
               <div className="feature-num">02</div>
               <h4>Live Environmental Analytics</h4>
               <p>Track water clarity indices, debris removal velocity, and community contribution benchmarks in real time.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="feature-item">
               <div className="feature-num">03</div>
               <h4>Verified Green Badging</h4>
               <p>Earn verified credentials and recognition for participating in shoreline restoration drives and logging ecological data.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
 
             <div className="feature-item">
               <div className="feature-num">04</div>
               <h4>Collaborative Task Management</h4>
               <p>Assign field tasks, coordinate equipment logistics, and stream real-time photos directly from shoreline sites.</p>
+              <img src="/images/big_cyan_fishes.png" alt="" className="card-artwork-blend" />
             </div>
           </div>
         </div>
@@ -289,6 +300,7 @@ const LandingPage = () => {
             <button className="cta-action-btn" onClick={handleJoin}>
               Get Started Now <ArrowRight size={18} />
             </button>
+            <img src="/images/sidebar_underwater_coral.png" alt="" className="card-artwork-blend" />
           </div>
         </div>
       </section>

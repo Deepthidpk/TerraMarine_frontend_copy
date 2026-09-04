@@ -8,6 +8,17 @@ const Reports = () => {
   const { user, authFetch, API_URL } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Date formatter for DD/MM/YYYY format
+  const formatDateDMY = (dateInput) => {
+    if (!dateInput) return 'N/A';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return 'N/A';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
   
   // Form State
   const [title, setTitle] = useState('');
@@ -24,6 +35,23 @@ const Reports = () => {
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Dynamic Categories & Waste Types State
+  const [categoriesList, setCategoriesList] = useState(['Pollution', 'Emergency']);
+  const [wasteTypesList, setWasteTypesList] = useState(['Plastic', 'Glass', 'Fishing Nets', 'Oil Spill', 'Dead Marine Life', 'General Litter']);
+  const [categoriesFull, setCategoriesFull] = useState([]);
+  const [wasteTypesFull, setWasteTypesFull] = useState([]);
+  
+  // Category & Waste Type Management Modal (Authority Only)
+  const [showCategoryMgmtModal, setShowCategoryMgmtModal] = useState(false);
+  const [mgmtTab, setMgmtTab] = useState('categories'); // 'categories' | 'waste_types'
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [newWasteName, setNewWasteName] = useState('');
+  const [newWasteDesc, setNewWasteDesc] = useState('');
+  const [mgmtError, setMgmtError] = useState('');
+  const [mgmtSuccess, setMgmtSuccess] = useState('');
+  const [mgmtSubmitting, setMgmtSubmitting] = useState(false);
 
   // Auto-dismiss notifications after 2 seconds
   useEffect(() => {
@@ -57,15 +85,17 @@ const Reports = () => {
   const [severityFilter, setSeverityFilter] = useState('All');
   const [wasteTypeFilter, setWasteTypeFilter] = useState('All');
 
-  // Count user's filed complaints
-  const myComplaintsCount = reports.filter(r => r.reported_by === user?.user_id).length;
+  // Filtered reports computation (only show reports which are not cleaned / completed)
+  const safeReports = Array.isArray(reports) ? reports : [];
+  const activeReports = safeReports.filter(r => r && r.status !== 'Completed');
+  const myComplaintsCount = activeReports.filter(r => r.reported_by === user?.user_id).length;
 
-  // Filtered reports computation
-  const filteredReports = reports.filter((rep) => {
+  const filteredReports = activeReports.filter((rep) => {
+    if (!rep || rep.status === 'Completed') return false;
     if (reportTab === 'my_complaints' && rep.reported_by !== user?.user_id) {
       return false;
     }
-    if (searchQuery.trim()) {
+    if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = rep.title?.toLowerCase().includes(q);
       const locMatch = rep.location_name?.toLowerCase().includes(q);
@@ -143,10 +173,9 @@ const Reports = () => {
       if (val.length > 1000) return 'Description must not exceed 1000 characters.';
       if (!/^[A-Za-z0-9\s.,!?'"()#&%+-]*$/.test(val)) return 'Description contains invalid characters.';
     } else if (name === 'category') {
-      if (!value || value === '' || !['Pollution', 'Emergency'].includes(value)) return 'Category selection is required.';
+      if (!value || value === '') return 'Category selection is required.';
     } else if (name === 'wasteType') {
-      const validTypes = ['Plastic', 'Glass', 'Fishing Nets', 'Oil Spill', 'Dead Marine Life', 'General Litter'];
-      if (!value || value === '' || !validTypes.includes(value)) return 'Waste type selection is required.';
+      if (!value || value === '') return 'Waste type selection is required.';
     } else if (name === 'image') {
       if (!imageFile) return 'Upload image proof is required.';
     } else if (name === 'locationName') {
@@ -183,7 +212,7 @@ const Reports = () => {
       const res = await authFetch('/reports');
       if (res.ok) {
         const data = await res.json();
-        setReports(data.reports);
+        setReports(Array.isArray(data.reports) ? data.reports : []);
       }
     } catch (err) {
       console.error('Error fetching reports:', err);
@@ -192,9 +221,163 @@ const Reports = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await authFetch('/categories');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.categories && data.categories.length > 0) {
+          setCategoriesFull(data.categories);
+          setCategoriesList(data.categories.map(c => c.name));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
+  const fetchWasteTypes = async () => {
+    try {
+      const res = await authFetch('/waste-types');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.wasteTypes && data.wasteTypes.length > 0) {
+          setWasteTypesFull(data.wasteTypes);
+          setWasteTypesList(data.wasteTypes.map(w => w.name));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching waste types:', err);
+    }
+  };
+
   useEffect(() => {
     fetchReports();
+    fetchCategories();
+    fetchWasteTypes();
   }, []);
+
+  const handleAddCategorySubmit = async (e) => {
+    e.preventDefault();
+    setMgmtError('');
+    setMgmtSuccess('');
+
+    if (!newCatName.trim()) {
+      setMgmtError('Category name is required.');
+      return;
+    }
+
+    setMgmtSubmitting(true);
+    try {
+      const res = await authFetch('/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCatName.trim(), description: newCatDesc.trim() })
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setMgmtError(data.error || 'Failed to add category.');
+      } else {
+        setMgmtSuccess(`Category "${data.category?.name || newCatName}" added successfully!`);
+        setNewCatName('');
+        setNewCatDesc('');
+        fetchCategories();
+      }
+    } catch (err) {
+      setMgmtError('Network error while adding category: ' + (err.message || 'Server unavailable'));
+    } finally {
+      setMgmtSubmitting(false);
+    }
+  };
+
+  const handleAddWasteTypeSubmit = async (e) => {
+    e.preventDefault();
+    setMgmtError('');
+    setMgmtSuccess('');
+
+    if (!newWasteName.trim()) {
+      setMgmtError('Waste type name is required.');
+      return;
+    }
+
+    setMgmtSubmitting(true);
+    try {
+      const res = await authFetch('/waste-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newWasteName.trim(), description: newWasteDesc.trim() })
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setMgmtError(data.error || 'Failed to add waste type.');
+      } else {
+        setMgmtSuccess(`Waste type "${data.wasteType?.name || newWasteName}" added successfully!`);
+        setNewWasteName('');
+        setNewWasteDesc('');
+        fetchWasteTypes();
+      }
+    } catch (err) {
+      setMgmtError('Network error while adding waste type: ' + (err.message || 'Server unavailable'));
+    } finally {
+      setMgmtSubmitting(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catItem) => {
+    const catName = typeof catItem === 'string' ? catItem : catItem.name;
+    const catId = typeof catItem === 'object' && catItem.category_id ? catItem.category_id : catName;
+
+    if (!window.confirm(`Are you sure you want to delete category "${catName}"?`)) return;
+
+    setMgmtError('');
+    setMgmtSuccess('');
+    try {
+      const res = await authFetch(`/categories/${encodeURIComponent(catId)}`, {
+        method: 'DELETE'
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setMgmtError(data.error || `Failed to delete category "${catName}".`);
+      } else {
+        setMgmtSuccess(`Category "${catName}" deleted successfully!`);
+        fetchCategories();
+      }
+    } catch (err) {
+      setMgmtError(`Network error deleting category: ${err.message || 'Server error'}`);
+    }
+  };
+
+  const handleDeleteWasteType = async (wasteItem) => {
+    const wasteName = typeof wasteItem === 'string' ? wasteItem : wasteItem.name;
+    const wasteId = typeof wasteItem === 'object' && wasteItem.waste_type_id ? wasteItem.waste_type_id : wasteName;
+
+    if (!window.confirm(`Are you sure you want to delete waste type "${wasteName}"?`)) return;
+
+    setMgmtError('');
+    setMgmtSuccess('');
+    try {
+      const res = await authFetch(`/waste-types/${encodeURIComponent(wasteId)}`, {
+        method: 'DELETE'
+      });
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setMgmtError(data.error || `Failed to delete waste type "${wasteName}".`);
+      } else {
+        setMgmtSuccess(`Waste type "${wasteName}" deleted successfully!`);
+        fetchWasteTypes();
+      }
+    } catch (err) {
+      setMgmtError(`Network error deleting waste type: ${err.message || 'Server error'}`);
+    }
+  };
 
   const handleMapClick = async (lat, lng) => {
     setSelectedCoords({ lat, lng });
@@ -413,6 +596,29 @@ const Reports = () => {
             </button>
           )}
 
+          {(user?.role === 'Authority' || user?.role === 'Admin') && (
+            <button 
+              onClick={() => setShowCategoryMgmtModal(true)} 
+              className="btn btn-secondary"
+              style={{ 
+                padding: '12px 20px', 
+                borderRadius: '12px', 
+                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.15) 0%, rgba(2, 132, 199, 0.25) 100%)', 
+                color: '#00e5ff', 
+                fontWeight: 700, 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                boxShadow: '0 4px 15px rgba(0, 229, 255, 0.15)',
+                cursor: 'pointer',
+                border: '1px solid rgba(0, 229, 255, 0.4)'
+              }}
+            >
+              <Layers size={18} />
+              <span>+ Manage Categories & Waste Types</span>
+            </button>
+          )}
+
           {user?.role !== 'Authority' && (
             <button 
               onClick={() => setShowCreateModal(true)} 
@@ -551,8 +757,9 @@ const Reports = () => {
                         style={{ color: category ? '#ffffff' : '#94a3b8', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.category ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
                       >
                         <option value="" style={{ color: '#94a3b8', background: '#08142a' }}>-- Select Category * --</option>
-                        <option value="Pollution" style={{ color: '#ffffff', background: '#08142a' }}>Pollution (Plastic, glass, metal)</option>
-                        <option value="Emergency" style={{ color: '#ffffff', background: '#08142a' }}>Emergency (Oil spill, toxic leaks)</option>
+                        {categoriesList.map((cat) => (
+                          <option key={cat} value={cat} style={{ color: '#ffffff', background: '#08142a' }}>{cat}</option>
+                        ))}
                       </select>
                       {fieldErrors.category && (
                         <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
@@ -571,12 +778,9 @@ const Reports = () => {
                         style={{ color: wasteType ? '#ffffff' : '#94a3b8', background: 'rgba(8, 20, 42, 0.8)', border: fieldErrors.wasteType ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)' }}
                       >
                         <option value="" style={{ color: '#94a3b8', background: '#08142a' }}>-- Select Waste Type * --</option>
-                        <option value="Plastic" style={{ color: '#ffffff', background: '#08142a' }}>Plastic Bottles/Bags</option>
-                        <option value="Glass" style={{ color: '#ffffff', background: '#08142a' }}>Glass Bottling</option>
-                        <option value="Fishing Nets" style={{ color: '#ffffff', background: '#08142a' }}>Fishing Nets / Line</option>
-                        <option value="Oil Spill" style={{ color: '#ffffff', background: '#08142a' }}>Oil Slick / Fuel Leak</option>
-                        <option value="Dead Marine Life" style={{ color: '#ffffff', background: '#08142a' }}>Dead Marine Organisms</option>
-                        <option value="General Litter" style={{ color: '#ffffff', background: '#08142a' }}>General Trash</option>
+                        {wasteTypesList.map((wt) => (
+                          <option key={wt} value={wt} style={{ color: '#ffffff', background: '#08142a' }}>{wt}</option>
+                        ))}
                       </select>
                       {fieldErrors.wasteType && (
                         <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
@@ -708,7 +912,7 @@ const Reports = () => {
                   <LeafletMap 
                     onLocationSelect={handleMapClick} 
                     selectedLocation={selectedCoords} 
-                    reports={reports}
+                    reports={activeReports}
                   />
                 </div>
                 {selectedCoords && (
@@ -729,7 +933,7 @@ const Reports = () => {
           <div>
             <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Active Reports Ledger</h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Showing {filteredReports.length} of {reports.length} reports
+              Showing {filteredReports.length} of {activeReports.length} reports
             </span>
           </div>
 
@@ -758,7 +962,7 @@ const Reports = () => {
         {/* Filter Controls Toolbar */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
+          gridTemplateColumns: ['Authority', 'Admin'].includes(user?.role) ? '2.5fr 1fr 1fr 1fr' : '2.5fr 1.5fr 1.5fr',
           gap: '12px',
           alignItems: 'end',
           marginBottom: '20px',
@@ -828,35 +1032,38 @@ const Reports = () => {
               }}
             >
               <option value="All">All Categories</option>
-              <option value="Pollution">Pollution</option>
-              <option value="Emergency">Emergency</option>
+              {categoriesList.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
-          {/* Severity Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Severity
-            </label>
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                borderRadius: '6px',
-                border: '1px solid var(--card-border)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem'
-              }}
-            >
-              <option value="All">All Severities</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-            </select>
-          </div>
+          {/* Severity Filter (Authority / Admin Only) */}
+          {['Authority', 'Admin'].includes(user?.role) && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Severity
+              </label>
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--card-border)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem'
+                }}
+              >
+                <option value="All">All Severities</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+          )}
 
           {/* Waste Type Filter */}
           <div>
@@ -877,12 +1084,9 @@ const Reports = () => {
               }}
             >
               <option value="All">All Waste Types</option>
-              <option value="Plastic">Plastic</option>
-              <option value="Glass">Glass</option>
-              <option value="Fishing Nets">Fishing Nets</option>
-              <option value="Oil Spill">Oil Spill</option>
-              <option value="Dead Marine Life">Dead Marine Life</option>
-              <option value="General Litter">General Litter</option>
+              {wasteTypesList.map((wt) => (
+                <option key={wt} value={wt}>{wt}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -916,60 +1120,97 @@ const Reports = () => {
             <table className="custom-table" style={{ width: '100%', tableLayout: 'auto', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'rgba(4, 14, 30, 0.95)', borderBottom: '1px solid rgba(0, 229, 255, 0.2)' }}>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>TITLE</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>LOCATION</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>WASTE TYPE</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>CATEGORY</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>REPORTED DATE</th>
-                  <th style={{ padding: '14px 24px', fontSize: '0.78rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>ACTIONS</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>TITLE</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>LOCATION</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>WASTE TYPE</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'left', color: '#94a3b8', fontWeight: '700' }}>CATEGORY</th>
+                  {['Authority', 'Admin'].includes(user?.role) && (
+                    <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700' }}>SEVERITY</th>
+                  )}
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>REPORTED DATE</th>
+                  <th style={{ padding: '8px 12px', fontSize: '0.72rem', letterSpacing: '0.06em', textAlign: 'center', color: '#94a3b8', fontWeight: '700', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredReports.map((rep) => (
                   <tr key={rep.report_id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background 0.2s ease' }}>
-                    <td style={{ padding: '14px 24px', textAlign: 'left' }}>
-                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.35' }}>{rep.title}</div>
+                    <td style={{ padding: '8px 12px', textAlign: 'left' }}>
+                      <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.8rem', lineHeight: '1.3', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {rep.status === 'Pending' && ['Authority', 'Admin'].includes(user?.role) && (
+                          <span 
+                            title="New complaint requiring approval"
+                            style={{
+                              width: '9px',
+                              height: '9px',
+                              borderRadius: '50%',
+                              background: '#10b981',
+                              boxShadow: '0 0 10px #10b981',
+                              flexShrink: 0,
+                              display: 'inline-block'
+                            }} 
+                          />
+                        )}
+                        <span>{rep.title}</span>
+                        {rep.status === 'Pending' && ['Authority', 'Admin'].includes(user?.role) && (
+                          <span style={{
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                            color: '#10b981',
+                            fontSize: '0.68rem',
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            fontWeight: '700',
+                            whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            Requires Approval
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
-                        <MapPin size={14} color="#00e5ff" style={{ flexShrink: 0 }} />
+                    <td style={{ padding: '8px 12px', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
+                        <MapPin size={13} color="#00e5ff" style={{ flexShrink: 0 }} />
                         <span>{rep.location_name || `${parseFloat(rep.latitude).toFixed(4)}, ${parseFloat(rep.longitude).toFixed(4)}`}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'left', fontSize: '0.85rem', color: '#e2e8f0', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.78rem', color: '#e2e8f0', fontWeight: '500', whiteSpace: 'nowrap' }}>
                       {rep.waste_type || 'General'}
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <span className={`badge ${rep.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.74rem', padding: '4px 10px' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      <span className={`badge ${rep.report_category === 'Emergency' ? 'badge-emergency' : 'badge-pollution'}`} style={{ fontSize: '0.7rem', padding: '3px 8px' }}>
                         {rep.report_category}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{ 
-                        fontWeight: '700', 
-                        fontSize: '0.84rem',
-                        color: rep.severity === 'High' ? '#ff4d4d' : rep.severity === 'Medium' ? '#ffb703' : '#00f5d4'
-                      }}>
-                        {rep.severity || 'Medium'}
-                      </span>
+                    {['Authority', 'Admin'].includes(user?.role) && (
+                      <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <span style={{ 
+                          fontWeight: '700', 
+                          fontSize: '0.78rem',
+                          color: rep.severity === 'High' ? '#ff4d4d' : rep.severity === 'Medium' ? '#ffb703' : '#00f5d4'
+                        }}>
+                          {rep.severity || 'Medium'}
+                        </span>
+                      </td>
+                    )}
+                    <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '0.78rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
+                      {formatDateDMY(rep.reported_at)}
                     </td>
-                    <td style={{ padding: '14px 24px', textAlign: 'center', fontSize: '0.84rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>
-                      {new Date(rep.reported_at).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: '12px 24px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button 
                         onClick={() => handleOpenDetails(rep.report_id)}
                         className="btn btn-secondary" 
                         style={{ 
-                          padding: '6px 14px', 
-                          fontSize: '0.78rem', 
-                          borderRadius: '8px', 
+                          padding: '4px 10px', 
+                          fontSize: '0.75rem', 
+                          borderRadius: '6px', 
                           whiteSpace: 'nowrap',
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px'
+                          gap: '5px'
                         }}
                       >
                         <Info size={13} />
@@ -1055,7 +1296,7 @@ const Reports = () => {
                 <div style={{ padding: '10px 8px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px auto', fontWeight: '700', fontSize: '0.8rem' }}>✓</div>
                   <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#ffffff' }}>1. Complaint Filed</div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{new Date(activeReportDetails.report.reported_at).toLocaleDateString()}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{formatDateDMY(activeReportDetails.report.reported_at)}</div>
                 </div>
 
                 {/* Step 2: Under Review */}
@@ -1115,7 +1356,9 @@ const Reports = () => {
                 <div style={{ marginTop: '16px', fontSize: '0.85rem' }}>
                   <p><strong>Coordinates:</strong> {parseFloat(activeReportDetails.report.latitude).toFixed(6)}, {parseFloat(activeReportDetails.report.longitude).toFixed(6)}</p>
                   <p><strong>Location:</strong> {activeReportDetails.report.location_name || 'Coastal boundary'}</p>
-                  <p><strong>Reporter:</strong> {activeReportDetails.report.reporter_name} ({activeReportDetails.report.reporter_phone || 'No phone'})</p>
+                  {['Authority', 'Admin'].includes(user?.role) && (
+                    <p><strong>Reporter:</strong> {activeReportDetails.report.reporter_name} ({activeReportDetails.report.reporter_phone || 'No phone'})</p>
+                  )}
                 </div>
               </div>
 
@@ -1127,7 +1370,9 @@ const Reports = () => {
                 </p>
 
                 <p><strong>Waste Type:</strong> {activeReportDetails.report.waste_type || 'General'}</p>
-                <p><strong>Severity:</strong> {activeReportDetails.report.severity || 'Medium'}</p>
+                {['Authority', 'Admin'].includes(user?.role) && (
+                  <p><strong>Severity:</strong> {activeReportDetails.report.severity || 'Medium'}</p>
+                )}
                 <p><strong>Current Status:</strong> <span className={`badge badge-${activeReportDetails.report.status.toLowerCase()}`} style={{ verticalAlign: 'middle' }}>{activeReportDetails.report.status}</span></p>
                 
                 {/* Authority verification controls */}
@@ -1158,8 +1403,8 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Audit updates timeline */}
-            {activeReportDetails.updates && activeReportDetails.updates.length > 0 && (
+            {/* Audit updates timeline - RESTRICTED TO MUNICIPAL AUTHORITY & ADMIN */}
+            {['Authority', 'Admin'].includes(user?.role) && activeReportDetails.updates && activeReportDetails.updates.length > 0 && (
               <div style={{ marginTop: '24px', borderTop: '1px solid var(--card-border)', paddingTop: '16px' }}>
                 <h4 style={{ fontSize: '1rem', marginBottom: '12px' }}>Incident Updates & Audit Log</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1167,7 +1412,7 @@ const Reports = () => {
                     <div key={update.update_id} style={{ padding: '10px', background: 'rgba(15, 23, 42, 0.02)', border: '1px solid rgba(15, 23, 42, 0.04)', borderRadius: '6px', fontSize: '0.8rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                         <span>Updated by: {update.updated_by_name}</span>
-                        <span>{new Date(update.updated_at).toLocaleString()}</span>
+                        <span>{formatDateDMY(update.updated_at)} {new Date(update.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <p>
                         Status changed from <strong>{update.old_status}</strong> to <strong>{update.new_status}</strong>.
@@ -1188,6 +1433,239 @@ const Reports = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: AUTHORITY CATEGORY & WASTE TYPE MANAGEMENT */}
+      {/* ========================================================================= */}
+      {showCategoryMgmtModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '680px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            position: 'relative',
+            padding: '28px',
+            margin: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Layers size={24} color="#00e5ff" />
+                <h2 style={{ fontSize: '1.3rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                  Manage Categories & Waste Types
+                </h2>
+              </div>
+              <button 
+                onClick={() => { setShowCategoryMgmtModal(false); setMgmtError(''); setMgmtSuccess(''); }}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Tab selector */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '10px' }}>
+              <button
+                type="button"
+                onClick={() => { setMgmtTab('categories'); setMgmtError(''); setMgmtSuccess(''); }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: mgmtTab === 'categories' ? '#0284c7' : 'rgba(255,255,255,0.05)',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Categories ({categoriesList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMgmtTab('waste_types'); setMgmtError(''); setMgmtSuccess(''); }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: mgmtTab === 'waste_types' ? '#0284c7' : 'rgba(255,255,255,0.05)',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Waste Types ({wasteTypesList.length})
+              </button>
+            </div>
+
+            {mgmtSuccess && (
+              <div style={{ padding: '10px 14px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid var(--success)', borderRadius: '8px', color: '#34d399', marginBottom: '16px', fontSize: '0.85rem' }}>
+                {mgmtSuccess}
+              </div>
+            )}
+            {mgmtError && (
+              <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--danger)', borderRadius: '8px', color: '#f87171', marginBottom: '16px', fontSize: '0.85rem' }}>
+                {mgmtError}
+              </div>
+            )}
+
+            {mgmtTab === 'categories' ? (
+              <div>
+                {/* Form to add category */}
+                <form onSubmit={handleAddCategorySubmit} style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(0, 229, 255, 0.15)', marginBottom: '20px' }}>
+                  <h4 style={{ margin: '0 0 12px 0', color: '#00e5ff', fontSize: '0.95rem' }}>+ Add New Category</h4>
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Category Name *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="e.g. Chemical Hazard" 
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Description (Optional)</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Brief description of this report category..." 
+                      value={newCatDesc}
+                      onChange={(e) => setNewCatDesc(e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={mgmtSubmitting}
+                    style={{
+                      padding: '8px 18px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '700',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {mgmtSubmitting ? 'Adding...' : 'Add Category'}
+                  </button>
+                </form>
+
+                {/* List of categories */}
+                <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '10px' }}>Active Categories</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {categoriesList.map((catName) => {
+                    const catObj = categoriesFull.find(c => c.name === catName) || { name: catName };
+                    return (
+                      <span key={catName} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'rgba(0, 229, 255, 0.1)', border: '1px solid rgba(0, 229, 255, 0.25)', borderRadius: '20px', color: '#00e5ff', fontSize: '0.82rem', fontWeight: '600' }}>
+                        <span>{catName}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(catObj)}
+                          title={`Delete category ${catName}`}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center' }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div>
+                {/* Form to add waste type */}
+                <form onSubmit={handleAddWasteTypeSubmit} style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(0, 229, 255, 0.15)', marginBottom: '20px' }}>
+                  <h4 style={{ margin: '0 0 12px 0', color: '#00e5ff', fontSize: '0.95rem' }}>+ Add New Waste Type</h4>
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Waste Type Name *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="e.g. Industrial Sludge" 
+                      value={newWasteName}
+                      onChange={(e) => setNewWasteName(e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Description (Optional)</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Brief description of this waste type..." 
+                      value={newWasteDesc}
+                      onChange={(e) => setNewWasteDesc(e.target.value)}
+                      style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.25)' }}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={mgmtSubmitting}
+                    style={{
+                      padding: '8px 18px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '700',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {mgmtSubmitting ? 'Adding...' : 'Add Waste Type'}
+                  </button>
+                </form>
+
+                {/* List of waste types */}
+                <h4 style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '10px' }}>Active Waste Types</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {wasteTypesList.map((wtName) => {
+                    const wtObj = wasteTypesFull.find(w => w.name === wtName) || { name: wtName };
+                    return (
+                      <span key={wtName} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '20px', color: '#34d399', fontSize: '0.82rem', fontWeight: '600' }}>
+                        <span>{wtName}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteWasteType(wtObj)}
+                          title={`Delete waste type ${wtName}`}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center' }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

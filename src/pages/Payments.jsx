@@ -8,13 +8,6 @@ const Payments = () => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Disbursement form state (Authority only)
-  const [activePaymentId, setActivePaymentId] = useState('');
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
-  const [transactionRef, setTransactionRef] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -51,42 +44,57 @@ const Payments = () => {
     fetchPayments();
   }, []);
 
-  const handleOpenPayModal = (paymentId) => {
-    setActivePaymentId(paymentId);
-    setTransactionRef(`TXN${Math.floor(1000000000 + Math.random() * 9000000000)}`); // generate mock transaction reference
-    setShowPayModal(true);
-  };
-
-  const handleProcessPayment = async (e) => {
-    e.preventDefault();
-    if (!paymentMethod || !transactionRef) {
-      return setError('Method and reference are required.');
-    }
-    setError('');
-    setSuccess('');
-    setSubmitting(true);
-
+  const handlePayReward = async (paymentId) => {
     try {
-      const res = await authFetch(`/payments/${activePaymentId}/pay`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          payment_method: paymentMethod,
-          transaction_ref: transactionRef
-        })
+      // 1. Create order
+      const orderRes = await authFetch(`/payments/${paymentId}/create-order`, {
+        method: 'POST'
       });
+      const orderData = await orderRes.json();
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Disbursement processing failed.');
-      }
+      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create order');
 
-      setSuccess('Reward payment disbursed successfully!');
-      setShowPayModal(false);
-      fetchPayments();
+      // 2. Initialize Razorpay
+      const options = {
+        key: orderData.key_id,
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: "TerraMarine",
+        description: "Cleanup Reward Payout",
+        order_id: orderData.order.id,
+        handler: async function (response) {
+          try {
+            const payRes = await authFetch(`/payments/${paymentId}/pay`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                payment_method: 'Razorpay',
+                transaction_ref: response.razorpay_payment_id
+              })
+            });
+            const payData = await payRes.json();
+            if (!payRes.ok) throw new Error(payData.error || 'Disbursement processing failed.');
+            setSuccess('Reward payment disbursed successfully!');
+            fetchPayments();
+          } catch (err) {
+            setError(err.message || 'Error executing payment.');
+          }
+        },
+        prefill: {
+          name: user.full_name,
+          email: user.email,
+        },
+        theme: {
+          color: "#00e5ff"
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response){
+         setError('Payment failed: ' + response.error.description);
+      });
+      rzp.open();
     } catch (err) {
-      setError(err.message || 'Error executing payment.');
-    } finally {
-      setSubmitting(false);
+      setError(err.message || 'Error initiating payment');
     }
   };
 
@@ -198,7 +206,7 @@ const Payments = () => {
                       <td>
                         {p.payment_status === 'Pending' ? (
                           <button
-                            onClick={() => handleOpenPayModal(p.payment_id)}
+                            onClick={() => handlePayReward(p.payment_id)}
                             className="btn btn-primary"
                             style={{ padding: '6px 12px', fontSize: '0.75rem' }}
                           >
@@ -219,95 +227,6 @@ const Payments = () => {
           </div>
         )}
       </div>
-
-      {/* Pay modal form (Authority only) */}
-      {showPayModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div className="glass-panel" style={{
-            maxWidth: '450px',
-            width: '100%',
-            background: 'var(--bg-secondary)',
-            position: 'relative'
-          }}>
-            <button 
-              onClick={() => setShowPayModal(false)}
-              style={{
-                position: 'absolute',
-                right: '20px',
-                top: '20px',
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-primary)',
-                fontSize: '1.5rem',
-                cursor: 'pointer'
-              }}
-            >
-              &times;
-            </button>
-
-            <h2 style={{ fontSize: '1.3rem', marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <Wallet size={20} color="var(--accent-primary)" />
-              Disburse Clean-Up Reward
-            </h2>
-
-            <form onSubmit={handleProcessPayment}>
-              <div className="form-group">
-                <label className="form-label">Payment Method *</label>
-                <select 
-                  className="form-control" 
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  required
-                >
-                  <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
-                  <option value="Bank Transfer">Bank Transfer / NEFT</option>
-                  <option value="Cash">Handover Cash</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Transaction Reference *</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={transactionRef}
-                  onChange={(e) => setTransactionRef(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                style={{ width: '100%', padding: '10px', marginTop: '8px' }}
-                disabled={submitting}
-              >
-                {submitting ? 'Processing payout...' : 'Confirm Reward Transfer'}
-              </button>
-            </form>
-
-            <button 
-              onClick={() => setShowPayModal(false)}
-              className="btn btn-secondary" 
-              style={{ width: '100%', marginTop: '12px' }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

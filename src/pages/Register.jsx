@@ -44,8 +44,8 @@ const Register = () => {
     if (name === 'full_name') {
       if (!value) {
         errorMsg = 'Full name is required.';
-      } else if (value.trim().length < 2) {
-        errorMsg = 'Full name must be at least 2 characters.';
+      } else if (value.trim().length < 3) {
+        errorMsg = 'Full name must be at least 3 characters.';
       } else if (!/^[A-Za-z\s]+$/.test(value)) {
         errorMsg = 'Full name can only contain letters and spaces.';
       }
@@ -56,14 +56,18 @@ const Register = () => {
         errorMsg = 'Please enter a valid email address.';
       }
     } else if (name === 'phone') {
-      if (value && !/^[0-9]{10}$/.test(value)) {
-        errorMsg = 'Please enter a valid phone number (10 digits).';
+      if (!value) {
+        errorMsg = 'Phone number is required.';
+      } else if (!/^[6-9][0-9]{9}$/.test(value)) {
+        errorMsg = 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
       }
     } else if (name === 'password') {
       if (!value) {
         errorMsg = 'Password is required.';
       } else if (value.length < 6) {
         errorMsg = 'Password must be at least 6 characters.';
+      } else if (!/[A-Za-z]/.test(value) || !/\d/.test(value) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(value)) {
+        errorMsg = 'Password must contain letters, digits, and special characters.';
       }
     } else if (name === 'confirmPassword') {
       if (!value) {
@@ -76,68 +80,68 @@ const Register = () => {
         errorMsg = 'Address is required.';
       } else if (value.trim().length < 5) {
         errorMsg = 'Address must be at least 5 characters.';
-      } else if (!/^[A-Za-z0-9\s.,#/-]+$/.test(value)) {
-        errorMsg = 'Address contains invalid characters (letters, numbers, spaces, and punctuation only).';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Address can only contain letters, digits, and spaces.';
       }
     } else if (name === 'district') {
       if (!value) {
         errorMsg = 'District is required.';
-      } else if (!/^[A-Za-z\s]+$/.test(value)) {
-        errorMsg = 'District can only contain letters and spaces.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'District can only contain letters, digits, and spaces.';
       }
     } else if (name === 'state') {
       if (!value) {
         errorMsg = 'State is required.';
-      } else if (!/^[A-Za-z\s]+$/.test(value)) {
-        errorMsg = 'State can only contain letters and spaces.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'State can only contain letters, digits, and spaces.';
       }
     } else if (name === 'organization_name') {
       if (!value) {
         errorMsg = 'Organization name is required.';
       } else if (value.trim().length < 3) {
         errorMsg = 'Organization name must be at least 3 characters.';
-      } else if (!/^[A-Za-z0-9\s.,#/-]+$/.test(value)) {
-        errorMsg = 'Organization name contains invalid characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Organization name can only contain letters, digits, and spaces.';
       }
     } else if (name === 'registration_number') {
       if (!value) {
         errorMsg = 'Registration number is required.';
       } else if (value.trim().length < 5) {
         errorMsg = 'Registration number must be at least 5 characters.';
-      } else if (!/^[A-Za-z0-9/-]+$/.test(value)) {
-        errorMsg = 'Registration number can only contain letters, numbers, and hyphens/slashes.';
+      } else if (!/^[A-Za-z0-9]+$/.test(value)) {
+        errorMsg = 'Registration number can only contain letters and digits.';
       }
     } else if (name === 'organization_address') {
       if (!value) {
         errorMsg = 'Organization address is required.';
       } else if (value.trim().length < 10) {
         errorMsg = 'Organization address must be at least 10 characters.';
-      } else if (!/^[A-Za-z0-9\s.,#/-]+$/.test(value)) {
-        errorMsg = 'Organization address contains invalid characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Organization address can only contain letters, digits, and spaces.';
       }
     } else if (name === 'institution_name') {
       if (!value) {
         errorMsg = 'Institution name is required.';
       } else if (value.trim().length < 3) {
         errorMsg = 'Institution name must be at least 3 characters.';
-      } else if (!/^[A-Za-z0-9\s.,#/-]+$/.test(value)) {
-        errorMsg = 'Institution name contains invalid characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Institution name can only contain letters, digits, and spaces.';
       }
     } else if (name === 'department') {
       if (!value) {
         errorMsg = 'Department is required.';
       } else if (value.trim().length < 2) {
         errorMsg = 'Department must be at least 2 characters.';
-      } else if (!/^[A-Za-z\s/-]+$/.test(value)) {
-        errorMsg = 'Department name can only contain letters, spaces, and hyphens/slashes.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Department name can only contain letters, digits, and spaces.';
       }
     } else if (name === 'research_area') {
       if (!value) {
         errorMsg = 'Research area is required.';
       } else if (value.trim().length < 5) {
         errorMsg = 'Research area must be at least 5 characters.';
-      } else if (!/^[A-Za-z0-9\s,-]+$/.test(value)) {
-        errorMsg = 'Research area can only contain letters, numbers, spaces, and commas/hyphens.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(value)) {
+        errorMsg = 'Research area can only contain letters, digits, and spaces.';
       }
     } else if (name === 'government_id_number') {
       if (!value) {
@@ -147,7 +151,7 @@ const Register = () => {
           errorMsg = 'Aadhaar number must be exactly 12 digits.';
         }
       } else if (!/^[A-Za-z0-9]+$/.test(value)) {
-        errorMsg = 'Government ID number can only contain letters and numbers.';
+        errorMsg = 'Government ID number can only contain letters and digits.';
       } else if (value.trim().length < 5) {
         errorMsg = 'ID number must be at least 5 characters.';
       }
@@ -156,16 +160,16 @@ const Register = () => {
         errorMsg = 'Fishing license number is required.';
       } else if (value.trim().length < 5) {
         errorMsg = 'Fishing license number must be at least 5 characters.';
-      } else if (!/^[A-Za-z0-9-]+$/.test(value)) {
-        errorMsg = 'Fishing license number can only contain letters, numbers, and hyphens.';
+      } else if (!/^[A-Za-z0-9]+$/.test(value)) {
+        errorMsg = 'Fishing license number can only contain letters and digits.';
       }
     } else if (name === 'boat_registration_number') {
       if (!value) {
         errorMsg = 'Boat registration number is required.';
       } else if (value.trim().length < 5) {
         errorMsg = 'Boat registration number must be at least 5 characters.';
-      } else if (!/^[A-Za-z0-9-]+$/.test(value)) {
-        errorMsg = 'Boat registration number can only contain letters, numbers, and hyphens.';
+      } else if (!/^[A-Za-z0-9]+$/.test(value)) {
+        errorMsg = 'Boat registration number can only contain letters and digits.';
       }
     }
 
@@ -257,7 +261,7 @@ const Register = () => {
   };
 
   const isFormValid = () => {
-    if (!formData.full_name || !formData.email || !formData.password || !formData.confirmPassword || !formData.address || !formData.district || !formData.state) return false;
+    if (!formData.full_name || !formData.email || !formData.phone || !formData.password || !formData.confirmPassword || !formData.address || !formData.district || !formData.state) return false;
     if (fieldErrors.full_name || fieldErrors.email || fieldErrors.phone || fieldErrors.password || fieldErrors.confirmPassword || fieldErrors.address || fieldErrors.district || fieldErrors.state) return false;
 
     if (formData.role === 'NGO') {
@@ -286,8 +290,8 @@ const Register = () => {
     // full_name
     if (!formData.full_name) {
       errors.full_name = 'Full name is required.';
-    } else if (formData.full_name.trim().length < 2) {
-      errors.full_name = 'Full name must be at least 2 characters.';
+    } else if (formData.full_name.trim().length < 3) {
+      errors.full_name = 'Full name must be at least 3 characters.';
     } else if (!/^[A-Za-z\s]+$/.test(formData.full_name)) {
       errors.full_name = 'Full name can only contain letters and spaces.';
     }
@@ -300,8 +304,10 @@ const Register = () => {
     }
 
     // phone
-    if (formData.phone && !/^[0-9]{10}$/.test(formData.phone)) {
-      errors.phone = 'Please enter a valid phone number (10 digits).';
+    if (!formData.phone) {
+      errors.phone = 'Phone number is required.';
+    } else if (!/^[6-9][0-9]{9}$/.test(formData.phone)) {
+      errors.phone = 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
     }
 
     // password
@@ -309,6 +315,8 @@ const Register = () => {
       errors.password = 'Password is required.';
     } else if (formData.password.length < 6) {
       errors.password = 'Password must be at least 6 characters.';
+    } else if (!/[A-Za-z]/.test(formData.password) || !/\d/.test(formData.password) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(formData.password)) {
+      errors.password = 'Password must contain letters, digits, and special characters.';
     }
 
     // confirmPassword
@@ -323,20 +331,22 @@ const Register = () => {
       errors.address = 'Address is required.';
     } else if (formData.address.trim().length < 5) {
       errors.address = 'Address must be at least 5 characters.';
+    } else if (!/^[A-Za-z0-9\s]+$/.test(formData.address)) {
+      errors.address = 'Address can only contain letters, digits, and spaces.';
     }
 
     // district
     if (!formData.district) {
       errors.district = 'District is required.';
-    } else if (!/^[A-Za-z\s]+$/.test(formData.district)) {
-      errors.district = 'District can only contain letters and spaces.';
+    } else if (!/^[A-Za-z0-9\s]+$/.test(formData.district)) {
+      errors.district = 'District can only contain letters, digits, and spaces.';
     }
 
     // state
     if (!formData.state) {
       errors.state = 'State is required.';
-    } else if (!/^[A-Za-z\s]+$/.test(formData.state)) {
-      errors.state = 'State can only contain letters and spaces.';
+    } else if (!/^[A-Za-z0-9\s]+$/.test(formData.state)) {
+      errors.state = 'State can only contain letters, digits, and spaces.';
     }
 
     // dynamic fields
@@ -345,18 +355,24 @@ const Register = () => {
         errors.organization_name = 'Organization name is required.';
       } else if (formData.organization_name.trim().length < 3) {
         errors.organization_name = 'Organization name must be at least 3 characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(formData.organization_name)) {
+        errors.organization_name = 'Organization name can only contain letters, digits, and spaces.';
       }
       
       if (!formData.registration_number) {
         errors.registration_number = 'Registration number is required.';
       } else if (formData.registration_number.trim().length < 5) {
         errors.registration_number = 'Registration number must be at least 5 characters.';
+      } else if (!/^[A-Za-z0-9]+$/.test(formData.registration_number)) {
+        errors.registration_number = 'Registration number can only contain letters and digits.';
       }
       
       if (!formData.organization_address) {
         errors.organization_address = 'Organization address is required.';
       } else if (formData.organization_address.trim().length < 10) {
         errors.organization_address = 'Organization address must be at least 10 characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(formData.organization_address)) {
+        errors.organization_address = 'Organization address can only contain letters, digits, and spaces.';
       }
       
       if (!files.registration_certificate) {
@@ -367,18 +383,24 @@ const Register = () => {
         errors.institution_name = 'Institution name is required.';
       } else if (formData.institution_name.trim().length < 3) {
         errors.institution_name = 'Institution name must be at least 3 characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(formData.institution_name)) {
+        errors.institution_name = 'Institution name can only contain letters, digits, and spaces.';
       }
       
       if (!formData.department) {
         errors.department = 'Department is required.';
       } else if (formData.department.trim().length < 2) {
         errors.department = 'Department must be at least 2 characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(formData.department)) {
+        errors.department = 'Department name can only contain letters, digits, and spaces.';
       }
       
       if (!formData.research_area) {
         errors.research_area = 'Research area is required.';
       } else if (formData.research_area.trim().length < 5) {
         errors.research_area = 'Research area must be at least 5 characters.';
+      } else if (!/^[A-Za-z0-9\s]+$/.test(formData.research_area)) {
+        errors.research_area = 'Research area can only contain letters, digits, and spaces.';
       }
       
       if (!files.institution_id) {
@@ -393,6 +415,8 @@ const Register = () => {
         }
       } else if (formData.government_id_number.trim().length < 5) {
         errors.government_id_number = 'ID number must be at least 5 characters.';
+      } else if (!/^[A-Za-z0-9]+$/.test(formData.government_id_number)) {
+        errors.government_id_number = 'Government ID number can only contain letters and digits.';
       }
       
       if (!files.government_id) {
@@ -403,12 +427,16 @@ const Register = () => {
         errors.fishing_license_number = 'Fishing license number is required.';
       } else if (formData.fishing_license_number.trim().length < 5) {
         errors.fishing_license_number = 'Fishing license number must be at least 5 characters.';
+      } else if (!/^[A-Za-z0-9]+$/.test(formData.fishing_license_number)) {
+        errors.fishing_license_number = 'Fishing license number can only contain letters and digits.';
       }
       
       if (!formData.boat_registration_number) {
         errors.boat_registration_number = 'Boat registration number is required.';
       } else if (formData.boat_registration_number.trim().length < 5) {
         errors.boat_registration_number = 'Boat registration number must be at least 5 characters.';
+      } else if (!/^[A-Za-z0-9]+$/.test(formData.boat_registration_number)) {
+        errors.boat_registration_number = 'Boat registration number can only contain letters and digits.';
       }
     }
 
@@ -679,14 +707,15 @@ const Register = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group">
-              <label className="form-label" style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.05em' }}>Phone Number</label>
+              <label className="form-label" style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.05em' }}>Phone Number *</label>
               <input 
                 type="text" 
                 name="phone" 
                 className="form-control" 
-                placeholder="+919876543210" 
+                placeholder="e.g. 9876543210" 
                 value={formData.phone}
                 onChange={handleChange}
+                required
                 style={{ fontSize: '0.9rem', borderColor: fieldErrors.phone ? 'var(--danger)' : '' }}
               />
               {fieldErrors.phone && (
@@ -704,13 +733,13 @@ const Register = () => {
                 value={formData.role}
                 onChange={handleChange}
                 required
-                style={{ color: '#171c42', fontWeight: 600, fontSize: '0.9rem' }}
+                style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}
               >
-                <option value="Citizen">Citizen</option>
-                <option value="Fisherman">Fisherman</option>
-                <option value="Volunteer">Volunteer</option>
-                <option value="NGO">NGO</option>
-                <option value="Researcher">Researcher</option>
+                <option value="Citizen" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Citizen</option>
+                <option value="Fisherman" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Fisherman</option>
+                <option value="Volunteer" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Volunteer</option>
+                <option value="NGO" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>NGO</option>
+                <option value="Researcher" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Researcher</option>
               </select>
             </div>
           </div>
@@ -1024,12 +1053,12 @@ const Register = () => {
                     value={formData.government_id_type}
                     onChange={handleChange}
                     required
-                    style={{ fontSize: '0.9rem' }}
+                    style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}
                   >
-                    <option value="Aadhaar">Aadhaar</option>
-                    <option value="Driving License">Driving License</option>
-                    <option value="Passport">Passport</option>
-                    <option value="Voter ID">Voter ID</option>
+                    <option value="Aadhaar" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Aadhaar</option>
+                    <option value="Driving License" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Driving License</option>
+                    <option value="Passport" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Passport</option>
+                    <option value="Voter ID" style={{ backgroundColor: '#0a1930', color: '#ffffff' }}>Voter ID</option>
                   </select>
                 </div>
 

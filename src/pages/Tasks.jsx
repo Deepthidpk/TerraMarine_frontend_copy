@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   CheckSquare, User, Calendar, Image, Info, Camera, Send, FileText,
@@ -19,14 +20,24 @@ const Tasks = () => {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('Active');
 
   // Task Creation Form State (Authority only)
   const [selectedReportId, setSelectedReportId] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
-  const [selectedWorkerId, setSelectedWorkerId] = useState('');
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState([]);
+  const [workerAvailabilityFilter, setWorkerAvailabilityFilter] = useState('free_only'); // 'free_only' | 'all'
   const [deadline, setDeadline] = useState('');
   
+  // Add Worker Modal State (Authority / Admin)
+  const [showAddWorkerModal, setShowAddWorkerModal] = useState(false);
+  const [workerName, setWorkerName] = useState('');
+  const [workerEmail, setWorkerEmail] = useState('');
+  const [workerPhone, setWorkerPhone] = useState('');
+  const [workerFormErrors, setWorkerFormErrors] = useState({});
+  const [addingWorker, setAddingWorker] = useState(false);
+  const [workerError, setWorkerError] = useState('');
+
   // Volunteer Update task form state
   const [activeTaskDetails, setActiveTaskDetails] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -50,8 +61,8 @@ const Tasks = () => {
         if (!value) return 'Verified incident report selection is required.';
         return null;
 
-      case 'selectedWorkerId':
-        if (!value) return 'Worker / volunteer selection is required.';
+      case 'selectedWorkerIds':
+        if (!value || value.length === 0) return 'At least one municipal worker must be selected.';
         return null;
 
       case 'deadline':
@@ -90,7 +101,7 @@ const Tasks = () => {
       }
 
       // If Authority/Admin, fetch reports and workers for assignment form
-      if (['Authority', 'Admin'].includes(user.role)) {
+      if (user && ['Authority', 'Admin'].includes(user.role)) {
         const reportsRes = await authFetch('/reports');
         if (reportsRes.ok) {
           const repData = await reportsRes.json();
@@ -104,23 +115,16 @@ const Tasks = () => {
         }
 
         try {
-          const usersRes = await authFetch('/authority/users');
+          const usersRes = await authFetch('/authority/users?role=Worker');
           if (usersRes.ok) {
             const uData = await usersRes.json();
-            if (uData.users && uData.users.length > 0) {
-              setWorkers(uData.users);
-            } else {
-              setWorkers([
-                { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
-                { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
-              ]);
-            }
+            const workerList = (uData.users || []).filter(u => u.role === 'Worker');
+            setWorkers(workerList);
+          } else {
+            setWorkers([]);
           }
         } catch (uErr) {
-          setWorkers([
-            { user_id: '55555555-5555-5555-5555-555555555555', full_name: 'Alex Green (Volunteer)' },
-            { user_id: '11111111-1111-1111-1111-111111111111', full_name: 'John Citizen (Volunteer)' }
-          ]);
+          setWorkers([]);
         }
       }
     } catch (err) {
@@ -131,8 +135,104 @@ const Tasks = () => {
   };
 
   useEffect(() => {
-    fetchTasksData();
-  }, []);
+    if (user) {
+      fetchTasksData();
+    }
+  }, [user]);
+
+  // Helper to accurately check worker availability on a given deadline date
+  const checkWorkerBusyOnDate = (worker, targetDeadline) => {
+    if (!worker || !targetDeadline) return false;
+    let target = targetDeadline.trim().slice(0, 10);
+    if (target.includes('/')) {
+      const parts = target.split('/');
+      if (parts.length === 3) {
+        if (parts[2].length === 4) {
+          target = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        } else if (parts[0].length === 4) {
+          target = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+      }
+    }
+
+    const busyDates = (worker.busy_dates || '').split(',').map(d => d.trim()).filter(Boolean);
+    if (busyDates.some(b => b === target || b.slice(0, 10) === target)) {
+      return true;
+    }
+
+    if (worker.active_task_names && worker.active_task_names.includes(target)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  useEffect(() => {
+    if (deadline && selectedWorkerIds.length > 0) {
+      const validWorkerIds = selectedWorkerIds.filter(wId => {
+        const worker = workers.find(w => w.user_id === wId);
+        if (!worker) return false;
+        return !checkWorkerBusyOnDate(worker, deadline);
+      });
+      if (validWorkerIds.length !== selectedWorkerIds.length) {
+        setSelectedWorkerIds(validWorkerIds);
+        setTaskFormErrors(p => ({
+          ...p,
+          selectedWorkerIds: 'Workers assigned on the selected date are locked and cannot be chosen.'
+        }));
+      }
+    }
+  }, [deadline]);
+
+  const handleToggleWorker = (wId) => {
+    if (!deadline) {
+      setTaskFormErrors(p => ({ 
+        ...p, 
+        selectedWorkerIds: 'Please select a Completion Deadline date above first before selecting workers.' 
+      }));
+      return;
+    }
+
+    const worker = workers.find(w => w.user_id === wId);
+    if (worker) {
+      const isBusyOnDate = checkWorkerBusyOnDate(worker, deadline);
+      if (isBusyOnDate && !selectedWorkerIds.includes(wId)) {
+        setTaskFormErrors(p => ({ 
+          ...p, 
+          selectedWorkerIds: `Cannot select ${worker.full_name}: Worker is locked and already assigned to a task on ${deadline}.` 
+        }));
+        return;
+      }
+    }
+
+    setSelectedWorkerIds(prev => {
+      const next = prev.includes(wId) ? prev.filter(id => id !== wId) : [...prev, wId];
+      const err = validateTaskField('selectedWorkerIds', next);
+      setTaskFormErrors(p => ({ ...p, selectedWorkerIds: err }));
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllWorkers = () => {
+    if (!deadline) {
+      setTaskFormErrors(p => ({ 
+        ...p, 
+        selectedWorkerIds: 'Please select a Completion Deadline date above first before selecting workers.' 
+      }));
+      return;
+    }
+
+    const freeWorkers = workers.filter(w => !checkWorkerBusyOnDate(w, deadline));
+
+    if (selectedWorkerIds.length >= freeWorkers.length && freeWorkers.length > 0) {
+      setSelectedWorkerIds([]);
+      setTaskFormErrors(p => ({ ...p, selectedWorkerIds: 'At least one municipal worker must be selected.' }));
+    } else {
+      const freeIds = freeWorkers.map(w => w.user_id);
+      setSelectedWorkerIds(freeIds);
+      setTaskFormErrors(p => ({ ...p, selectedWorkerIds: null }));
+    }
+  };
 
   const handleCreateTaskSubmit = async (e) => {
     e.preventDefault();
@@ -142,7 +242,7 @@ const Tasks = () => {
     // Validate all task fields
     const errors = {
       selectedReportId: validateTaskField('selectedReportId', selectedReportId),
-      selectedWorkerId: validateTaskField('selectedWorkerId', selectedWorkerId),
+      selectedWorkerIds: validateTaskField('selectedWorkerIds', selectedWorkerIds),
       deadline: validateTaskField('deadline', deadline)
     };
 
@@ -164,7 +264,7 @@ const Tasks = () => {
         body: JSON.stringify({
           report_id: selectedReportId,
           campaign_id: selectedCampaignId || null,
-          assigned_worker: selectedWorkerId,
+          assigned_workers: selectedWorkerIds,
           deadline: deadline || null
         })
       });
@@ -177,7 +277,7 @@ const Tasks = () => {
       setSuccess('Cleanup task assigned to volunteer successfully!');
       setSelectedReportId('');
       setSelectedCampaignId('');
-      setSelectedWorkerId('');
+      setSelectedWorkerIds([]);
       setDeadline('');
       setTaskFormErrors({});
       setShowAssignModal(false);
@@ -190,6 +290,123 @@ const Tasks = () => {
     }
   };
 
+  const validateWorkerField = (fieldName, value) => {
+    const val = (value || '').trim();
+    switch (fieldName) {
+      case 'workerName':
+        if (!val) return 'Worker full name is required.';
+        if (val.length < 3) return 'Full name must be at least 3 characters long.';
+        if (val.length > 50) return 'Full name cannot exceed 50 characters.';
+        if (!/^[a-zA-Z0-9\s]+$/.test(val)) return 'Full name can only contain letters, digits, and spaces.';
+        return null;
+
+      case 'workerEmail':
+        if (!val) return 'Email address is required.';
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val)) return 'Please enter a valid email address (e.g. worker@example.com).';
+        return null;
+
+      case 'workerPhone': {
+        if (!val) return 'Phone number is required.';
+        if (!/^[6-9]\d{9}$/.test(val)) return 'Phone number must be exactly 10 digits and start with 6, 7, 8, or 9.';
+        return null;
+      }
+
+      default:
+        return null;
+    }
+  };
+
+  const handleAddWorkerSubmit = async (e) => {
+    e.preventDefault();
+    setWorkerError('');
+    setError('');
+    setSuccess('');
+
+    const errors = {
+      name: validateWorkerField('workerName', workerName),
+      email: validateWorkerField('workerEmail', workerEmail),
+      phone: validateWorkerField('workerPhone', workerPhone)
+    };
+
+    const activeErrors = {};
+    if (errors.name) activeErrors.name = errors.name;
+    if (errors.email) activeErrors.email = errors.email;
+    if (errors.phone) activeErrors.phone = errors.phone;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setWorkerFormErrors(activeErrors);
+      return;
+    }
+
+    setAddingWorker(true);
+    try {
+      const res = await authFetch('/authority/workers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: workerName.trim(),
+          email: workerEmail.trim(),
+          phone: workerPhone.trim()
+        })
+      });
+
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        setWorkerError(data.error || 'Failed to add worker.');
+      } else {
+        setSuccess(`Worker "${workerName.trim()}" registered successfully! Login details sent to ${workerEmail.trim()}.`);
+        setWorkerName('');
+        setWorkerEmail('');
+        setWorkerPhone('');
+        setWorkerFormErrors({});
+        setShowAddWorkerModal(false);
+        fetchTasksData();
+      }
+    } catch (err) {
+      setWorkerError('Network error while adding worker: ' + (err.message || 'Server error'));
+    } finally {
+      setAddingWorker(false);
+    }
+  };
+
+  const [proofFormErrors, setProofFormErrors] = useState({});
+
+  const validateProofModalField = (fieldName, value, extraFile) => {
+    switch (fieldName) {
+      case 'completionNotes': {
+        const val = (value !== undefined ? value : completionNotes || '').trim();
+        if (!val) return 'Completion notes are required. Describe the cleanup work done.';
+        if (!/[a-zA-Z0-9]/.test(val) || !/^[a-zA-Z0-9\s.,()'-]+$/.test(val)) {
+          return 'Special characters are not allowed. Please enter letters and numbers only.';
+        }
+        if (val.length < 10) return 'Completion notes must be at least 10 characters long (e.g. Cleaned 5 bags of net waste).';
+        if (val.length > 500) return 'Completion notes cannot exceed 500 characters.';
+        return null;
+      }
+      case 'afterImage': {
+        const file = extraFile !== undefined ? extraFile : afterImage;
+        const existingImage = activeTaskDetails?.after_image;
+        if (!file && !existingImage) {
+          return 'An after-cleanup proof photo is required to submit task completion.';
+        }
+        if (file) {
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+          if (!allowedTypes.includes(file.type.toLowerCase())) {
+            return 'Invalid file format. Please upload a valid image file (JPG, PNG, WEBP).';
+          }
+          if (file.size > 5 * 1024 * 1024) {
+            return 'Image file size is too large (maximum allowed size is 5 MB).';
+          }
+        }
+        return null;
+      }
+      default:
+        return null;
+    }
+  };
+
   const handleOpenUpdateModal = async (taskId) => {
     try {
       const res = await authFetch(`/tasks/${taskId}`);
@@ -197,6 +414,7 @@ const Tasks = () => {
         const data = await res.json();
         setActiveTaskDetails(data.task);
         setCompletionNotes(data.task.completion_notes || '');
+        setProofFormErrors({});
         setShowUpdateModal(true);
       }
     } catch (err) {
@@ -205,21 +423,56 @@ const Tasks = () => {
   };
 
   const handleFileChange = (e) => {
-    setAfterImage(e.target.files[0]);
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type.toLowerCase())) {
+        const err = 'Invalid file format. Please upload a valid image file (JPG, PNG, WEBP).';
+        setProofFormErrors(prev => ({ ...prev, afterImage: err }));
+        setAfterImage(null);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        const err = 'Image file size is too large (maximum allowed size is 5 MB).';
+        setProofFormErrors(prev => ({ ...prev, afterImage: err }));
+        setAfterImage(null);
+        return;
+      }
+      setAfterImage(file);
+      setProofFormErrors(prev => ({ ...prev, afterImage: null }));
+    } else {
+      setAfterImage(null);
+      const err = validateProofModalField('afterImage', null, null);
+      setProofFormErrors(prev => ({ ...prev, afterImage: err }));
+    }
   };
 
   const handleVolunteerSubmitProof = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    const notesErr = validateProofModalField('completionNotes', completionNotes);
+    const imageErr = validateProofModalField('afterImage', null, afterImage);
+
+    const activeErrors = {};
+    if (notesErr) activeErrors.completionNotes = notesErr;
+    if (imageErr) activeErrors.afterImage = imageErr;
+
+    if (Object.keys(activeErrors).length > 0) {
+      setProofFormErrors(activeErrors);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.append('status', 'Completed');
-      formData.append('completion_notes', completionNotes);
+      formData.append('completion_notes', completionNotes.trim());
       if (afterImage) {
         formData.append('image', afterImage);
+        formData.append('after_image', afterImage);
       }
 
       const res = await authFetch(`/tasks/${activeTaskDetails.task_id}/status`, {
@@ -236,6 +489,7 @@ const Tasks = () => {
       setShowUpdateModal(false);
       setAfterImage(null);
       setCompletionNotes('');
+      setProofFormErrors({});
       fetchTasksData();
     } catch (err) {
       setError(err.message || 'Error submitting task completion.');
@@ -250,22 +504,46 @@ const Tasks = () => {
     try {
       const res = await authFetch(`/tasks/${taskId}/status`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Verified' })
       });
+      const data = await res.json();
       if (res.ok) {
-        setSuccess('Cleanup verified! Payment reward logged for the volunteer.');
+        setSuccess('Cleanup verified successfully! Payment reward logged for the worker.');
         fetchTasksData();
+        if (activeTaskDetails && activeTaskDetails.task_id === taskId) {
+          setActiveTaskDetails(prev => prev ? ({ ...prev, status: 'Verified' }) : null);
+        }
       } else {
-        const data = await res.json();
         setError(data.error || 'Verification failed.');
       }
     } catch (err) {
       console.error('Verify task error:', err);
+      setError('Error occurred during cleanup verification.');
+    }
+  };
+
+  const handleAcceptTask = async (taskId) => {
+    setError('');
+    setSuccess('');
+    try {
+      const res = await authFetch(`/tasks/${taskId}/accept`, {
+        method: 'PUT'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to accept task.');
+      }
+      setSuccess('Task accepted successfully! It is now listed under your active tasks.');
+      fetchTasksData();
+    } catch (err) {
+      setError(err.message || 'Error accepting task.');
     }
   };
 
   // Filtered tasks computation
   const filteredTasks = tasks.filter((t) => {
+    if (t.status === 'Verified') return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = t.report_title?.toLowerCase().includes(q);
@@ -275,6 +553,10 @@ const Tasks = () => {
       if (!titleMatch && !locMatch && !workerMatch && !campaignMatch) return false;
     }
 
+    if (statusFilter === 'Active') {
+      return t.status !== 'Verified' && t.status !== 'Completed';
+    }
+
     if (statusFilter !== 'All' && t.status !== statusFilter) {
       return false;
     }
@@ -282,7 +564,7 @@ const Tasks = () => {
     return true;
   });
 
-  const isAssignRole = ['Authority', 'Admin'].includes(user.role);
+  const isAssignRole = ['Authority', 'Admin'].includes(user?.role);
 
   return (
     <div>
@@ -303,27 +585,51 @@ const Tasks = () => {
         </div>
 
         {isAssignRole && (
-          <button
-            onClick={() => { setTaskFormErrors({}); setShowAssignModal(true); }}
-            style={{
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              color: 'white',
-              border: '1px solid rgba(0, 229, 255, 0.4)',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              fontSize: '0.95rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)',
-              marginLeft: 'auto'
-            }}
-          >
-            <PlusCircle size={20} />
-            Assign Cleanup Task
-          </button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginLeft: 'auto' }}>
+            <button
+              type="button"
+              onClick={() => { setWorkerFormErrors({}); setWorkerError(''); setShowAddWorkerModal(true); }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.15) 0%, rgba(2, 132, 199, 0.25) 100%)',
+                color: '#00e5ff',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(0, 229, 255, 0.15)'
+              }}
+            >
+              <User size={18} />
+              + Add Worker
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setTaskFormErrors({}); fetchTasksData(); setShowAssignModal(true); }}
+              style={{
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: 'white',
+                border: '1px solid rgba(0, 229, 255, 0.4)',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.25)'
+              }}
+            >
+              <PlusCircle size={20} />
+              Assign Cleanup Task
+            </button>
+          </div>
         )}
       </div>
 
@@ -342,7 +648,7 @@ const Tasks = () => {
       )}
 
       {/* Overview Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '20px', marginBottom: '32px' }}>
         {/* Card 1: Total Tasks (RED THEME) */}
         <div className="stat-card-marine" style={{
           background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
@@ -485,15 +791,16 @@ const Tasks = () => {
                 fontWeight: '600'
               }}
             >
-              <option value="All">All Statuses</option>
+              <option value="Active">Active Tasks (Hide Completed)</option>
+              <option value="All">All Statuses Ledger</option>
               <option value="Pending">Pending</option>
               <option value="Completed">Completed (Proof Uploaded)</option>
-              <option value="Verified">Verified</option>
+              <option value="Verified">Verified Tasks</option>
             </select>
 
-            {(searchQuery || statusFilter !== 'All') && (
+            {(searchQuery || statusFilter !== 'Active') && (
               <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('All'); }}
+                onClick={() => { setSearchQuery(''); setStatusFilter('Active'); }}
                 style={{
                   background: 'rgba(239, 68, 68, 0.1)',
                   color: 'var(--danger)',
@@ -562,14 +869,32 @@ const Tasks = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        {user.role === 'Volunteer' && task.status === 'Pending' && (
+                        {['Volunteer', 'Citizen'].includes(user?.role) && (!task.assigned_worker || task.assigned_worker !== user?.user_id) && task.status === 'Pending' && (
+                          <button 
+                            onClick={() => handleAcceptTask(task.task_id)}
+                            className="btn btn-primary" 
+                            style={{ 
+                              padding: '6px 12px', 
+                              fontSize: '0.8rem',
+                              background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                              color: '#041126',
+                              fontWeight: '700',
+                              boxShadow: '0 4px 12px rgba(0, 229, 255, 0.3)'
+                            }}
+                          >
+                            <CheckSquare size={14} />
+                            Accept Task
+                          </button>
+                        )}
+
+                        {['Volunteer', 'Citizen'].includes(user?.role) && task.assigned_worker === user?.user_id && ['Pending', 'In Progress'].includes(task.status) && (
                           <button 
                             onClick={() => handleOpenUpdateModal(task.task_id)}
                             className="btn btn-primary" 
                             style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                           >
                             <Camera size={14} />
-                            Complete
+                            Complete Task
                           </button>
                         )}
 
@@ -582,13 +907,24 @@ const Tasks = () => {
                           Details
                         </button>
 
-                        {isAssignRole && task.status === 'Completed' && (
+                        {isAssignRole && task.status !== 'Verified' && (
                           <button 
                             onClick={() => handleVerifyTask(task.task_id)}
+                            disabled={!task.after_image}
+                            title={task.after_image ? "Verify cleanup task" : "After Image proof photo required for verification"}
                             className="btn btn-primary" 
-                            style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' }}
+                            style={{ 
+                              padding: '6px 12px', 
+                              fontSize: '0.8rem', 
+                              background: task.after_image ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(51, 65, 85, 0.6)', 
+                              color: task.after_image ? '#ffffff' : '#94a3b8',
+                              border: task.after_image ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                              cursor: task.after_image ? 'pointer' : 'not-allowed',
+                              opacity: task.after_image ? 1 : 0.6
+                            }}
                           >
-                            Verify Cleanup
+                            <ShieldCheck size={14} />
+                            {task.after_image ? 'Verify Cleanup' : 'Verify (Proof Required)'}
                           </button>
                         )}
                       </div>
@@ -670,11 +1006,14 @@ const Tasks = () => {
                   style={{ color: selectedReportId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedReportId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedReportId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
                 >
                   <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Choose Incident Report --</option>
-                  {reports.map(rep => (
-                    <option key={rep.report_id} value={rep.report_id} style={{ color: '#cbd5e1' }}>
-                      {rep.title} ({rep.location_name})
-                    </option>
-                  ))}
+                  {reports.filter(rep => rep.status === 'Verified' && !rep.assigned_workers).map(rep => {
+                    const workerSuffix = rep.assigned_workers ? ` - ${rep.assigned_workers}` : '';
+                    return (
+                      <option key={rep.report_id} value={rep.report_id} style={{ color: '#cbd5e1' }}>
+                        {rep.title} ({rep.location_name}){workerSuffix}
+                      </option>
+                    );
+                  })}
                 </select>
                 {taskFormErrors.selectedReportId && (
                   <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
@@ -698,35 +1037,6 @@ const Tasks = () => {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Assign Worker / Volunteer *</label>
-                <select 
-                  className="form-control" 
-                  value={selectedWorkerId} 
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedWorkerId(val);
-                    const err = validateTaskField('selectedWorkerId', val);
-                    setTaskFormErrors(prev => ({ ...prev, selectedWorkerId: err }));
-                  }}
-                  onBlur={(e) => {
-                    const err = validateTaskField('selectedWorkerId', e.target.value);
-                    setTaskFormErrors(prev => ({ ...prev, selectedWorkerId: err }));
-                  }}
-                  style={{ color: selectedWorkerId ? '#cbd5e1' : 'rgba(148, 163, 184, 0.45)', border: taskFormErrors.selectedWorkerId ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)', boxShadow: taskFormErrors.selectedWorkerId ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none' }}
-                >
-                  <option value="" style={{ color: 'rgba(148, 163, 184, 0.45)' }}>-- Select Volunteer --</option>
-                  {workers.map(w => (
-                    <option key={w.user_id} value={w.user_id} style={{ color: '#cbd5e1' }}>{w.full_name}</option>
-                  ))}
-                </select>
-                {taskFormErrors.selectedWorkerId && (
-                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
-                    ⚠️ {taskFormErrors.selectedWorkerId}
-                  </span>
-                )}
               </div>
 
               <div className="form-group">
@@ -756,6 +1066,178 @@ const Tasks = () => {
                 {taskFormErrors.deadline && (
                   <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
                     ⚠️ {taskFormErrors.deadline}
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ margin: 0 }}>Assign Workers * (Check availability)</label>
+                  {workers.length > 0 && (
+                    <span 
+                      onClick={handleToggleSelectAllWorkers}
+                      style={{ fontSize: '0.75rem', color: '#00e5ff', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      {selectedWorkerIds.length > 0 ? 'Deselect All' : 'Select All'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Worker Availability Status Summary (Only shown AFTER selecting deadline date) */}
+                {workers.length > 0 && deadline ? (() => {
+                  const freeCount = workers.filter(w => !checkWorkerBusyOnDate(w, deadline)).length;
+                  const busyCount = workers.length - freeCount;
+
+                  return (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                      <span
+                        style={{
+                          padding: '5px 12px',
+                          fontSize: '0.76rem',
+                          borderRadius: '8px',
+                          fontWeight: '700',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10b981'
+                        }}
+                      >
+                        🟢 {freeCount} Free
+                      </span>
+                      {busyCount > 0 && (
+                        <span
+                          style={{
+                            padding: '5px 12px',
+                            fontSize: '0.76rem',
+                            borderRadius: '8px',
+                            fontWeight: '700',
+                            border: '1px solid rgba(239, 68, 68, 0.5)',
+                            background: 'rgba(239, 68, 68, 0.2)',
+                            color: '#ff4d4d'
+                          }}
+                        >
+                          🔴 {busyCount} Busy
+                        </span>
+                      )}
+                    </div>
+                  );
+                })() : workers.length > 0 ? (
+                  <div style={{ padding: '8px 12px', background: 'rgba(0, 229, 255, 0.06)', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.2)', fontSize: '0.78rem', color: '#00e5ff', marginBottom: '10px', fontWeight: '600' }}>
+                    📅 Select a Completion Deadline above to check worker availability.
+                  </div>
+                ) : null}
+
+                {workers.length === 0 ? (
+                  <div style={{ color: '#94a3b8', fontSize: '0.84rem', fontStyle: 'italic', padding: '8px' }}>
+                    No municipal workers registered yet. Click "+ Add Worker" to register worker accounts.
+                  </div>
+                ) : (
+                  <div style={{
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    background: 'rgba(8, 20, 42, 0.85)',
+                    borderRadius: '12px',
+                    border: taskFormErrors.selectedWorkerIds ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    boxShadow: taskFormErrors.selectedWorkerIds ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                  }}>
+                    {workers.map(w => {
+                      const isBusyOnDate = deadline ? checkWorkerBusyOnDate(w, deadline) : false;
+
+                      return (
+                        <label 
+                          key={w.user_id} 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between', 
+                            fontSize: '0.85rem', 
+                            color: isBusyOnDate ? '#94a3b8' : '#ffffff', 
+                            cursor: isBusyOnDate ? 'not-allowed' : 'pointer', 
+                            userSelect: 'none', 
+                            gap: '10px',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: isBusyOnDate ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                            border: isBusyOnDate ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)',
+                            opacity: isBusyOnDate ? 0.65 : 1
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedWorkerIds.includes(w.user_id)}
+                              disabled={isBusyOnDate}
+                              onChange={() => handleToggleWorker(w.user_id)}
+                              style={{ 
+                                width: '16px', 
+                                height: '16px', 
+                                accentColor: '#00e5ff', 
+                                cursor: isBusyOnDate ? 'not-allowed' : 'pointer' 
+                              }}
+                            />
+                            <div>
+                              <span style={{ fontWeight: '600' }}>{w.full_name}</span>
+                              <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: '6px' }}>({w.email})</span>
+                            </div>
+                          </div>
+
+                          {/* Availability Badge: Only displayed AFTER deadline date is selected */}
+                          {deadline && (
+                            isBusyOnDate ? (
+                              <span 
+                                title={w.active_task_names ? `Assigned tasks: ${w.active_task_names}` : `Worker is locked and busy on ${deadline}`}
+                                style={{ 
+                                  background: 'rgba(239, 68, 68, 0.25)', 
+                                  color: '#ff4d4d', 
+                                  border: '1px solid rgba(239, 68, 68, 0.6)', 
+                                  padding: '3px 10px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '0.74rem', 
+                                  fontWeight: '700', 
+                                  whiteSpace: 'nowrap' 
+                                }}
+                              >
+                                🔴 Busy
+                              </span>
+                            ) : (
+                              <span 
+                                style={{ 
+                                  background: 'rgba(16, 185, 129, 0.15)', 
+                                  color: '#10b981', 
+                                  border: '1px solid rgba(16, 185, 129, 0.4)', 
+                                  padding: '3px 10px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '0.74rem', 
+                                  fontWeight: '700', 
+                                  whiteSpace: 'nowrap' 
+                                }}
+                              >
+                                🟢 Free
+                              </span>
+                            )
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Worker Busy Notice */}
+                {selectedWorkerIds.some(id => {
+                  const w = workers.find(item => item.user_id === id);
+                  return w && (parseInt(w.active_tasks_count) || 0) > 0;
+                }) && (
+                  <div style={{ marginTop: '8px', padding: '8px 12px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', fontSize: '0.76rem', color: '#ff4d4d', fontWeight: '600' }}>
+                    ⚠️ Availability Warning: Selected worker is currently busy with an active task.
+                  </div>
+                )}
+
+                {taskFormErrors.selectedWorkerIds && (
+                  <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {taskFormErrors.selectedWorkerIds}
                   </span>
                 )}
               </div>
@@ -862,43 +1344,111 @@ const Tasks = () => {
               </div>
             </div>
 
-            <div style={{ fontSize: '0.88rem', color: '#cbd5e1', marginBottom: '20px' }}>
-              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Location:</strong> {activeTaskDetails.location_name}</p>
-              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Coordinates:</strong> {activeTaskDetails.latitude}, {activeTaskDetails.longitude}</p>
-              <p style={{ margin: '6px 0' }}><strong style={{ color: '#94a3b8' }}>Description:</strong> {activeTaskDetails.report_description || 'No notes'}</p>
-              {activeTaskDetails.completion_notes && (
-                <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(8, 20, 42, 0.6)', border: '1px solid rgba(0, 229, 255, 0.2)', borderRadius: '10px', color: '#ffffff' }}>
-                  <strong style={{ color: '#00e5ff' }}>Completion Notes:</strong> {activeTaskDetails.completion_notes}
-                </div>
-              )}
-            </div>
+            {/* Authority / Admin Verification Action Section */}
+            {isAssignRole && (
+              <div style={{ borderTop: '1px solid rgba(0, 229, 255, 0.15)', paddingTop: '16px', marginTop: '16px' }}>
+                <h4 style={{ fontSize: '1rem', color: '#00e5ff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldCheck size={18} /> Municipal Authority Verification
+                </h4>
+
+                {activeTaskDetails.status === 'Verified' ? (
+                  <div style={{ padding: '12px 16px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', borderRadius: '10px', color: '#10b981', fontWeight: '700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={18} /> Cleanup task verified and completed.
+                  </div>
+                ) : (
+                  <div>
+                    <button 
+                      type="button"
+                      onClick={() => handleVerifyTask(activeTaskDetails.task_id)}
+                      disabled={!activeTaskDetails.after_image}
+                      style={{ 
+                        width: '100%', 
+                        padding: '12px', 
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '0.92rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: activeTaskDetails.after_image ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(51, 65, 85, 0.6)', 
+                        color: activeTaskDetails.after_image ? '#ffffff' : '#94a3b8',
+                        border: activeTaskDetails.after_image ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                        cursor: activeTaskDetails.after_image ? 'pointer' : 'not-allowed',
+                        opacity: activeTaskDetails.after_image ? 1 : 0.65,
+                        boxShadow: activeTaskDetails.after_image ? '0 4px 15px rgba(16, 185, 129, 0.3)' : 'none'
+                      }}
+                    >
+                      <ShieldCheck size={18} />
+                      {activeTaskDetails.after_image ? 'Verify & Confirm Cleanup Completed' : 'Verify Cleanup (Proof Image Required)'}
+                    </button>
+
+                    {!activeTaskDetails.after_image && (
+                      <div style={{ marginTop: '8px', padding: '8px 12px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', fontSize: '0.78rem', color: '#ff4d4d', fontWeight: '600' }}>
+                        ⚠️ Verification Locked: Cleanup proof photo (After Image) must be uploaded before Authority verification.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Submit proof form for assigned volunteer */}
-            {user.role === 'Volunteer' && activeTaskDetails.status === 'Pending' && (
+            {['Volunteer', 'Citizen'].includes(user.role) && ['Pending', 'In Progress'].includes(activeTaskDetails.status) && (
               <form onSubmit={handleVolunteerSubmitProof} style={{ borderTop: '1px solid rgba(0, 229, 255, 0.15)', paddingTop: '16px' }}>
                 <h4 style={{ fontSize: '1rem', color: '#00e5ff', marginBottom: '12px' }}>Submit Cleanup Verification Proof</h4>
                 
                 <div className="form-group">
-                  <label className="form-label">Completion Notes *</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Completion Notes *</label>
+                    <span style={{ fontSize: '0.72rem', color: completionNotes.trim().length > 500 ? '#ff4d4d' : '#94a3b8', fontWeight: '600' }}>
+                      {completionNotes.trim().length}/500
+                    </span>
+                  </div>
                   <textarea 
                     className="form-control" 
                     placeholder="Enter observations on total bags cleaned, volunteers involved, or leftover tasks." 
                     rows="2"
                     value={completionNotes}
-                    onChange={(e) => setCompletionNotes(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCompletionNotes(val);
+                      const err = validateProofModalField('completionNotes', val);
+                      setProofFormErrors(prev => ({ ...prev, completionNotes: err }));
+                    }}
+                    onBlur={(e) => {
+                      const err = validateProofModalField('completionNotes', e.target.value);
+                      setProofFormErrors(prev => ({ ...prev, completionNotes: err }));
+                    }}
+                    style={{
+                      border: proofFormErrors.completionNotes ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: proofFormErrors.completionNotes ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                    }}
                   />
+                  {proofFormErrors.completionNotes && (
+                    <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                      ⚠️ {proofFormErrors.completionNotes}
+                    </span>
+                  )}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">After Image File *</label>
+                  <label className="form-label">After Image File * (JPG, PNG, max 5MB)</label>
                   <input 
                     type="file" 
                     className="form-control" 
                     accept="image/*"
                     onChange={handleFileChange}
-                    required
+                    style={{
+                      border: proofFormErrors.afterImage ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: proofFormErrors.afterImage ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                    }}
                   />
+                  {proofFormErrors.afterImage && (
+                    <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                      ⚠️ {proofFormErrors.afterImage}
+                    </span>
+                  )}
                 </div>
 
                 <button 
@@ -913,6 +1463,184 @@ const Tasks = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: REGISTER NEW CLEANUP WORKER */}
+      {/* ========================================================================= */}
+      {showAddWorkerModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 99999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '540px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: 'linear-gradient(135deg, rgba(12, 28, 54, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+            borderRadius: '24px',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            position: 'relative',
+            padding: '28px',
+            margin: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <User size={24} color="#00e5ff" />
+                <h2 style={{ fontSize: '1.3rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                  Register New Cleanup Worker
+                </h2>
+              </div>
+              <button 
+                onClick={() => setShowAddWorkerModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {workerError && (
+              <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--danger)', borderRadius: '8px', color: '#f87171', marginBottom: '16px', fontSize: '0.85rem' }}>
+                ⚠️ {workerError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddWorkerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Worker Full Name *</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="e.g. Rahul Kumar" 
+                  value={workerName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkerName(val);
+                    const err = validateWorkerField('workerName', val);
+                    setWorkerFormErrors(prev => ({ ...prev, name: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateWorkerField('workerName', e.target.value);
+                    setWorkerFormErrors(prev => ({ ...prev, name: err }));
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: workerFormErrors.name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: workerFormErrors.name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
+                />
+                {workerFormErrors.name && (
+                  <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {workerFormErrors.name}
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Email Address *</label>
+                <input 
+                  type="email" 
+                  className="form-control" 
+                  placeholder="e.g. worker@example.com" 
+                  value={workerEmail}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkerEmail(val);
+                    const err = validateWorkerField('workerEmail', val);
+                    setWorkerFormErrors(prev => ({ ...prev, email: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateWorkerField('workerEmail', e.target.value);
+                    setWorkerFormErrors(prev => ({ ...prev, email: err }));
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: workerFormErrors.email ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: workerFormErrors.email ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
+                />
+                {workerFormErrors.email && (
+                  <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {workerFormErrors.email}
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Phone Number *</label>
+                <input 
+                  type="tel" 
+                  className="form-control" 
+                  placeholder="e.g. +91 9876543210" 
+                  value={workerPhone}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkerPhone(val);
+                    const err = validateWorkerField('workerPhone', val);
+                    setWorkerFormErrors(prev => ({ ...prev, phone: err }));
+                  }}
+                  onBlur={(e) => {
+                    const err = validateWorkerField('workerPhone', e.target.value);
+                    setWorkerFormErrors(prev => ({ ...prev, phone: err }));
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: workerFormErrors.phone ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: workerFormErrors.phone ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
+                />
+                {workerFormErrors.phone && (
+                  <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'block', fontWeight: '600' }}>
+                    ⚠️ {workerFormErrors.phone}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ background: 'rgba(0, 229, 255, 0.05)', border: '1px solid rgba(0, 229, 255, 0.2)', padding: '12px', borderRadius: '10px', fontSize: '0.8rem', color: '#94a3b8' }}>
+                <p style={{ margin: 0 }}>
+                  💡 An automated welcome email containing their login details and portal link will be dispatched upon registration.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddWorkerModal(false)}
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingWorker}
+                  className="btn btn-primary"
+                  style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+                >
+                  {addingWorker ? 'Registering...' : 'Add Worker'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

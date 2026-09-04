@@ -282,14 +282,14 @@ button, input, select, textarea {
   right: 0;
   bottom: 0;
   top: 0;
-  width: 42%;
+  width: 55%;
   height: 100%;
   object-fit: cover;
   object-position: right bottom;
-  opacity: 0.9;
+  opacity: 0.85;
   mix-blend-mode: screen;
-  -webkit-mask-image: radial-gradient(ellipse at 100% 100%, rgba(0, 0, 0, 1) 25%, rgba(0, 0, 0, 0.5) 65%, transparent 100%);
-  mask-image: radial-gradient(ellipse at 100% 100%, rgba(0, 0, 0, 1) 25%, rgba(0, 0, 0, 0.5) 65%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 110% 110% at 100% 100%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 30%, rgba(0, 0, 0, 0.2) 55%, transparent 75%);
+  mask-image: radial-gradient(ellipse 110% 110% at 100% 100%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 30%, rgba(0, 0, 0, 0.2) 55%, transparent 75%);
   pointer-events: none;
   z-index: 1;
 }
@@ -444,10 +444,10 @@ button, input, select, textarea {
 }
 
 .custom-table th {
-  padding: 14px 16px;
+  padding: 8px 10px;
   background: rgba(5, 16, 35, 0.9);
   color: #94a3b8;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 700;
@@ -456,9 +456,9 @@ button, input, select, textarea {
 }
 
 .custom-table td {
-  padding: 15px 16px;
+  padding: 8px 10px;
   border-bottom: 1px solid rgba(0, 229, 255, 0.08);
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   color: #e2e8f0;
   vertical-align: middle;
 }
@@ -469,6 +469,20 @@ button, input, select, textarea {
 
 .custom-table tr:hover td {
   background: rgba(0, 229, 255, 0.06);
+}
+
+/* Refresh Icon Spin Animation */
+@keyframes spinIcon {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-icon {
+  animation: spinIcon 0.8s linear infinite;
 }
 
 /* Leaflet Map Dark Styling Override */
@@ -498,6 +512,10 @@ button, input, select, textarea {
   font-family: inherit !important;
   border-radius: inherit;
   z-index: 1;
+}
+
+.leaflet-tile-container img {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) !important;
 }
 
 .leaflet-container img,
