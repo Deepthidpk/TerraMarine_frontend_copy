@@ -282,6 +282,30 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   };
 
+  const updateFishermanLocation = async (locationData) => {
+    const res = await authFetch('/fisherman/location', {
+      method: 'PUT',
+      body: JSON.stringify(locationData)
+    });
+
+    const data = await parseResponse(res);
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save coastal location details.');
+    }
+
+    if (data.location) {
+      setUser((prevUser) => ({
+        ...prevUser,
+        location_state: data.location.state,
+        location_district: data.location.district,
+        location_municipality: data.location.municipality,
+        location_coastal_area: data.location.coastalArea,
+        location_completed: true
+      }));
+    }
+    return data;
+  };
+
   const value = {
     user,
     token,
@@ -292,6 +316,7 @@ export const AuthProvider = ({ children }) => {
     completeGoogleRegistration,
     logout,
     updateProfile,
+    updateFishermanLocation,
     authFetch,
     API_URL,
     notifications,
