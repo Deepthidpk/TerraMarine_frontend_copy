@@ -89,7 +89,7 @@ const SPECIES_CATALOG = [
     threats: 'Plastic pollution, accidental netting, coastal development',
     sensitivity: 'High',
     notes: 'Frequently observed feeding on seagrass near Fort Kochi.',
-    image: 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=400&q=80'
+    image: '/images/green_sea_turtle.png'
   },
   {
     id: 'sp2',
@@ -101,7 +101,7 @@ const SPECIES_CATALOG = [
     threats: 'Acoustic disturbance, vessel strikes, chemical pollution',
     sensitivity: 'High',
     notes: 'A small group spotted periodically inside the Kochi harbour channel.',
-    image: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?auto=format&fit=crop&w=400&q=80'
+    image: '/images/indian_humpback_dolphin.png'
   },
   {
     id: 'sp3',
@@ -113,7 +113,7 @@ const SPECIES_CATALOG = [
     threats: 'Overfishing, rising seawater temperature, microplastics',
     sensitivity: 'Medium',
     notes: 'Major commercial species. Vulnerable to chemical and plastic residues.',
-    image: 'https://images.unsplash.com/photo-1534482421-64566f976cfa?auto=format&fit=crop&w=400&q=80'
+    image: '/images/indian_mackerel.png'
   },
   {
     id: 'sp4',
@@ -210,6 +210,196 @@ const MapClickHandler = ({ onMapClick }) => {
     }
   });
   return null;
+};
+
+// =========================================================================
+// AI Assistant Rich Markdown & Chart Formatters
+// =========================================================================
+const formatMessageText = (text) => {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const elements = [];
+  let tableRows = [];
+  let inTable = false;
+  let inList = false;
+  let listItems = [];
+
+  const parseBoldText = (str) => {
+    const parts = str.split(/\*\*([^*]+)\*\*/g);
+    return parts.map((part, i) => {
+      if (i % 2 === 1) {
+        return <strong key={i} style={{ color: '#00e5ff', fontWeight: 'bold' }}>{part}</strong>;
+      }
+      const italicParts = part.split(/\*([^*]+)\*/g);
+      return italicParts.map((subPart, j) => {
+        if (j % 2 === 1) {
+          return <em key={j} style={{ color: '#ffb703', fontStyle: 'italic' }}>{subPart}</em>;
+        }
+        return subPart;
+      });
+    });
+  };
+
+  const flushList = (key) => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`list-${key}`} style={{ listStyleType: 'disc', paddingLeft: '20px', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {listItems.map((li, idx) => <li key={idx} style={{ color: '#e2e8f0' }}>{li}</li>)}
+        </ul>
+      );
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  const flushTable = (key) => {
+    if (tableRows.length > 0) {
+      const headers = tableRows[0];
+      const rows = tableRows.slice(1);
+      elements.push(
+        <div key={`table-wrapper-${key}`} className="table-container" style={{ margin: '12px 0', overflowX: 'auto', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ background: 'rgba(2, 132, 199, 0.2)' }}>
+                {headers.map((h, idx) => (
+                  <th key={idx} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.15)', color: 'var(--accent-primary)' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rIdx) => (
+                <tr key={rIdx} style={{ background: rIdx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  {row.map((cell, cIdx) => (
+                    <td key={cIdx} style={{ padding: '8px 12px', color: '#e2e8f0' }}>
+                      {parseBoldText(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    if (line.startsWith('|')) {
+      flushList(i);
+      inTable = true;
+      const cells = line.split('|').map(c => c.trim()).filter((c, idx, arr) => idx > 0 && idx < arr.length - 1);
+      if (!cells.every(c => c.startsWith(':') || c.startsWith('-') || c.split('').every(ch => ch === '-'))) {
+        tableRows.push(cells);
+      }
+      continue;
+    } else {
+      if (inTable) {
+        flushTable(i);
+      }
+    }
+
+    if (line.startsWith('###')) {
+      flushList(i);
+      const title = line.replace('###', '').trim();
+      elements.push(
+        <h4 key={i} style={{
+          fontSize: '0.95rem',
+          fontWeight: '700',
+          color: 'var(--accent-primary)',
+          marginTop: '14px',
+          marginBottom: '6px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          paddingBottom: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}>
+          <Sparkles size={12} style={{ color: 'var(--accent-primary)' }} />
+          {title}
+        </h4>
+      );
+    } else if (line.startsWith('##')) {
+      flushList(i);
+      const title = line.replace('##', '').trim();
+      elements.push(
+        <h3 key={i} style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>
+          {title}
+        </h3>
+      );
+    } else if (line.startsWith('*') || line.startsWith('-')) {
+      inList = true;
+      const content = line.substring(1).trim();
+      listItems.push(parseBoldText(content));
+    } else {
+      if (inList) {
+        flushList(i);
+      }
+      if (line) {
+        elements.push(
+          <p key={i} style={{ margin: '6px 0', lineHeight: '1.45', color: '#cbd5e1' }}>
+            {parseBoldText(line)}
+          </p>
+        );
+      }
+    }
+  }
+
+  if (inList) flushList(lines.length);
+  if (inTable) flushTable(lines.length);
+
+  return elements;
+};
+
+const RenderChatChart = ({ chart }) => {
+  if (!chart || !chart.data || chart.data.length === 0) return null;
+
+  const colors = chart.colors || ['#00e5ff', '#ffb703', '#9d4edd'];
+
+  return (
+    <div style={{
+      marginTop: '12px',
+      padding: '12px',
+      background: 'rgba(5, 12, 24, 0.45)',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
+      borderRadius: '8px',
+      height: '180px',
+      width: '100%',
+      maxWidth: '450px'
+    }}>
+      <ResponsiveContainer width="100%" height="100%">
+        {chart.type === 'bar' ? (
+          <BarChart data={chart.data} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+            <XAxis dataKey={chart.xKey} stroke="var(--text-muted)" fontSize={8} />
+            <YAxis stroke="var(--text-muted)" fontSize={8} />
+            <Tooltip contentStyle={{ background: '#090f1d', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px' }} />
+            <Legend wrapperStyle={{ fontSize: '8px' }} />
+            {chart.yKeys.map((key, idx) => (
+              <Bar key={key} dataKey={key} fill={colors[idx] || '#00e5ff'} radius={[2, 2, 0, 0]} />
+            ))}
+          </BarChart>
+        ) : (
+          <LineChart data={chart.data} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+            <XAxis dataKey={chart.xKey} stroke="var(--text-muted)" fontSize={8} />
+            <YAxis stroke="var(--text-muted)" fontSize={8} />
+            <Tooltip contentStyle={{ background: '#090f1d', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px' }} />
+            <Legend wrapperStyle={{ fontSize: '8px' }} />
+            {chart.yKeys.map((key, idx) => (
+              <Line key={key} type="monotone" dataKey={key} stroke={colors[idx] || '#00e5ff'} strokeWidth={1.5} dot={{ r: 2 }} />
+            ))}
+          </LineChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  );
 };
 
 const ResearcherDashboard = ({
@@ -762,6 +952,37 @@ I can query environmental indicators, water sensor history, pollution logs, and 
   // -------------------------------------------------------------------------
   // Chat Assistant Submission
   // -------------------------------------------------------------------------
+  const handleQuickQuestionClick = async (question) => {
+    setChatInput('');
+    setChatMessages(prev => [...prev, { sender: 'user', text: question, time: new Date() }]);
+    setChatLoading(true);
+
+    try {
+      const res = await authFetch('/researcher/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: question })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, {
+          sender: 'assistant',
+          text: data.reply,
+          chart: data.chart,
+          ambiguous: data.ambiguous,
+          options: data.options,
+          time: new Date()
+        }]);
+      } else {
+        setChatMessages(prev => [...prev, { sender: 'assistant', text: 'Error communicating with assistant. Please try again.', time: new Date() }]);
+      }
+    } catch (error) {
+      setChatMessages(prev => [...prev, { sender: 'assistant', text: 'Network failure. Check server telemetry status.', time: new Date() }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const handleSendChatMessage = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -779,7 +1000,14 @@ I can query environmental indicators, water sensor history, pollution logs, and 
       });
       if (res.ok) {
         const data = await res.json();
-        setChatMessages(prev => [...prev, { sender: 'assistant', text: data.reply, time: new Date() }]);
+        setChatMessages(prev => [...prev, {
+          sender: 'assistant',
+          text: data.reply,
+          chart: data.chart,
+          ambiguous: data.ambiguous,
+          options: data.options,
+          time: new Date()
+        }]);
       } else {
         setChatMessages(prev => [...prev, { sender: 'assistant', text: 'Error communicating with assistant. Please try again.', time: new Date() }]);
       }
@@ -865,66 +1093,126 @@ I can query environmental indicators, water sensor history, pollution logs, and 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
           
           {/* Top 6 Stats Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '20px' }}>
             
-            <div className="stat-card-marine glass-panel">
-              <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.12)', border: '1px solid rgba(0, 229, 255, 0.3)' }}>
-                <Activity size={22} style={{ color: 'var(--accent-primary)' }} />
+            {/* Card 1: Ocean Health (CYAN THEME) */}
+            <div className="stat-card-marine" style={{
+              background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+              border: '1px solid rgba(0, 229, 255, 0.35)',
+              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
+            }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+                <Activity size={24} style={{ color: '#00e5ff' }} />
               </div>
               <div className="stat-content-wrapper">
+                <span className="stat-lbl">Ocean Health</span>
                 <div className="stat-val">78<span style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>/100</span></div>
-                <div className="stat-lbl">Ocean Health</div>
               </div>
+              <img 
+                src="/images/cyan_cleanups_corner.png" 
+                alt="Ocean Health Coral" 
+                className="card-artwork-blend"
+              />
             </div>
 
-            <div className="stat-card-marine glass-panel">
-              <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.12)', border: '1px solid rgba(157, 78, 221, 0.3)' }}>
-                <Compass size={22} style={{ color: 'var(--accent-purple)' }} />
+            {/* Card 2: Marine Species (PURPLE THEME) */}
+            <div className="stat-card-marine" style={{
+              background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
+              border: '1px solid rgba(157, 78, 221, 0.35)',
+              boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
+            }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
+                <Compass size={24} style={{ color: '#9d4edd' }} />
               </div>
               <div className="stat-content-wrapper">
+                <span className="stat-lbl">Marine Species</span>
                 <div className="stat-val">{biodiversityObs.length + SPECIES_CATALOG.length}</div>
-                <div className="stat-lbl">Marine Species</div>
               </div>
+              <img 
+                src="/images/purple_coral_card_bg.png" 
+                alt="Marine Species Coral" 
+                className="card-artwork-blend"
+              />
             </div>
 
-            <div className="stat-card-marine glass-panel">
-              <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.12)', border: '1px solid rgba(0, 245, 212, 0.3)' }}>
-                <Layers size={22} style={{ color: 'var(--success)' }} />
+            {/* Card 3: Biodiversity Index (EMERALD/GREEN THEME) */}
+            <div className="stat-card-marine" style={{
+              background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
+              border: '1px solid rgba(0, 245, 212, 0.35)',
+              boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
+            }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
+                <Layers size={24} style={{ color: '#00f5d4' }} />
               </div>
               <div className="stat-content-wrapper">
+                <span className="stat-lbl">Biodiversity Index</span>
                 <div className="stat-val">82%</div>
-                <div className="stat-lbl">Biodiversity Index</div>
               </div>
+              <img 
+                src="/images/green_teal_campaigns_bg.png" 
+                alt="Biodiversity Kelp" 
+                className="card-artwork-blend"
+              />
             </div>
 
-            <div className="stat-card-marine glass-panel">
-              <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.12)', border: '1px solid rgba(0, 229, 255, 0.3)' }}>
-                <Sliders size={22} style={{ color: 'var(--accent-primary)' }} />
+            {/* Card 4: Water Quality (CYAN/BLUE THEME) */}
+            <div className="stat-card-marine" style={{
+              background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+              border: '1px solid rgba(0, 229, 255, 0.35)',
+              boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
+            }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
+                <Sliders size={24} style={{ color: '#00e5ff' }} />
               </div>
               <div className="stat-content-wrapper">
+                <span className="stat-lbl">Water Quality</span>
                 <div className="stat-val" style={{ color: 'var(--success)', fontSize: '1.7rem' }}>Good</div>
-                <div className="stat-lbl">Water Quality</div>
               </div>
+              <img 
+                src="/images/blue_coral_card_bg.png" 
+                alt="Water Quality Coral" 
+                className="card-artwork-blend"
+              />
             </div>
 
-            <div className="stat-card-marine glass-panel">
-              <div className="stat-icon-wrapper" style={{ background: 'rgba(2, 132, 199, 0.12)', border: '1px solid rgba(2, 132, 199, 0.3)' }}>
-                <MapIcon size={22} style={{ color: 'var(--accent-secondary)' }} />
+            {/* Card 5: Survey Locations (DEEP BLUE THEME) */}
+            <div className="stat-card-marine" style={{
+              background: 'linear-gradient(135deg, rgba(8, 30, 58, 0.85) 0%, rgba(6, 20, 40, 0.95) 100%)',
+              border: '1px solid rgba(2, 132, 199, 0.35)',
+              boxShadow: '0 8px 24px rgba(2, 132, 199, 0.12)'
+            }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(2, 132, 199, 0.2)', border: '1px solid rgba(2, 132, 199, 0.4)' }}>
+                <MapIcon size={24} style={{ color: '#0284c7' }} />
               </div>
               <div className="stat-content-wrapper">
+                <span className="stat-lbl">Survey Locations</span>
                 <div className="stat-val">{new Set(biodiversityObs.map(o => `${o.latitude},${o.longitude}`)).size || 1}</div>
-                <div className="stat-lbl">Survey Locations</div>
               </div>
+              <img 
+                src="/images/blue_coral_card_bg.png" 
+                alt="Survey Locations Coral" 
+                className="card-artwork-blend"
+              />
             </div>
 
-            <div className="stat-card-marine glass-panel">
-              <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 183, 3, 0.12)', border: '1px solid rgba(255, 183, 3, 0.3)' }}>
-                <AlertCircle size={22} style={{ color: 'var(--warning)' }} />
+            {/* Card 6: Ecological Alerts (RED THEME) */}
+            <div className="stat-card-marine" style={{
+              background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+              border: '1px solid rgba(255, 77, 77, 0.35)',
+              boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
+            }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
+                <AlertCircle size={24} style={{ color: '#ff4d4d' }} />
               </div>
               <div className="stat-content-wrapper">
+                <span className="stat-lbl">Ecological Alerts</span>
                 <div className="stat-val">{researchAlertRules.filter(r => r.is_active).length}</div>
-                <div className="stat-lbl">Ecological Alerts</div>
               </div>
+              <img 
+                src="/images/red_coral_card_bg.png" 
+                alt="Ecological Alerts Coral" 
+                className="card-artwork-blend"
+              />
             </div>
 
           </div>
@@ -2375,7 +2663,7 @@ I can query environmental indicators, water sensor history, pollution logs, and 
           TAB 11: RESEARCH ASSISTANT
           ========================================================================= */}
       {activeTab === 'research-assistant' && (
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '580px', padding: '20px' }}>
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '620px', padding: '20px' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
             <Sparkles size={20} style={{ color: 'var(--accent-primary)' }} />
@@ -2393,9 +2681,52 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                 maxWidth: '85%', padding: '12px 16px', borderRadius: '14px',
                 background: msg.sender === 'user' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'rgba(10, 25, 48, 0.65)',
                 border: msg.sender === 'user' ? '1px solid rgba(0,229,255,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                color: '#ffffff', fontSize: '0.85rem', whiteSpace: 'pre-wrap'
+                color: '#ffffff', fontSize: '0.85rem'
               }}>
-                {msg.text}
+                <div>
+                  {msg.sender === 'user' ? msg.text : formatMessageText(msg.text)}
+                </div>
+
+                {/* Render Dynamic Recharts Chart */}
+                {msg.sender === 'assistant' && msg.chart && (
+                  <RenderChatChart chart={msg.chart} />
+                )}
+
+                {/* Render Ambiguity Options */}
+                {msg.sender === 'assistant' && msg.ambiguous && msg.options && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Suggested locations:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {msg.options.locations.map(loc => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => handleQuickQuestionClick(`Show water quality in ${loc}`)}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '0.72rem',
+                            borderRadius: '16px',
+                            background: 'rgba(0, 229, 255, 0.12)',
+                            border: '1px solid rgba(0, 229, 255, 0.25)',
+                            color: 'var(--accent-primary)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = 'rgba(0, 229, 255, 0.2)';
+                            e.target.style.borderColor = 'rgba(0, 229, 255, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = 'rgba(0, 229, 255, 0.12)';
+                            e.target.style.borderColor = 'rgba(0, 229, 255, 0.25)';
+                          }}
+                        >
+                          {loc}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             
@@ -2409,6 +2740,48 @@ I can query environmental indicators, water sensor history, pollution logs, and 
             )}
             
             <div ref={chatEndRef}></div>
+          </div>
+
+          {/* Quick Questions Row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', alignSelf: 'center', marginRight: '4px' }}>Quick actions:</span>
+            {[
+              "Compare pH between Kochi and Alappuzha",
+              "Show water quality telemetry trends in Kochi",
+              "Show pollution reports in Fort Kochi",
+              "List biodiversity observations near Kochi"
+            ].map((q, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleQuickQuestionClick(q)}
+                disabled={chatLoading}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                  borderRadius: '16px',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#cbd5e1',
+                  cursor: chatLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  if (!chatLoading) {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                    e.target.style.color = '#ffffff';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'rgba(255, 255, 255, 0.04)';
+                  e.target.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                  e.target.style.color = '#cbd5e1';
+                }}
+              >
+                {q}
+              </button>
+            ))}
           </div>
 
           {/* Chat Input form */}
