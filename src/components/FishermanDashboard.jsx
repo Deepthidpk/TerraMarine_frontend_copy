@@ -609,6 +609,7 @@ const FishermanDashboard = ({
               coastalBulletin: relevantData?.relevantCoastalBulletin,
               seaBulletin: relevantData?.relevantSeaBulletin,
               portWarning: relevantData?.relevantPortWarning,
+              cycloneWarning: relevantData?.cycloneWarning,
               location: locObj,
               coverage: covObj
             });
@@ -616,6 +617,7 @@ const FishermanDashboard = ({
             weatherAlert = calculateWeatherAlert({
               coastalBulletin: relevantData?.relevantCoastalBulletin,
               seaBulletin: relevantData?.relevantSeaBulletin,
+              cycloneWarning: relevantData?.cycloneWarning,
               location: locObj,
               coverage: covObj
             });

@@ -209,7 +209,28 @@ export function isWarningApplicableToLocation(warningText, location = {}, covera
 /**
  * Calculates Marine Alert
  */
-export function calculateMarineAlert({ coastalBulletin, seaBulletin, portWarning, location = {}, coverage = {}, currentTime = new Date() }) {
+export function calculateMarineAlert({ coastalBulletin, seaBulletin, portWarning, cycloneWarning = null, location = {}, coverage = {}, currentTime = new Date() }) {
+  // 0. High priority: Check active Cyclone Wind Warning covering the fisherman's location
+  if (cycloneWarning && cycloneWarning.active) {
+    if (cycloneWarning.level === 'RED') {
+      return {
+        level: 'RED',
+        label: 'DO NOT GO TO SEA',
+        badgeColor: '#ef4444',
+        reason: cycloneWarning.warningText || `Official IMD Cyclone Warning: ${cycloneWarning.category}.`,
+        subtext: 'Dangerous cyclone wind hazard active over your coastal zone.',
+        source: 'India Meteorological Department (IMD)',
+        validUntil: null,
+        formattedValidUntil: 'Active Official Warning',
+        details: {
+          seaCondition: 'Very Rough / High',
+          wind: `${cycloneWarning.windSpeedKnots}+ Knots`,
+          portSignal: 'Cyclone Warning Signal'
+        }
+      };
+    }
+  }
+
   const coastalValidity = coastalBulletin ? parseBulletinValidity(coastalBulletin, currentTime) : { isValid: false };
   const seaValidity = seaBulletin ? parseBulletinValidity(seaBulletin, currentTime) : { isValid: false };
 
@@ -375,7 +396,27 @@ export function calculateMarineAlert({ coastalBulletin, seaBulletin, portWarning
 /**
  * Calculates Weather Alert
  */
-export function calculateWeatherAlert({ coastalBulletin, seaBulletin, location = {}, coverage = {}, currentTime = new Date() }) {
+export function calculateWeatherAlert({ coastalBulletin, seaBulletin, cycloneWarning = null, location = {}, coverage = {}, currentTime = new Date() }) {
+  // 0. High priority: Check active Cyclone Wind Warning covering the fisherman's location
+  if (cycloneWarning && cycloneWarning.active) {
+    if (cycloneWarning.level === 'RED') {
+      return {
+        level: 'RED',
+        label: 'DO NOT GO TO SEA',
+        badgeColor: '#ef4444',
+        reason: cycloneWarning.warningText || `Official IMD Cyclone Warning: ${cycloneWarning.category}.`,
+        subtext: 'Severe cyclonic storm hazard active over your coastal zone.',
+        source: 'India Meteorological Department (IMD)',
+        validUntil: null,
+        formattedValidUntil: 'Active Official Warning',
+        details: {
+          weather: cycloneWarning.category || 'Cyclonic Storm',
+          visibility: 'Very Poor'
+        }
+      };
+    }
+  }
+
   const coastalValidity = coastalBulletin ? parseBulletinValidity(coastalBulletin, currentTime) : { isValid: false };
   const seaValidity = seaBulletin ? parseBulletinValidity(seaBulletin, currentTime) : { isValid: false };
 
