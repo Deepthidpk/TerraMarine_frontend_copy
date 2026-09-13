@@ -5,6 +5,12 @@ import {
   Wind, Compass, Bell, CheckCircle, Clock, Info, X, Radio, Navigation, Eye, CheckCircle2, ChevronRight,
   RefreshCw, Send, AlertTriangle, Layers, Droplet, Fish, AlertCircle, FileText, Check, Filter, ExternalLink
 } from 'lucide-react';
+import {
+  calculateMarineAlert,
+  calculateWeatherAlert,
+  calculateOverallSafety,
+  parseBulletinValidity
+} from '../utils/marineSafetyEvaluator';
 
 const FishermanDashboard = ({ 
   user, 
@@ -551,57 +557,255 @@ const FishermanDashboard = ({
           </div>
         </div>
 
-        {/* Marine Safety Status Indicator Banner */}
-        {marineError ? (
-          <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(148, 163, 184, 0.1)', border: '1px solid rgba(148, 163, 184, 0.3)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <AlertCircle size={20} color="#94a3b8" />
-            <div>
-              <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#cbd5e1', fontWeight: '700' }}>Location-specific marine information is currently unavailable.</h4>
-              <p style={{ margin: '2px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Please verify your registered coastal location or try refreshing.</p>
-            </div>
-          </div>
-        ) : relevantData?.status ? (
-          <div style={{
-            padding: '16px 20px',
-            borderRadius: '14px',
-            background: relevantData.status.statusCode === 'OFFICIAL_WARNING_ACTIVE' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-            border: `1px solid ${relevantData.status.badgeColor}50`,
-            marginBottom: '20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '14px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                backgroundColor: relevantData.status.badgeColor,
-                boxShadow: `0 0 12px ${relevantData.status.badgeColor}`
-              }} />
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800' }}>
-                    Status: <span style={{ color: relevantData.status.badgeColor }}>{relevantData.status.statusText}</span>
-                  </h4>
-                  <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', background: `${relevantData.status.badgeColor}25`, color: relevantData.status.badgeColor, fontWeight: '700' }}>
-                    OFFICIAL IMD CLASSIFICATION
-                  </span>
-                </div>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#cbd5e1' }}>
-                  {relevantData.status.message}
-                </p>
-              </div>
-            </div>
+        {/* 2.1 DETERMINISTIC DUAL LIGHT INDICATOR SYSTEM: MARINE ALERT & WEATHER ALERT */}
+        {(() => {
+          const renderTrafficLight = (level, size = 18) => {
+            let color = '#22c55e';
+            let glow = '0 0 16px rgba(34, 197, 94, 0.85)';
+            if (level === 'RED') {
+              color = '#ef4444';
+              glow = '0 0 18px rgba(239, 68, 68, 0.95)';
+            } else if (level === 'YELLOW') {
+              color = '#f59e0b';
+              glow = '0 0 16px rgba(245, 158, 11, 0.85)';
+            } else if (level === 'UNAVAILABLE') {
+              color = '#94a3b8';
+              glow = '0 0 10px rgba(148, 163, 184, 0.4)';
+            }
 
-            <div style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'right' }}>
-              <div>Coverage: <strong style={{ color: '#00e5ff' }}>{relevantData.imdCoverage?.region}</strong></div>
-              <div>Retrieved: <strong style={{ color: '#ffffff' }}>{relevantData.retrievedAt ? new Date(relevantData.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}</strong></div>
-            </div>
-          </div>
-        ) : null}
+            return (
+              <div
+                style={{
+                  width: `${size}px`,
+                  height: `${size}px`,
+                  borderRadius: '50%',
+                  backgroundColor: color,
+                  boxShadow: glow,
+                  flexShrink: 0,
+                  border: '2px solid rgba(255, 255, 255, 0.4)',
+                  transition: 'all 0.3s ease'
+                }}
+              />
+            );
+          };
+
+          // 1. Check if server already evaluated alerts
+          let marineAlert = relevantData?.marineAlert;
+          let weatherAlert = relevantData?.weatherAlert;
+          let overallStatus = relevantData?.overallStatus;
+          let validity = relevantData?.validity;
+
+          // 2. Client-side deterministic evaluation fallback if backend payload was from cache or missing fields
+          if (!marineAlert && (relevantData?.relevantSeaBulletin || relevantData?.relevantCoastalBulletin)) {
+            const locObj = {
+              state: user?.location_state || relevantData?.location?.state || 'Kerala',
+              district: user?.location_district || relevantData?.location?.district || 'Malappuram',
+              municipality: user?.location_municipality || relevantData?.location?.municipality || 'Ponnani Municipality',
+              coastalArea: user?.location_coastal_area || relevantData?.location?.coastalArea || 'Ponnani Light House & Harbour'
+            };
+            const covObj = relevantData?.imdCoverage || { region: 'North Kerala Coast', state: 'Kerala' };
+            
+            marineAlert = calculateMarineAlert({
+              coastalBulletin: relevantData?.relevantCoastalBulletin,
+              seaBulletin: relevantData?.relevantSeaBulletin,
+              portWarning: relevantData?.relevantPortWarning,
+              location: locObj,
+              coverage: covObj
+            });
+
+            weatherAlert = calculateWeatherAlert({
+              coastalBulletin: relevantData?.relevantCoastalBulletin,
+              seaBulletin: relevantData?.relevantSeaBulletin,
+              location: locObj,
+              coverage: covObj
+            });
+
+            overallStatus = calculateOverallSafety(marineAlert, weatherAlert);
+
+            const coastalValidity = relevantData?.relevantCoastalBulletin ? parseBulletinValidity(relevantData?.relevantCoastalBulletin) : null;
+            const seaValidity = relevantData?.relevantSeaBulletin ? parseBulletinValidity(relevantData?.relevantSeaBulletin) : null;
+            validity = coastalValidity || seaValidity;
+          }
+
+          const mLevel = marineError ? 'UNAVAILABLE' : (marineAlert?.level || 'UNAVAILABLE');
+          const wLevel = marineError ? 'UNAVAILABLE' : (weatherAlert?.level || 'UNAVAILABLE');
+          const oLevel = marineError ? 'UNAVAILABLE' : (overallStatus?.level || 'UNAVAILABLE');
+
+          return (
+            <>
+              {/* Dual Alert Indicators Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+                
+                {/* 🌊 MARINE ALERT CARD */}
+                <div style={{
+                  padding: '20px',
+                  borderRadius: '16px',
+                  background: mLevel === 'RED' ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              mLevel === 'YELLOW' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              mLevel === 'GREEN' ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              'linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                  border: `1px solid ${mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}60`,
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}>
+                  <div>
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.3rem' }}>🌊</span>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                          Marine Alert
+                        </h3>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {renderTrafficLight(mLevel, 16)}
+                        <span style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '800',
+                          padding: '3px 10px',
+                          borderRadius: '8px',
+                          background: `${mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}25`,
+                          color: mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8',
+                          border: `1px solid ${mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}50`
+                        }}>
+                          {mLevel === 'RED' ? '🔴 RED' : mLevel === 'YELLOW' ? '🟡 YELLOW' : mLevel === 'GREEN' ? '🟢 GREEN' : '⚪ DATA UNAVAILABLE'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status & Reason */}
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '1.25rem',
+                        fontWeight: '900',
+                        color: mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#cbd5e1',
+                        letterSpacing: '-0.01em',
+                        marginBottom: '6px'
+                      }}>
+                        {marineError ? 'DATA UNAVAILABLE' : marineAlert?.label || (mLevel === 'GREEN' ? 'SAFE TO GO TO SEA' : mLevel === 'YELLOW' ? 'CAUTION' : mLevel === 'RED' ? 'DO NOT GO TO SEA' : 'DATA UNAVAILABLE')}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.86rem', color: '#e2e8f0', lineHeight: 1.45 }}>
+                        {marineError ? 'Unable to retrieve current official IMD conditions.' : (marineAlert?.reason || (mLevel === 'GREEN' ? 'No significant official marine hazard detected for your registered area.' : 'Current official marine information could not be verified.'))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Footer Meta */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', marginTop: '14px', fontSize: '0.74rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <span>Source: <strong style={{ color: '#cbd5e1' }}>IMD</strong></span>
+                    <span>Valid Until: <strong style={{ color: '#00e5ff' }}>{marineAlert?.formattedValidUntil || validity?.formattedValidUntil || 'Current Cycle'}</strong></span>
+                  </div>
+                </div>
+
+                {/* ☁️ WEATHER ALERT CARD */}
+                <div style={{
+                  padding: '20px',
+                  borderRadius: '16px',
+                  background: wLevel === 'RED' ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              wLevel === 'YELLOW' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              wLevel === 'GREEN' ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              'linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                  border: `1px solid ${wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}60`,
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}>
+                  <div>
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.3rem' }}>☁️</span>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                          Weather Alert
+                        </h3>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {renderTrafficLight(wLevel, 16)}
+                        <span style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '800',
+                          padding: '3px 10px',
+                          borderRadius: '8px',
+                          background: `${wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}25`,
+                          color: wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8',
+                          border: `1px solid ${wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}50`
+                        }}>
+                          {wLevel === 'RED' ? '🔴 RED' : wLevel === 'YELLOW' ? '🟡 YELLOW' : wLevel === 'GREEN' ? '🟢 GREEN' : '⚪ DATA UNAVAILABLE'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status & Reason */}
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '1.25rem',
+                        fontWeight: '900',
+                        color: wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#cbd5e1',
+                        letterSpacing: '-0.01em',
+                        marginBottom: '6px'
+                      }}>
+                        {marineError ? 'DATA UNAVAILABLE' : weatherAlert?.label || (wLevel === 'GREEN' ? 'SAFE TO GO TO SEA' : wLevel === 'YELLOW' ? 'CAUTION' : wLevel === 'RED' ? 'DO NOT GO TO SEA' : 'DATA UNAVAILABLE')}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.86rem', color: '#e2e8f0', lineHeight: 1.45 }}>
+                        {marineError ? 'Unable to retrieve current official IMD conditions.' : (weatherAlert?.reason || (wLevel === 'GREEN' ? 'No significant official weather hazard detected for your registered area.' : 'Current official weather information could not be verified.'))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Footer Meta */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', marginTop: '14px', fontSize: '0.74rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <span>Source: <strong style={{ color: '#cbd5e1' }}>IMD</strong></span>
+                    <span>Valid Until: <strong style={{ color: '#00e5ff' }}>{weatherAlert?.formattedValidUntil || validity?.formattedValidUntil || 'Current Cycle'}</strong></span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* OVERALL SAFETY STATUS BANNER */}
+              <div style={{
+                padding: '16px 20px',
+                borderRadius: '14px',
+                background: oLevel === 'RED' ? 'rgba(239, 68, 68, 0.15)' :
+                            oLevel === 'YELLOW' ? 'rgba(245, 158, 11, 0.15)' :
+                            oLevel === 'GREEN' ? 'rgba(34, 197, 94, 0.15)' :
+                            'rgba(148, 163, 184, 0.12)',
+                border: `1px solid ${oLevel === 'RED' ? '#ef4444' : oLevel === 'YELLOW' ? '#f59e0b' : oLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}60`,
+                marginBottom: '22px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '14px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  {renderTrafficLight(oLevel, 18)}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        OVERALL STATUS:
+                      </span>
+                      <h4 style={{ margin: 0, fontSize: '1.05rem', color: oLevel === 'RED' ? '#ef4444' : oLevel === 'YELLOW' ? '#f59e0b' : oLevel === 'GREEN' ? '#22c55e' : '#cbd5e1', fontWeight: '900' }}>
+                        {oLevel === 'RED' ? '🔴 DO NOT GO TO SEA' : oLevel === 'YELLOW' ? '🟡 PROCEED WITH CAUTION' : oLevel === 'GREEN' ? '🟢 NO SIGNIFICANT OFFICIAL HAZARD' : '⚪ INFORMATION UNAVAILABLE'}
+                      </h4>
+                    </div>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#cbd5e1' }}>
+                      {marineError ? 'Unable to verify current official IMD conditions. Check official VHF/coastal broadcasts.' : (overallStatus?.message || (oLevel === 'GREEN' ? 'No significant official hazards detected. Safe to venture to sea.' : 'Proceed with caution.'))}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'right' }}>
+                  <div>Source: <strong style={{ color: '#00e5ff' }}>India Meteorological Department (IMD)</strong></div>
+                  <div>Updated: <strong style={{ color: '#ffffff' }}>{relevantData?.retrievedAt ? new Date(relevantData.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}</strong></div>
+                  <div>Valid Until: <strong style={{ color: '#00e5ff' }}>{validity?.formattedValidUntil || 'Current cycle'}</strong></div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Bulletins Section: Strictly Filtered Relevant Coastal & Sea Area Bulletins */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
