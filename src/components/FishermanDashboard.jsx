@@ -261,6 +261,99 @@ const FishermanDashboard = ({
   // TerraMarine environmental alerts (user/system submitted)
   const envAlerts = alerts || [];
 
+  const getSimplifiedDisplay = (text, type) => {
+    if (!text || text === 'N/A' || text === 'NIL') return <span style={{color: '#94a3b8'}}>N/A</span>;
+    const str = String(text).toLowerCase();
+    
+    let icon = '';
+    let simpleText = text;
+    let color = '#cbd5e1';
+
+    if (type === 'wind') {
+      icon = '💨';
+      const match = str.match(/(\d+)\s*(to|-)\s*(\d+)\s*knots?/i);
+      const gustMatch = str.match(/gusting\s*to\s*(\d+)\s*knots?/i);
+      if (match) {
+        simpleText = `${match[1]}-${match[3]} Knots`;
+        if (gustMatch) simpleText += ` (Gusts ${gustMatch[1]})`;
+        
+        const speed = parseInt(match[3]);
+        if (speed > 25) color = '#ef4444';
+        else if (speed > 15) color = '#f59e0b';
+        else color = '#10b981';
+      } else {
+        simpleText = text.length > 40 ? text.substring(0, 37) + '...' : text;
+      }
+    } else if (type === 'sea') {
+      icon = '🌊';
+      if (str.includes('rough') || str.includes('high') || str.includes('very')) {
+        simpleText = 'Rough (Dangerous)';
+        color = '#ef4444';
+      } else if (str.includes('moderate')) {
+        simpleText = 'Moderate (Caution)';
+        color = '#f59e0b';
+      } else if (str.includes('slight') || str.includes('smooth')) {
+        simpleText = 'Calm / Slight (Safe)';
+        color = '#10b981';
+      } else {
+        simpleText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      }
+    } else if (type === 'weather') {
+      icon = '🌧️';
+      if (str.includes('thunder') || str.includes('squall')) {
+        simpleText = 'Thunderstorms / Squall';
+        color = '#ef4444';
+        icon = '⛈️';
+      } else if (str.includes('rain') || str.includes('shower')) {
+        simpleText = 'Rain / Showers';
+        color = '#3b82f6';
+      } else if (str.includes('cloud')) {
+        simpleText = 'Cloudy';
+        color = '#94a3b8';
+        icon = '☁️';
+      } else if (str.includes('clear') || str.includes('fair')) {
+        simpleText = 'Clear Skies';
+        color = '#10b981';
+        icon = '☀️';
+      } else {
+        simpleText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      }
+    } else if (type === 'visibility') {
+      icon = '👁️';
+      if (str.includes('very poor')) {
+        simpleText = 'Very Poor';
+        color = '#ef4444';
+      } else if (str.includes('poor')) {
+        simpleText = 'Poor Visibility';
+        color = '#f59e0b';
+      } else if (str.includes('moderate')) {
+        simpleText = 'Moderate';
+        color = '#fbbf24';
+      } else if (str.includes('good')) {
+        simpleText = 'Good Visibility';
+        color = '#10b981';
+      } else {
+         simpleText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      }
+    } else if (type === 'portSignal') {
+       icon = '🚩';
+       if (str.includes('nil') || str === 'n/a') {
+         simpleText = 'No Signal (Safe)';
+         color = '#10b981';
+       } else {
+         simpleText = `Signal: ${text}`;
+         color = '#ef4444';
+       }
+    }
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span style={{ fontSize: '1.1rem' }}>{icon}</span>
+        <span style={{ color: color, fontWeight: '700', fontSize: '0.85rem' }}>{simpleText}</span>
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -552,11 +645,23 @@ const FishermanDashboard = ({
                   </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '10px' }}>
-                  <div>💨 <strong>Wind:</strong> {relevantData.relevantCoastalBulletin.wind || 'N/A'}</div>
-                  <div>🌊 <strong>Sea:</strong> {relevantData.relevantCoastalBulletin.seaCondition || 'N/A'}</div>
-                  <div>🌧️ <strong>Weather:</strong> {relevantData.relevantCoastalBulletin.weather || 'N/A'}</div>
-                  <div>🚩 <strong>Port Signal:</strong> {relevantData.relevantCoastalBulletin.portSignal || 'NIL'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.8rem', marginBottom: '10px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Wind</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.wind, 'wind')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Sea Condition</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.seaCondition, 'sea')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Weather</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.weather, 'weather')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Port Signal</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.portSignal, 'portSignal')}
+                  </div>
                 </div>
 
                 {relevantData.relevantCoastalBulletin.warning && relevantData.relevantCoastalBulletin.warning !== 'NIL' && (
@@ -612,11 +717,23 @@ const FishermanDashboard = ({
                   </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '10px' }}>
-                  <div>💨 <strong>Wind:</strong> {relevantData.relevantSeaBulletin.wind || 'N/A'}</div>
-                  <div>🌊 <strong>Sea:</strong> {relevantData.relevantSeaBulletin.seaCondition || 'N/A'}</div>
-                  <div>🌧️ <strong>Weather:</strong> {relevantData.relevantSeaBulletin.weather || 'N/A'}</div>
-                  <div>👁️ <strong>Visibility:</strong> {relevantData.relevantSeaBulletin.visibility || 'N/A'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.8rem', marginBottom: '10px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Wind</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.wind, 'wind')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Sea Condition</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.seaCondition, 'sea')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Weather</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.weather, 'weather')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Visibility</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.visibility, 'visibility')}
+                  </div>
                 </div>
 
                 {relevantData.relevantSeaBulletin.warning && relevantData.relevantSeaBulletin.warning !== 'NIL' && (
