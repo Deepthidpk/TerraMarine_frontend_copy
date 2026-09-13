@@ -38,6 +38,7 @@ const FishermanDashboard = ({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Dynamic categories & waste types
   const [categoriesList, setCategoriesList] = useState(['Pollution', 'Emergency']);
@@ -65,6 +66,66 @@ const FishermanDashboard = ({
     fetchCats();
     fetchWastes();
   }, []);
+
+  // Strong field validation function matching standard platform rules
+  const getFieldError = (name, value, extraFile) => {
+    if (name === 'title') {
+      const val = (value || '').trim();
+      if (!val) return 'Title is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Title must start with a letter or number.';
+      if (val.length < 3) return 'Title must be at least 3 characters.';
+      if (val.length > 100) return 'Title must not exceed 100 characters.';
+      if (!/^[A-Za-z0-9][A-Za-z0-9\s.,'-]*$/.test(val)) return "Title can only contain letters, numbers, spaces, and basic punctuation (.,'-).";
+    } else if (name === 'category') {
+      if (!value || String(value).trim() === '') return 'Category selection is required.';
+    } else if (name === 'wasteType') {
+      if (!value || String(value).trim() === '') return 'Incident / waste type selection is required.';
+    } else if (name === 'locationName') {
+      const val = (value || '').trim();
+      if (!val) return 'Location / Coastal Zone is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Location name must start with a letter or number.';
+      if (val.length < 3) return 'Location name must be at least 3 characters.';
+      if (val.length > 150) return 'Location name must not exceed 150 characters.';
+      if (!/^[A-Za-z0-9][A-Za-z0-9\s.,/-]*$/.test(val)) return 'Location name can only contain letters, numbers, spaces, and basic punctuation (.,/-).';
+    } else if (name === 'latitude') {
+      const val = (value || '').toString().trim();
+      const latNum = parseFloat(val);
+      if (!val) return 'Latitude is required. Use GPS button or enter coordinates.';
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(val)) return 'Latitude must be a valid decimal number.';
+      if (isNaN(latNum) || latNum < -90 || latNum > 90) return 'Latitude must be between -90 and 90 degrees.';
+    } else if (name === 'longitude') {
+      const val = (value || '').toString().trim();
+      const lngNum = parseFloat(val);
+      if (!val) return 'Longitude is required. Use GPS button or enter coordinates.';
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(val)) return 'Longitude must be a valid decimal number.';
+      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) return 'Longitude must be between -180 and 180 degrees.';
+    } else if (name === 'description') {
+      const val = (value || '').trim();
+      if (!val) return 'Description notes are required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Description must start with a letter or number.';
+      if (val.length < 5) return 'Description must be at least 5 characters.';
+      if (val.length > 1000) return 'Description must not exceed 1000 characters.';
+      if (!/^[A-Za-z0-9\s.,!?'"()#&%+-]*$/.test(val)) return 'Description contains invalid characters.';
+    } else if (name === 'image') {
+      const fileToValidate = extraFile !== undefined ? extraFile : imageFile;
+      if (fileToValidate) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+        if (!allowedTypes.includes(fileToValidate.type)) {
+          return 'Only JPEG, PNG, or WebP image formats are supported.';
+        }
+        if (fileToValidate.size > 10 * 1024 * 1024) {
+          return 'Image size must not exceed 10MB.';
+        }
+      }
+    }
+    return '';
+  };
+
+  const validateField = (name, value, extraFile) => {
+    const errorMsg = getFieldError(name, value, extraFile);
+    setFieldErrors((prev) => ({ ...prev, [name]: errorMsg }));
+    return errorMsg;
+  };
 
   // 2. REPORT DETAILS & TRACKING STEPPER MODAL STATE
   const [activeReportDetails, setActiveReportDetails] = useState(null);
@@ -118,12 +179,19 @@ const FishermanDashboard = ({
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setLatitude(pos.coords.latitude.toFixed(6));
-          setLongitude(pos.coords.longitude.toFixed(6));
+          const latStr = pos.coords.latitude.toFixed(6);
+          const lngStr = pos.coords.longitude.toFixed(6);
+          setLatitude(latStr);
+          setLongitude(lngStr);
+          setFieldErrors((prev) => ({ ...prev, latitude: '', longitude: '' }));
           setFormSuccess('GPS coordinates auto-detected!');
           setTimeout(() => setFormSuccess(''), 2500);
         },
-        () => setFormError('GPS access denied or unavailable. Enter manually.'),
+        () => {
+          setFormError('GPS access denied or unavailable. Enter coordinates manually.');
+          validateField('latitude', latitude);
+          validateField('longitude', longitude);
+        },
         { enableHighAccuracy: true, timeout: 8000 }
       );
     }
@@ -131,6 +199,7 @@ const FishermanDashboard = ({
 
   // Quick Preset Selector for Floating Waste / Emergency
   const handleApplyPreset = (presetType) => {
+    setFieldErrors({});
     if (presetType === 'plastic') {
       setModalCategory('Pollution');
       setModalWasteType('Plastic');
@@ -174,6 +243,7 @@ const FishermanDashboard = ({
     setLatitude('');
     setLongitude('');
     setImageFile(null);
+    setFieldErrors({});
     setFormError('');
     setFormSuccess('');
     setShowReportModal(true);
@@ -183,14 +253,28 @@ const FishermanDashboard = ({
 
   const handleSubmitReport = async (e) => {
     e.preventDefault();
-    if (!reportTitle.trim() || reportTitle.length < 3) {
-      return setFormError('Title must be at least 3 characters.');
-    }
-    if (!locationName.trim()) {
-      return setFormError('Location name or fishing zone is required.');
-    }
-    if (!latitude || !longitude) {
-      return setFormError('Latitude & Longitude GPS coordinates are required.');
+
+    // Validate all fields strictly
+    const errors = {
+      title: getFieldError('title', reportTitle),
+      category: getFieldError('category', modalCategory),
+      wasteType: getFieldError('wasteType', modalWasteType),
+      locationName: getFieldError('locationName', locationName),
+      latitude: getFieldError('latitude', latitude),
+      longitude: getFieldError('longitude', longitude),
+      description: getFieldError('description', reportDesc),
+      image: getFieldError('image', null, imageFile)
+    };
+
+    const activeErrors = {};
+    Object.keys(errors).forEach((key) => {
+      if (errors[key]) activeErrors[key] = errors[key];
+    });
+
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
+      setFormError('Please fix the highlighted field errors before submitting.');
+      return;
     }
 
     setSubmitting(true);
@@ -1273,81 +1357,186 @@ const FishermanDashboard = ({
 
             <form onSubmit={handleSubmitReport} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Title</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                  Title <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input 
                   type="text" 
                   className="form-control" 
                   value={reportTitle} 
-                  onChange={(e) => setReportTitle(e.target.value)} 
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} 
+                  placeholder="e.g. Floating Plastic Debris Sighting"
+                  onChange={(e) => { setReportTitle(e.target.value); validateField('title', e.target.value); }}
+                  onBlur={(e) => validateField('title', e.target.value)}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.title ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.title ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }} 
                 />
+                {fieldErrors.title && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.title}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Category</label>
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Category <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
                   <select 
                     className="form-control" 
                     value={modalCategory} 
-                    onChange={(e) => setModalCategory(e.target.value)}
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                    onChange={(e) => { setModalCategory(e.target.value); validateField('category', e.target.value); }}
+                    onBlur={(e) => validateField('category', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.category ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)'
+                    }}
                   >
                     {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {fieldErrors.category && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.category}
+                    </span>
+                  )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incident Type</label>
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Incident Type <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
                   <select 
                     className="form-control" 
                     value={modalWasteType} 
-                    onChange={(e) => setModalWasteType(e.target.value)}
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                    onChange={(e) => { setModalWasteType(e.target.value); validateField('wasteType', e.target.value); }}
+                    onBlur={(e) => validateField('wasteType', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.wasteType ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)'
+                    }}
                   >
                     {wasteTypesList.map(w => <option key={w} value={w}>{w}</option>)}
                   </select>
+                  {fieldErrors.wasteType && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.wasteType}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Location / Coastal Zone</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                  Location / Coastal Zone <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input 
                   type="text" 
                   className="form-control" 
                   value={locationName} 
-                  onChange={(e) => setLocationName(e.target.value)} 
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} 
+                  placeholder="e.g. Ponnani Coastal Area / Offshore Route"
+                  onChange={(e) => { setLocationName(e.target.value); validateField('locationName', e.target.value); }}
+                  onBlur={(e) => validateField('locationName', e.target.value)}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.locationName ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.locationName ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }} 
                 />
+                {fieldErrors.locationName && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.locationName}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Latitude</label>
-                  <input type="text" className="form-control" value={latitude} onChange={(e) => setLatitude(e.target.value)} style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} />
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Latitude <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={latitude} 
+                    placeholder="e.g. 10.782000"
+                    onChange={(e) => { setLatitude(e.target.value); validateField('latitude', e.target.value); }}
+                    onBlur={(e) => validateField('latitude', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.latitude ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: fieldErrors.latitude ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                    }} 
+                  />
+                  {fieldErrors.latitude && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.latitude}
+                    </span>
+                  )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Longitude</label>
-                  <input type="text" className="form-control" value={longitude} onChange={(e) => setLongitude(e.target.value)} style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} />
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Longitude <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={longitude} 
+                    placeholder="e.g. 75.925000"
+                    onChange={(e) => { setLongitude(e.target.value); validateField('longitude', e.target.value); }}
+                    onBlur={(e) => validateField('longitude', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.longitude ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: fieldErrors.longitude ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                    }} 
+                  />
+                  {fieldErrors.longitude && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.longitude}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <button 
                 type="button" 
                 onClick={handleDetectGPS} 
-                style={{ background: 'rgba(0, 229, 255, 0.1)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '6px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                style={{ background: 'rgba(0, 229, 255, 0.1)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
                 <MapPin size={14} /> Detect GPS Location Now
               </button>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Description Notes</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                  Description Notes <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <textarea 
                   className="form-control"
                   rows={3}
-                  placeholder="Describe quantity, direction of flow, or marine hazards..."
+                  placeholder="Describe quantity, direction of flow, hazard condition, or marine observations..."
                   value={reportDesc}
-                  onChange={(e) => setReportDesc(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                  onChange={(e) => { setReportDesc(e.target.value); validateField('description', e.target.value); }}
+                  onBlur={(e) => validateField('description', e.target.value)}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.description ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.description ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
                 />
+                {fieldErrors.description && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.description}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1356,9 +1545,22 @@ const FishermanDashboard = ({
                   type="file" 
                   className="form-control" 
                   accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files[0])}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                  onChange={(e) => {
+                    const f = e.target.files[0] || null;
+                    setImageFile(f);
+                    validateField('image', null, f);
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.image ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)'
+                  }}
                 />
+                {fieldErrors.image && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.image}
+                  </span>
+                )}
               </div>
 
               <button 
