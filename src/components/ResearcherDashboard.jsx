@@ -554,16 +554,14 @@ const ResearcherDashboard = ({
   const [savedReports, setSavedReports] = useState([]);
 
   // Tab 11: Research Assistant Chat
-  const [chatMessages, setChatMessages] = useState([
+  const [chatMessages, setChatMessages] = useState(() => [
     {
       sender: 'assistant',
-      text: `### TerraMarine Research Assistant
-I can query environmental indicators, water sensor history, pollution logs, and biodiversity observations in real-time.
+      text: `Hello **${user?.full_name || user?.name || 'Researcher'}**! 👋 I am your **TerraMarine AI Environmental Intelligence Assistant**.
 
-**Example Inquiries:**
-1. *"What species have been observed near Kochi?"*
-2. *"List the active pollution incidents in Fort Kochi."*
-3. *"Show sensor statistics."*`,
+I am integrated directly with live coastal telemetry, community pollution records, IMD marine weather bulletins, and marine science knowledge bases.
+
+Feel free to ask me conceptual marine science questions, request cross-coastal comparisons, or query live sensor trends!`,
       time: new Date()
     }
   ]);
