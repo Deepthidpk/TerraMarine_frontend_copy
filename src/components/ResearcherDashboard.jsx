@@ -553,11 +553,11 @@ const ResearcherDashboard = ({
   const [generatedReport, setGeneratedReport] = useState(null);
   const [savedReports, setSavedReports] = useState([]);
 
-  // Tab 11: Research Assistant Chat
+  // Tab 11: Research Assistant Chat (Octo)
   const [chatMessages, setChatMessages] = useState(() => [
     {
       sender: 'assistant',
-      text: `Hello **${user?.full_name || user?.name || 'Researcher'}**! 👋 I am your **TerraMarine AI Environmental Intelligence Assistant**.
+      text: `Hello **${user?.full_name || user?.name || 'Researcher'}**! 🐙 I am **Octo**, your **TerraMarine AI Environmental Intelligence Assistant**.
 
 I am integrated directly with live coastal telemetry, community pollution records, IMD marine weather bulletins, and marine science knowledge bases.
 
@@ -2721,7 +2721,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
             <Sparkles size={20} style={{ color: 'var(--accent-primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>AI Assistant - TerraMarine Intelligence</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>Octo - AI Research Assistant 🐙</h3>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Analyzes live platform DB stats, sensor metrics & biodiversity logs.</div>
             </div>
           </div>
@@ -2825,7 +2825,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                 alignSelf: 'flex-start', background: 'rgba(10, 25, 48, 0.65)', border: '1px solid rgba(255,255,255,0.08)',
                 padding: '12px 16px', borderRadius: '14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px'
               }}>
-                <RefreshCw size={12} className="spin-icon" /> AI Assistant is formulating response using live query structures...
+                <RefreshCw size={12} className="spin-icon" /> Octo is formulating response using live query structures...
               </div>
             )}
             
@@ -2881,7 +2881,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
             <input
               type="text"
               className="form-control"
-              placeholder="Ask Assistant: 'Compare pH averages' or 'What species were observed near Kochi?'"
+              placeholder="Ask Octo: 'Compare pH averages' or 'What species were observed near Kochi?'"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               disabled={chatLoading}

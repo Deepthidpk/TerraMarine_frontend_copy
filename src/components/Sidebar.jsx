@@ -244,7 +244,7 @@ const Sidebar = () => {
         { to: '/dashboard?tab=my-observations', tabKey: 'my-observations', label: 'My Observations', icon: <Camera size={18} /> },
         { to: '/dashboard?tab=datasets', tabKey: 'datasets', label: 'Datasets', icon: <Database size={18} /> },
         { to: '/dashboard?tab=research-reports', tabKey: 'research-reports', label: 'Research Reports', icon: <FileText size={18} /> },
-        { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Research Assistant', icon: <MessageSquare size={18} /> },
+        { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Octo AI Assistant', icon: <MessageSquare size={18} /> },
         { to: '/dashboard?tab=research-alerts', tabKey: 'research-alerts', label: 'Research Alerts', icon: <AlertCircle size={18} /> }
       ];
     }
