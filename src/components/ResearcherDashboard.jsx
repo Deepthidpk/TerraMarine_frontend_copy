@@ -225,18 +225,36 @@ const formatMessageText = (text) => {
   let inList = false;
   let listItems = [];
 
-  const parseBoldText = (str) => {
-    const parts = str.split(/\*\*([^*]+)\*\*/g);
-    return parts.map((part, i) => {
-      if (i % 2 === 1) {
-        return <strong key={i} style={{ color: '#00e5ff', fontWeight: 'bold' }}>{part}</strong>;
+  const parseInlineElements = (str) => {
+    // Parse bold, inline code, and italics
+    const codeParts = str.split(/`([^`]+)`/g);
+    return codeParts.map((cPart, cIdx) => {
+      if (cIdx % 2 === 1) {
+        return (
+          <code key={`code-${cIdx}`} style={{
+            background: 'rgba(0, 229, 255, 0.12)',
+            color: 'var(--accent-primary)',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '0.8rem'
+          }}>
+            {cPart}
+          </code>
+        );
       }
-      const italicParts = part.split(/\*([^*]+)\*/g);
-      return italicParts.map((subPart, j) => {
-        if (j % 2 === 1) {
-          return <em key={j} style={{ color: '#ffb703', fontStyle: 'italic' }}>{subPart}</em>;
+      const boldParts = cPart.split(/\*\*([^*]+)\*\*/g);
+      return boldParts.map((part, i) => {
+        if (i % 2 === 1) {
+          return <strong key={`b-${i}`} style={{ color: '#00e5ff', fontWeight: '600' }}>{part}</strong>;
         }
-        return subPart;
+        const italicParts = part.split(/\*([^*]+)\*/g);
+        return italicParts.map((subPart, j) => {
+          if (j % 2 === 1) {
+            return <em key={`em-${j}`} style={{ color: '#ffb703', fontStyle: 'italic' }}>{subPart}</em>;
+          }
+          return subPart;
+        });
       });
     });
   };
@@ -244,8 +262,8 @@ const formatMessageText = (text) => {
   const flushList = (key) => {
     if (listItems.length > 0) {
       elements.push(
-        <ul key={`list-${key}`} style={{ listStyleType: 'disc', paddingLeft: '20px', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {listItems.map((li, idx) => <li key={idx} style={{ color: '#e2e8f0' }}>{li}</li>)}
+        <ul key={`list-${key}`} style={{ listStyleType: 'disc', paddingLeft: '20px', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          {listItems.map((li, idx) => <li key={idx} style={{ color: '#e2e8f0', lineHeight: '1.45' }}>{li}</li>)}
         </ul>
       );
       listItems = [];
@@ -274,7 +292,7 @@ const formatMessageText = (text) => {
                 <tr key={rIdx} style={{ background: rIdx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   {row.map((cell, cIdx) => (
                     <td key={cIdx} style={{ padding: '8px 12px', color: '#e2e8f0' }}>
-                      {parseBoldText(cell)}
+                      {parseInlineElements(cell)}
                     </td>
                   ))}
                 </tr>
@@ -305,15 +323,29 @@ const formatMessageText = (text) => {
       }
     }
 
-    if (line.startsWith('###')) {
+    if (line.startsWith('####')) {
       flushList(i);
-      const title = line.replace('###', '').trim();
+      const title = line.replace(/^####\s*/, '').trim();
+      elements.push(
+        <h5 key={i} style={{
+          fontSize: '0.88rem',
+          fontWeight: '700',
+          color: '#38bdf8',
+          marginTop: '10px',
+          marginBottom: '4px'
+        }}>
+          {parseInlineElements(title)}
+        </h5>
+      );
+    } else if (line.startsWith('###')) {
+      flushList(i);
+      const title = line.replace(/^###\s*/, '').trim();
       elements.push(
         <h4 key={i} style={{
-          fontSize: '0.95rem',
+          fontSize: '0.98rem',
           fontWeight: '700',
           color: 'var(--accent-primary)',
-          marginTop: '14px',
+          marginTop: '12px',
           marginBottom: '6px',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
           paddingBottom: '4px',
@@ -321,22 +353,45 @@ const formatMessageText = (text) => {
           alignItems: 'center',
           gap: '6px'
         }}>
-          <Sparkles size={12} style={{ color: 'var(--accent-primary)' }} />
-          {title}
+          <Sparkles size={13} style={{ color: 'var(--accent-primary)' }} />
+          {parseInlineElements(title)}
         </h4>
       );
     } else if (line.startsWith('##')) {
       flushList(i);
-      const title = line.replace('##', '').trim();
+      const title = line.replace(/^##\s*/, '').trim();
       elements.push(
-        <h3 key={i} style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>
-          {title}
+        <h3 key={i} style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginTop: '14px', marginBottom: '8px' }}>
+          {parseInlineElements(title)}
         </h3>
+      );
+    } else if (line.startsWith('>')) {
+      flushList(i);
+      const quoteText = line.replace(/^>\s*/, '').trim();
+      elements.push(
+        <div key={i} style={{
+          margin: '10px 0',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          background: 'rgba(0, 229, 255, 0.06)',
+          borderLeft: '3px solid var(--accent-primary)',
+          fontSize: '0.8rem',
+          color: '#e2e8f0'
+        }}>
+          {parseInlineElements(quoteText)}
+        </div>
       );
     } else if (line.startsWith('*') || line.startsWith('-')) {
       inList = true;
       const content = line.substring(1).trim();
-      listItems.push(parseBoldText(content));
+      listItems.push(parseInlineElements(content));
+    } else if (/^\d+\.\s+/.test(line)) {
+      flushList(i);
+      elements.push(
+        <p key={i} style={{ margin: '5px 0', paddingLeft: '8px', lineHeight: '1.45', color: '#cbd5e1' }}>
+          {parseInlineElements(line)}
+        </p>
+      );
     } else {
       if (inList) {
         flushList(i);
@@ -344,7 +399,7 @@ const formatMessageText = (text) => {
       if (line) {
         elements.push(
           <p key={i} style={{ margin: '6px 0', lineHeight: '1.45', color: '#cbd5e1' }}>
-            {parseBoldText(line)}
+            {parseInlineElements(line)}
           </p>
         );
       }
@@ -2692,39 +2747,76 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                   <RenderChatChart chart={msg.chart} />
                 )}
 
-                {/* Render Ambiguity Options */}
-                {msg.sender === 'assistant' && msg.ambiguous && msg.options && (
+                {/* Render Interactive Suggestion Chips & Locations */}
+                {msg.sender === 'assistant' && msg.options && (
                   <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Suggested locations:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {msg.options.locations.map(loc => (
-                        <button
-                          key={loc}
-                          type="button"
-                          onClick={() => handleQuickQuestionClick(`Show water quality in ${loc}`)}
-                          style={{
-                            padding: '4px 10px',
-                            fontSize: '0.72rem',
-                            borderRadius: '16px',
-                            background: 'rgba(0, 229, 255, 0.12)',
-                            border: '1px solid rgba(0, 229, 255, 0.25)',
-                            color: 'var(--accent-primary)',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.background = 'rgba(0, 229, 255, 0.2)';
-                            e.target.style.borderColor = 'rgba(0, 229, 255, 0.4)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.background = 'rgba(0, 229, 255, 0.12)';
-                            e.target.style.borderColor = 'rgba(0, 229, 255, 0.25)';
-                          }}
-                        >
-                          {loc}
-                        </button>
-                      ))}
-                    </div>
+                    {msg.options.suggestions && msg.options.suggestions.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Sparkles size={11} style={{ color: 'var(--accent-primary)' }} /> Suggested queries:
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {msg.options.suggestions.map((sug, sIdx) => (
+                            <button
+                              key={sIdx}
+                              type="button"
+                              onClick={() => handleQuickQuestionClick(sug)}
+                              disabled={chatLoading}
+                              style={{
+                                padding: '5px 12px',
+                                fontSize: '0.72rem',
+                                borderRadius: '16px',
+                                background: 'rgba(0, 229, 255, 0.08)',
+                                border: '1px solid rgba(0, 229, 255, 0.22)',
+                                color: 'var(--accent-primary)',
+                                cursor: chatLoading ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s',
+                                textAlign: 'left'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!chatLoading) {
+                                  e.currentTarget.style.background = 'rgba(0, 229, 255, 0.2)';
+                                  e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.45)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(0, 229, 255, 0.08)';
+                                e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.22)';
+                              }}
+                            >
+                              {sug}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {msg.options.locations && msg.options.locations.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Locations:</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {msg.options.locations.map(loc => (
+                            <button
+                              key={loc}
+                              type="button"
+                              onClick={() => handleQuickQuestionClick(`Show water quality in ${loc}`)}
+                              disabled={chatLoading}
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: '0.72rem',
+                                borderRadius: '16px',
+                                background: 'rgba(0, 229, 255, 0.08)',
+                                border: '1px solid rgba(0, 229, 255, 0.22)',
+                                color: 'var(--accent-primary)',
+                                cursor: chatLoading ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              {loc}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2749,7 +2841,9 @@ I can query environmental indicators, water sensor history, pollution logs, and 
               "Compare pH between Kochi and Alappuzha",
               "Show water quality telemetry trends in Kochi",
               "Show pollution reports in Fort Kochi",
-              "List biodiversity observations near Kochi"
+              "List biodiversity observations near Kochi",
+              "What is the latest official IMD marine alert?",
+              "Explain ocean acidification"
             ].map((q, idx) => (
               <button
                 key={idx}
