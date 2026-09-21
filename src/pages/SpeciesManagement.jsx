@@ -11,6 +11,7 @@ import {
   Camera, 
   Sparkles, 
   AlertTriangle, 
+  AlertCircle,
   ShieldCheck, 
   CheckCircle2, 
   Compass, 
@@ -49,6 +50,161 @@ const SENSITIVITY_LEVELS = [
   'Low'
 ];
 
+// Regular expressions for strict line-by-line field validation
+const ALPHANUMERIC_REGEX = /^[a-zA-Z0-9\s\-()']+$/;
+const SCIENTIFIC_NAME_REGEX = /^[a-zA-Z0-9\s\-.'()]+$/;
+const EXTENDED_TEXT_REGEX = /^[a-zA-Z0-9\s\-.,/()'"+!?:;]+$/;
+const CATEGORY_REGEX = /^[a-zA-Z0-9\s\-]+$/;
+
+const validateSpeciesField = (fieldName, value, file = null) => {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+
+  switch (fieldName) {
+    case 'image':
+      if (!file) {
+        return 'Species specimen photograph is required (max 15MB).';
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        return 'Specimen photo size must be less than 15MB.';
+      }
+      if (!file.type || !file.type.startsWith('image/')) {
+        return 'Please upload a valid image file (PNG, JPG, JPEG, WEBP).';
+      }
+      return '';
+
+    case 'name':
+      if (!trimmed) {
+        return 'Species common name is required.';
+      }
+      if (trimmed.length < 3) {
+        return 'Common name must be at least 3 characters long.';
+      }
+      if (trimmed.length > 100) {
+        return 'Common name cannot exceed 100 characters.';
+      }
+      if (!ALPHANUMERIC_REGEX.test(trimmed)) {
+        return 'Only letters, digits, spaces, hyphens, and parentheses are allowed (no special symbols).';
+      }
+      if (!/[a-zA-Z]/.test(trimmed)) {
+        return 'Common name must contain at least one alphabet letter.';
+      }
+      return '';
+
+    case 'scientific_name':
+      if (!trimmed) {
+        return 'Scientific taxonomy name is required.';
+      }
+      if (trimmed.length < 3) {
+        return 'Scientific taxonomy must be at least 3 characters long.';
+      }
+      if (trimmed.length > 100) {
+        return 'Scientific taxonomy cannot exceed 100 characters.';
+      }
+      if (!SCIENTIFIC_NAME_REGEX.test(trimmed)) {
+        return 'Only letters, digits, spaces, hyphens, periods, and parentheses are allowed.';
+      }
+      if (!/[a-zA-Z]/.test(trimmed)) {
+        return 'Scientific taxonomy must contain at least one alphabet letter.';
+      }
+      return '';
+
+    case 'category':
+      if (!trimmed) {
+        return 'Please select a taxonomy category.';
+      }
+      return '';
+
+    case 'status':
+      if (!trimmed) {
+        return 'Please select a conservation status.';
+      }
+      return '';
+
+    case 'sensitivity':
+      if (!trimmed) {
+        return 'Please select a pollution sensitivity index.';
+      }
+      return '';
+
+    case 'habitat':
+      if (trimmed) {
+        if (trimmed.length < 3) {
+          return 'Typical habitat description must be at least 3 characters.';
+        }
+        if (trimmed.length > 300) {
+          return 'Typical habitat description cannot exceed 300 characters.';
+        }
+        if (!EXTENDED_TEXT_REGEX.test(trimmed)) {
+          return 'Only letters, digits, spaces, and standard punctuation (., - / () \') are allowed.';
+        }
+        if (!/[a-zA-Z]/.test(trimmed)) {
+          return 'Habitat description must contain alphabet letters.';
+        }
+      }
+      return '';
+
+    case 'threats':
+      if (trimmed) {
+        if (trimmed.length < 3) {
+          return 'Threats description must be at least 3 characters.';
+        }
+        if (trimmed.length > 300) {
+          return 'Threats description cannot exceed 300 characters.';
+        }
+        if (!EXTENDED_TEXT_REGEX.test(trimmed)) {
+          return 'Only letters, digits, spaces, and standard punctuation (., - / () \') are allowed.';
+        }
+        if (!/[a-zA-Z]/.test(trimmed)) {
+          return 'Threats description must contain alphabet letters.';
+        }
+      }
+      return '';
+
+    case 'notes':
+      if (trimmed) {
+        if (trimmed.length < 5) {
+          return 'Research field notes must be at least 5 characters.';
+        }
+        if (trimmed.length > 1000) {
+          return 'Research field notes cannot exceed 1000 characters.';
+        }
+        if (!EXTENDED_TEXT_REGEX.test(trimmed)) {
+          return 'Only letters, digits, spaces, and standard punctuation (. , - / () \' " ! ? : ;) are allowed.';
+        }
+        if (!/[a-zA-Z]/.test(trimmed)) {
+          return 'Field notes must contain alphabet letters.';
+        }
+      }
+      return '';
+
+    default:
+      return '';
+  }
+};
+
+const validateCategoryInput = (name, existingList = []) => {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  if (!trimmed) {
+    return 'Taxonomy category name is required.';
+  }
+  if (trimmed.length < 3) {
+    return 'Category name must be at least 3 characters long.';
+  }
+  if (trimmed.length > 40) {
+    return 'Category name cannot exceed 40 characters.';
+  }
+  if (!CATEGORY_REGEX.test(trimmed)) {
+    return 'Only letters, numbers, spaces, and hyphens are allowed.';
+  }
+  if (!/[a-zA-Z]/.test(trimmed)) {
+    return 'Category name must contain at least one alphabet letter.';
+  }
+  if (existingList.some(cat => cat.toLowerCase() === trimmed.toLowerCase())) {
+    return `Category "${trimmed}" already exists in the catalog.`;
+  }
+  return '';
+};
+
 const SpeciesManagement = () => {
   const { user, authFetch } = useAuth();
   
@@ -67,9 +223,11 @@ const SpeciesManagement = () => {
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
-  // Category Management Form State
+  // Category Management Form State & Errors
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categorySubmitting, setCategorySubmitting] = useState(false);
+  const [categoryError, setCategoryError] = useState('');
+  const [categoryTouched, setCategoryTouched] = useState(false);
 
   // Species Form state
   const [formData, setFormData] = useState({
@@ -85,6 +243,10 @@ const SpeciesManagement = () => {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Form Field Validation Tracking
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   // Auto-dismiss notifications
   useEffect(() => {
@@ -151,12 +313,33 @@ const SpeciesManagement = () => {
     fetchSpecies();
   }, []);
 
-  // Handle image file change with live preview
+  // Field change handler with live validation
+  const handleFieldChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (touched[field]) {
+      const err = validateSpeciesField(field, value);
+      setErrors(prev => ({ ...prev, [field]: err }));
+    }
+  };
+
+  // Field blur handler
+  const handleFieldBlur = (field) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const err = validateSpeciesField(field, formData[field]);
+    setErrors(prev => ({ ...prev, [field]: err }));
+  };
+
+  // Handle image file change with validation and live preview
   const handleImageChange = (e) => {
     const file = e.target.files && e.target.files[0];
+    setTouched(prev => ({ ...prev, image: true }));
+    
     if (file) {
-      if (file.size > 15 * 1024 * 1024) {
-        setActionError('Image size exceeds 15MB limit.');
+      const err = validateSpeciesField('image', null, file);
+      setErrors(prev => ({ ...prev, image: err }));
+      if (err) {
+        setImageFile(null);
+        setImagePreview(null);
         return;
       }
       setImageFile(file);
@@ -165,6 +348,11 @@ const SpeciesManagement = () => {
         setImagePreview(reader.result);
       };
       reader.readAsDataURL(file);
+    } else {
+      const err = validateSpeciesField('image', null, null);
+      setErrors(prev => ({ ...prev, image: err }));
+      setImageFile(null);
+      setImagePreview(null);
     }
   };
 
@@ -182,17 +370,23 @@ const SpeciesManagement = () => {
     });
     setImageFile(null);
     setImagePreview(null);
+    setErrors({});
+    setTouched({});
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Handle Add Category
+  // Handle Add Category with strong validation
   const handleAddCategory = async (e) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) {
-      return setActionError('Please enter a category name.');
+    setCategoryTouched(true);
+    const catErr = validateCategoryInput(newCategoryName, categoriesList);
+    if (catErr) {
+      setCategoryError(catErr);
+      return;
     }
+    setCategoryError('');
 
     setCategorySubmitting(true);
     setActionError('');
@@ -213,6 +407,8 @@ const SpeciesManagement = () => {
       setActionSuccess(`New category "${newCategoryName.trim()}" added successfully!`);
       const addedName = newCategoryName.trim();
       setNewCategoryName('');
+      setCategoryTouched(false);
+      setCategoryError('');
       
       // Refresh categories list
       await fetchCategories();
@@ -234,7 +430,6 @@ const SpeciesManagement = () => {
     }
 
     try {
-      // Find category id or delete by querying categories
       const catRes = await authFetch('/species/categories');
       if (catRes.ok) {
         const data = await catRes.json();
@@ -263,14 +458,43 @@ const SpeciesManagement = () => {
     }
   };
 
-  // Handle Form Submission
+  // Handle Form Submission with comprehensive validation pass
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      return setActionError('Species common name is required.');
-    }
-    if (!formData.scientific_name.trim()) {
-      return setActionError('Scientific name is required.');
+
+    // Mark all fields as touched
+    const allTouched = {
+      image: true,
+      name: true,
+      scientific_name: true,
+      category: true,
+      status: true,
+      sensitivity: true,
+      habitat: true,
+      threats: true,
+      notes: true
+    };
+    setTouched(allTouched);
+
+    // Compute errors for every field
+    const validationErrors = {
+      image: validateSpeciesField('image', null, imageFile),
+      name: validateSpeciesField('name', formData.name),
+      scientific_name: validateSpeciesField('scientific_name', formData.scientific_name),
+      category: validateSpeciesField('category', formData.category),
+      status: validateSpeciesField('status', formData.status),
+      sensitivity: validateSpeciesField('sensitivity', formData.sensitivity),
+      habitat: validateSpeciesField('habitat', formData.habitat),
+      threats: validateSpeciesField('threats', formData.threats),
+      notes: validateSpeciesField('notes', formData.notes)
+    };
+
+    setErrors(validationErrors);
+
+    const firstError = Object.values(validationErrors).find(err => Boolean(err));
+    if (firstError) {
+      setActionError('Please correct the validation errors highlighted in the form before publishing.');
+      return;
     }
 
     setSubmitting(true);
@@ -314,26 +538,39 @@ const SpeciesManagement = () => {
     }
   };
 
-  // Handle Delete Species
-  const handleDeleteSpecies = async (speciesId, speciesName, e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to remove "${speciesName}" from the catalog?`)) {
-      return;
-    }
+  // Helper for input styles based on validation state
+  const getInputStyle = (fieldName, baseStyle = {}) => {
+    const hasError = touched[fieldName] && Boolean(errors[fieldName]);
+    const isValid = touched[fieldName] && !errors[fieldName] && (formData[fieldName] || (fieldName === 'image' && imageFile));
 
-    try {
-      const res = await authFetch(`/species/${speciesId}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to delete species.');
-      }
-      setActionSuccess(`"${speciesName}" removed from catalog.`);
-      fetchSpecies();
-    } catch (err) {
-      setActionError(err.message || 'Error deleting species.');
+    return {
+      ...baseStyle,
+      borderColor: hasError ? '#ef4444' : isValid ? 'rgba(16, 185, 129, 0.6)' : 'rgba(255, 255, 255, 0.12)',
+      boxShadow: hasError ? '0 0 0 2px rgba(239, 68, 68, 0.25)' : undefined,
+      transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+    };
+  };
+
+  // Helper for rendering line-by-line error message
+  const renderFieldError = (fieldName) => {
+    if (touched[fieldName] && errors[fieldName]) {
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          color: '#ef4444',
+          fontSize: '0.74rem',
+          marginTop: '5px',
+          fontWeight: '500',
+          lineHeight: '1.3'
+        }}>
+          <AlertCircle size={13} style={{ flexShrink: 0 }} />
+          <span>{errors[fieldName]}</span>
+        </div>
+      );
     }
+    return null;
   };
 
   // Helper for resolving image URL
@@ -416,7 +653,7 @@ const SpeciesManagement = () => {
           </button>
 
           <button 
-            onClick={() => setShowCategoryModal(true)}
+            onClick={() => { setCategoryTouched(false); setCategoryError(''); setShowCategoryModal(true); }}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(157, 78, 221, 0.4)', color: '#d8b4fe' }}
           >
@@ -596,7 +833,7 @@ const SpeciesManagement = () => {
           ))}
 
           <button
-            onClick={() => setShowCategoryModal(true)}
+            onClick={() => { setCategoryTouched(false); setCategoryError(''); setShowCategoryModal(true); }}
             style={{
               padding: '6px 12px',
               borderRadius: '8px',
@@ -778,7 +1015,7 @@ const SpeciesManagement = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: ADD NEW SPECIES FORM */}
+      {/* MODAL 1: ADD NEW SPECIES FORM WITH STRONG LINE-BY-LINE VALIDATION */}
       {/* ========================================================================= */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
@@ -802,9 +1039,9 @@ const SpeciesManagement = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
-              {/* Photo Upload Box with Preview */}
+              {/* Photo Upload Box with Preview & Validation */}
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Species Photograph *</span>
@@ -814,11 +1051,11 @@ const SpeciesManagement = () => {
                 <div 
                   onClick={() => fileInputRef.current && fileInputRef.current.click()}
                   style={{
-                    border: '2px dashed rgba(0, 229, 255, 0.35)',
+                    border: touched.image && errors.image ? '2px dashed #ef4444' : imageFile ? '2px solid rgba(16, 185, 129, 0.7)' : '2px dashed rgba(0, 229, 255, 0.35)',
                     borderRadius: '12px',
                     padding: '16px',
                     textAlign: 'center',
-                    background: 'rgba(10, 25, 48, 0.5)',
+                    background: touched.image && errors.image ? 'rgba(239, 68, 68, 0.05)' : 'rgba(10, 25, 48, 0.5)',
                     cursor: 'pointer',
                     position: 'relative',
                     overflow: 'hidden',
@@ -855,7 +1092,7 @@ const SpeciesManagement = () => {
                     </div>
                   ) : (
                     <>
-                      <Camera size={30} style={{ color: 'var(--accent-primary)', opacity: 0.8, marginBottom: '6px' }} />
+                      <Camera size={30} style={{ color: touched.image && errors.image ? '#ef4444' : 'var(--accent-primary)', opacity: 0.8, marginBottom: '6px' }} />
                       <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#ffffff' }}>Upload Specimen Photo</div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                         Click to select photo or drag and drop image here
@@ -870,31 +1107,49 @@ const SpeciesManagement = () => {
                     style={{ display: 'none' }} 
                   />
                 </div>
+                {renderFieldError('image')}
               </div>
 
-              {/* Names: Common & Scientific */}
+              {/* Names: Common & Scientific with Strict Character & Length Validation */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Common Name *</label>
+                  <label className="form-label">
+                    Common Name * 
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
+                      (Letters, digits, min 3 chars)
+                    </span>
+                  </label>
                   <input
                     type="text"
                     className="form-control"
                     placeholder="e.g. Olive Ridley Sea Turtle"
                     value={formData.name}
-                    onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
-                    required
+                    onChange={(e) => handleFieldChange('name', e.target.value)}
+                    onBlur={() => handleFieldBlur('name')}
+                    style={getInputStyle('name')}
+                    maxLength={100}
                   />
+                  {renderFieldError('name')}
                 </div>
+
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Scientific Taxonomy *</label>
+                  <label className="form-label">
+                    Scientific Taxonomy *
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
+                      (Latin binomial, min 3 chars)
+                    </span>
+                  </label>
                   <input
                     type="text"
                     className="form-control"
                     placeholder="e.g. Lepidochelys olivacea"
                     value={formData.scientific_name}
-                    onChange={(e) => setFormData(p => ({ ...p, scientific_name: e.target.value }))}
-                    required
+                    onChange={(e) => handleFieldChange('scientific_name', e.target.value)}
+                    onBlur={() => handleFieldBlur('scientific_name')}
+                    style={getInputStyle('scientific_name')}
+                    maxLength={100}
                   />
+                  {renderFieldError('scientific_name')}
                 </div>
               </div>
 
@@ -905,7 +1160,7 @@ const SpeciesManagement = () => {
                     <label className="form-label" style={{ margin: 0 }}>Taxonomy Category *</label>
                     <button
                       type="button"
-                      onClick={() => setShowCategoryModal(true)}
+                      onClick={() => { setCategoryTouched(false); setCategoryError(''); setShowCategoryModal(true); }}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -922,12 +1177,15 @@ const SpeciesManagement = () => {
                   <select
                     className="form-control"
                     value={formData.category}
-                    onChange={(e) => setFormData(p => ({ ...p, category: e.target.value }))}
+                    onChange={(e) => handleFieldChange('category', e.target.value)}
+                    onBlur={() => handleFieldBlur('category')}
+                    style={getInputStyle('category')}
                   >
                     {categoriesList.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
+                  {renderFieldError('category')}
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -935,63 +1193,101 @@ const SpeciesManagement = () => {
                   <select
                     className="form-control"
                     value={formData.status}
-                    onChange={(e) => setFormData(p => ({ ...p, status: e.target.value }))}
+                    onChange={(e) => handleFieldChange('status', e.target.value)}
+                    onBlur={() => handleFieldBlur('status')}
+                    style={getInputStyle('status')}
                   >
                     {CONSERVATION_STATUSES.map(st => (
                       <option key={st} value={st}>{st}</option>
                     ))}
                   </select>
+                  {renderFieldError('status')}
                 </div>
               </div>
 
               {/* Sensitivity Level */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Pollution Sensitivity Index</label>
+                <label className="form-label">Pollution Sensitivity Index *</label>
                 <select
                   className="form-control"
                   value={formData.sensitivity}
-                  onChange={(e) => setFormData(p => ({ ...p, sensitivity: e.target.value }))}
+                  onChange={(e) => handleFieldChange('sensitivity', e.target.value)}
+                  onBlur={() => handleFieldBlur('sensitivity')}
+                  style={getInputStyle('sensitivity')}
                 >
                   {SENSITIVITY_LEVELS.map(lvl => (
                     <option key={lvl} value={lvl}>{lvl} Sensitivity</option>
                   ))}
                 </select>
+                {renderFieldError('sensitivity')}
               </div>
 
               {/* Habitat */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Typical Habitat</label>
+                <label className="form-label">
+                  Typical Habitat
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
+                    (Optional, letters & digits, min 3 chars)
+                  </span>
+                </label>
                 <input
                   type="text"
                   className="form-control"
                   placeholder="e.g. Shallow coastal waters, sandy beaches, and offshore foraging corridors"
                   value={formData.habitat}
-                  onChange={(e) => setFormData(p => ({ ...p, habitat: e.target.value }))}
+                  onChange={(e) => handleFieldChange('habitat', e.target.value)}
+                  onBlur={() => handleFieldBlur('habitat')}
+                  style={getInputStyle('habitat')}
+                  maxLength={300}
                 />
+                {renderFieldError('habitat')}
               </div>
 
               {/* Anthropogenic Threats */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Anthropogenic Threats</label>
+                <label className="form-label">
+                  Anthropogenic Threats
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
+                    (Optional, letters & digits, min 3 chars)
+                  </span>
+                </label>
                 <input
                   type="text"
                   className="form-control"
                   placeholder="e.g. Trawl nets, microplastic ingestion, coastal artificial lighting"
                   value={formData.threats}
-                  onChange={(e) => setFormData(p => ({ ...p, threats: e.target.value }))}
+                  onChange={(e) => handleFieldChange('threats', e.target.value)}
+                  onBlur={() => handleFieldBlur('threats')}
+                  style={getInputStyle('threats')}
+                  maxLength={300}
                 />
+                {renderFieldError('threats')}
               </div>
 
               {/* Research Field Notes */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Research Field Notes / Observations</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label" style={{ margin: 0 }}>
+                    Research Field Notes / Observations
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
+                      (Optional, letters & digits, min 5 chars)
+                    </span>
+                  </label>
+                  <span style={{ fontSize: '0.7rem', color: formData.notes.length > 950 ? '#ef4444' : 'var(--text-muted)' }}>
+                    {formData.notes.length}/1000
+                  </span>
+                </div>
                 <textarea
                   className="form-control"
                   rows="3"
                   placeholder="Behavioral traits, local sightings near Kochi/Kerala shoreline, seasonal migration dates..."
                   value={formData.notes}
-                  onChange={(e) => setFormData(p => ({ ...p, notes: e.target.value }))}
+                  onChange={(e) => handleFieldChange('notes', e.target.value)}
+                  onBlur={() => handleFieldBlur('notes')}
+                  style={getInputStyle('notes', { marginTop: '6px' })}
+                  maxLength={1000}
                 ></textarea>
+                {renderFieldError('notes')}
               </div>
 
               {/* Form Buttons */}
@@ -1019,7 +1315,7 @@ const SpeciesManagement = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: CATEGORY MANAGEMENT MODAL */}
+      {/* MODAL 2: CATEGORY MANAGEMENT MODAL WITH LINE-BY-LINE VALIDATION */}
       {/* ========================================================================= */}
       {showCategoryModal && (
         <div className="modal-overlay" onClick={() => setShowCategoryModal(false)}>
@@ -1043,25 +1339,53 @@ const SpeciesManagement = () => {
               </button>
             </div>
 
-            {/* Add Category Form */}
-            <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '10px' }}>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Enter new category (e.g. Mollusks, Echinoderms)..."
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                style={{ flex: 1 }}
-                required
-              />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={categorySubmitting}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
-              >
-                <Plus size={16} /> Add
-              </button>
+            {/* Add Category Form with Line-by-Line Validation */}
+            <form onSubmit={handleAddCategory} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Enter new category (e.g. Mollusks, Echinoderms)..."
+                  value={newCategoryName}
+                  onChange={(e) => {
+                    setNewCategoryName(e.target.value);
+                    if (categoryTouched) {
+                      setCategoryError(validateCategoryInput(e.target.value, categoriesList));
+                    }
+                  }}
+                  onBlur={() => {
+                    setCategoryTouched(true);
+                    setCategoryError(validateCategoryInput(newCategoryName, categoriesList));
+                  }}
+                  style={{
+                    flex: 1,
+                    borderColor: categoryTouched && categoryError ? '#ef4444' : undefined,
+                    boxShadow: categoryTouched && categoryError ? '0 0 0 2px rgba(239, 68, 68, 0.25)' : undefined
+                  }}
+                  maxLength={40}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={categorySubmitting}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                >
+                  <Plus size={16} /> Add
+                </button>
+              </div>
+              {categoryTouched && categoryError && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  color: '#ef4444',
+                  fontSize: '0.74rem',
+                  fontWeight: '500'
+                }}>
+                  <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                  <span>{categoryError}</span>
+                </div>
+              )}
             </form>
 
             {/* Category List with Delete Option */}
