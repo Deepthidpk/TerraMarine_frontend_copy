@@ -17,6 +17,7 @@ import Tasks from './pages/Tasks';
 import Biodiversity from './pages/Biodiversity';
 import Payments from './pages/Payments';
 import UserApproval from './pages/UserApproval';
+import SpeciesManagement from './pages/SpeciesManagement';
 import Notifications from './pages/Notifications';
 import MyParticipations from './pages/MyParticipations';
 import LocationSetup from './pages/LocationSetup';
@@ -130,6 +131,7 @@ const App = () => {
           <Route path="/campaigns" element={<ProtectedLayout><Campaigns /></ProtectedLayout>} />
           <Route path="/tasks" element={<ProtectedLayout><NonVolunteerRoute><Tasks /></NonVolunteerRoute></ProtectedLayout>} />
           <Route path="/biodiversity" element={<ProtectedLayout><NonVolunteerRoute><Biodiversity /></NonVolunteerRoute></ProtectedLayout>} />
+          <Route path="/species-management" element={<ProtectedLayout><AuthorityOrAdminRoute><SpeciesManagement /></AuthorityOrAdminRoute></ProtectedLayout>} />
           <Route path="/payments" element={<ProtectedLayout><Payments /></ProtectedLayout>} />
           <Route path="/participations" element={<ProtectedLayout><MyParticipations /></ProtectedLayout>} />
           <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />

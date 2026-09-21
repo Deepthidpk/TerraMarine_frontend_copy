@@ -493,9 +493,11 @@ const ResearcherDashboard = ({
   const [mapCenter, setMapCenter] = useState([9.976, 76.275]); // Fort Kochi
 
   // Tab 3: Species Explorer
+  const [speciesCatalogList, setSpeciesCatalogList] = useState(SPECIES_CATALOG);
   const [speciesSearch, setSpeciesSearch] = useState('');
   const [speciesCategory, setSpeciesCategory] = useState('All');
   const [selectedSpecies, setSelectedSpecies] = useState(null);
+  const [speciesLoading, setSpeciesLoading] = useState(false);
 
   // Tab 6: Water Quality Selector
   const [selectedDevice, setSelectedDevice] = useState('all');
@@ -631,11 +633,49 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
         setSavedReports(data.reports || []);
       }
 
+      // 6. Dynamic Species Catalog (includes authority additions)
+      try {
+        const speciesRes = await authFetch('/species');
+        if (speciesRes.ok) {
+          const sData = await speciesRes.json();
+          if (sData.species && sData.species.length > 0) {
+            setSpeciesCatalogList(sData.species);
+          }
+        }
+      } catch (sErr) {
+        console.warn('Species catalog API fetch note:', sErr.message);
+      }
+
     } catch (error) {
       console.error('Error fetching research workspaces:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const syncSpeciesCatalog = async () => {
+    setSpeciesLoading(true);
+    try {
+      const speciesRes = await authFetch('/species');
+      if (speciesRes.ok) {
+        const sData = await speciesRes.json();
+        if (sData.species && sData.species.length > 0) {
+          setSpeciesCatalogList(sData.species);
+          setSuccessMessage('Species catalog synchronized with official marine registry.');
+        }
+      }
+    } catch (err) {
+      console.error('Error syncing species:', err);
+    } finally {
+      setSpeciesLoading(false);
+    }
+  };
+
+  const resolveCatalogImage = (img) => {
+    if (!img) return '/images/whale_shark.png';
+    if (img.startsWith('http') || img.startsWith('/images/')) return img;
+    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:5000';
+    return `${serverUrl}${img}`;
   };
 
   // -------------------------------------------------------------------------
@@ -673,13 +713,18 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
 
   // Filtered Species Catalog
   const filteredSpecies = useMemo(() => {
-    return SPECIES_CATALOG.filter(sp => {
-      const matchSearch = sp.name.toLowerCase().includes(speciesSearch.toLowerCase()) || 
-                          sp.scientificName.toLowerCase().includes(speciesSearch.toLowerCase());
+    return speciesCatalogList.filter(sp => {
+      const spName = sp.name || '';
+      const spSci = sp.scientificName || sp.scientific_name || '';
+      const notes = sp.notes || '';
+      const query = speciesSearch.toLowerCase();
+      const matchSearch = spName.toLowerCase().includes(query) || 
+                          spSci.toLowerCase().includes(query) ||
+                          notes.toLowerCase().includes(query);
       const matchCat = speciesCategory === 'All' || sp.category === speciesCategory;
       return matchSearch && matchCat;
     });
-  }, [speciesSearch, speciesCategory]);
+  }, [speciesCatalogList, speciesSearch, speciesCategory]);
 
   // Coordinate Query handler
   const handleMapCoordinateClick = (lat, lng) => {
@@ -1684,8 +1729,8 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Filters and search */}
-          <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', padding: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', padding: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
               <Search size={18} style={{ color: 'var(--text-secondary)' }} />
               <input
                 type="text"
@@ -1697,7 +1742,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
               />
             </div>
             
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
               {['All', 'Mammals', 'Fish', 'Reptiles', 'Corals', 'Crustaceans', 'Microorganisms', 'Plants', 'Coastal Birds'].map(cat => (
                 <button
                   key={cat}
@@ -1705,12 +1750,23 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                   style={{
                     padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', border: '1px solid rgba(0, 229, 255, 0.25)',
                     background: speciesCategory === cat ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'rgba(10, 25, 48, 0.5)',
-                    color: '#ffffff', cursor: 'pointer', fontWeight: '600'
+                    color: '#ffffff', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap'
                   }}
                 >
                   {cat}
                 </button>
               ))}
+
+              <button
+                onClick={syncSpeciesCatalog}
+                className="btn btn-secondary"
+                disabled={speciesLoading}
+                style={{ padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Sync species catalog from live registry"
+              >
+                <RefreshCw size={13} className={speciesLoading ? 'spin-icon' : ''} />
+                <span>Sync</span>
+              </button>
             </div>
           </div>
 
@@ -1719,13 +1775,13 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
             
             {filteredSpecies.map(sp => (
               <div
-                key={sp.id}
+                key={sp.id || sp.species_id}
                 className="glass-panel"
                 onClick={() => setSelectedSpecies(sp)}
                 style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', height: '360px' }}
               >
-                <div style={{ height: '160px', overflow: 'hidden', position: 'relative' }}>
-                  <img src={sp.image} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <div style={{ height: '160px', overflow: 'hidden', position: 'relative', background: 'rgba(5, 19, 41, 0.8)' }}>
+                  <img src={resolveCatalogImage(sp.image)} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   <span style={{
                     position: 'absolute', top: '12px', right: '12px', padding: '4px 10px', borderRadius: '20px',
                     fontSize: '0.65rem', fontWeight: 'bold', background: sp.status === 'Endangered' || sp.status === 'Critically Endangered' ? 'rgba(255,77,77,0.85)' : 'rgba(0,245,212,0.85)',
@@ -1741,14 +1797,14 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                       {sp.category}
                     </span>
                     <h3 style={{ fontSize: '1.15rem', marginTop: '2px' }}>{sp.name}</h3>
-                    <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{sp.scientificName}</p>
+                    <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{sp.scientificName || sp.scientific_name}</p>
                     <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {sp.notes}
+                      {sp.notes || sp.habitat}
                     </p>
                   </div>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity}</strong></span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity || 'Medium'}</strong></span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       Profile <ChevronRight size={14} />
                     </span>
@@ -1771,8 +1827,8 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                 </div>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
-                  <div style={{ borderRadius: '12px', overflow: 'hidden', height: '220px' }}>
-                    <img src={selectedSpecies.image} alt={selectedSpecies.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div style={{ borderRadius: '12px', overflow: 'hidden', height: '220px', background: 'rgba(5, 19, 41, 0.8)' }}>
+                    <img src={resolveCatalogImage(selectedSpecies.image)} alt={selectedSpecies.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
                     <div>
@@ -1781,7 +1837,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>Scientific Name:</span>
-                      <div style={{ fontStyle: 'italic', fontWeight: 'bold' }}>{selectedSpecies.scientificName}</div>
+                      <div style={{ fontStyle: 'italic', fontWeight: 'bold' }}>{selectedSpecies.scientificName || selectedSpecies.scientific_name}</div>
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>Taxonomy Category:</span>
@@ -1801,19 +1857,19 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px', fontSize: '0.85rem' }}>
                   <div>
                     <strong>Typical Habitat:</strong>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.habitat}</p>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.habitat || 'Not specified'}</p>
                   </div>
                   <div>
                     <strong>Anthropogenic Threats:</strong>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.threats}</p>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.threats || 'None recorded'}</p>
                   </div>
                   <div>
                     <strong>Chemical/Pollution Sensitivity Index:</strong>
-                    <p style={{ color: 'var(--accent-primary)', marginTop: '2px', fontWeight: '600' }}>{selectedSpecies.sensitivity} Sensitivity</p>
+                    <p style={{ color: 'var(--accent-primary)', marginTop: '2px', fontWeight: '600' }}>{selectedSpecies.sensitivity ? `${selectedSpecies.sensitivity} Sensitivity` : 'High Sensitivity'}</p>
                   </div>
                   <div>
                     <strong>Research Field Notes:</strong>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.notes}</p>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.notes || 'No field notes logged.'}</p>
                   </div>
                 </div>
 

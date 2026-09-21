@@ -285,6 +285,7 @@ const Sidebar = () => {
 
     if (user.role === 'Authority') {
       links.push({ to: '/user-approval', label: 'User Approvals', icon: <Shield size={18} /> });
+      links.push({ to: '/species-management', label: 'Marine Species Registry', icon: <Compass size={18} /> });
     }
 
     links.push({ to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> });
