@@ -54,8 +54,9 @@ const SENSITIVITY_LEVELS = [
 const ALPHANUMERIC_REGEX = /^[a-zA-Z0-9\s\-()']+$/;
 const SCIENTIFIC_NAME_REGEX = /^[a-zA-Z0-9\s\-.'()]+$/;
 const EXTENDED_TEXT_REGEX = /^[a-zA-Z0-9\s\-.,/()'"+!?:;]+$/;
-const CATEGORY_REGEX = /^[a-zA-Z0-9\s\-]+$/;
+const CATEGORY_REGEX = /^[a-zA-Z\s]+$/;
 
+// Validator for Species form fields
 const validateSpeciesField = (fieldName, value, file = null) => {
   const trimmed = typeof value === 'string' ? value.trim() : '';
 
@@ -182,10 +183,16 @@ const validateSpeciesField = (fieldName, value, file = null) => {
   }
 };
 
+// Validator for Category Manager input field (Letters & spaces only)
 const validateCategoryInput = (name, existingList = []) => {
-  const trimmed = typeof name === 'string' ? name.trim() : '';
+  const raw = typeof name === 'string' ? name : '';
+  const trimmed = raw.trim();
+  
   if (!trimmed) {
-    return 'Taxonomy category name is required.';
+    return 'Category name is required (letters only, min 3 chars).';
+  }
+  if (!CATEGORY_REGEX.test(raw)) {
+    return 'Only alphabet letters and spaces are allowed (no numbers, hyphens, or symbols).';
   }
   if (trimmed.length < 3) {
     return 'Category name must be at least 3 characters long.';
@@ -193,14 +200,8 @@ const validateCategoryInput = (name, existingList = []) => {
   if (trimmed.length > 40) {
     return 'Category name cannot exceed 40 characters.';
   }
-  if (!CATEGORY_REGEX.test(trimmed)) {
-    return 'Only letters, numbers, spaces, and hyphens are allowed.';
-  }
-  if (!/[a-zA-Z]/.test(trimmed)) {
-    return 'Category name must contain at least one alphabet letter.';
-  }
   if (existingList.some(cat => cat.toLowerCase() === trimmed.toLowerCase())) {
-    return `Category "${trimmed}" already exists in the catalog.`;
+    return `Category "${trimmed}" already exists in the registry.`;
   }
   return '';
 };
@@ -223,11 +224,14 @@ const SpeciesManagement = () => {
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
-  // Category Management Form State & Errors
+  // Category Management Modal State & Errors
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categorySubmitting, setCategorySubmitting] = useState(false);
   const [categoryError, setCategoryError] = useState('');
   const [categoryTouched, setCategoryTouched] = useState(false);
+  const [categoryModalError, setCategoryModalError] = useState('');
+  const [categoryModalSuccess, setCategoryModalSuccess] = useState('');
+  const categoryInputRef = useRef(null);
 
   // Species Form state
   const [formData, setFormData] = useState({
@@ -262,6 +266,29 @@ const SpeciesManagement = () => {
       return () => clearTimeout(timer);
     }
   }, [actionError]);
+
+  useEffect(() => {
+    if (categoryModalSuccess) {
+      const timer = setTimeout(() => setCategoryModalSuccess(''), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [categoryModalSuccess]);
+
+  useEffect(() => {
+    if (categoryModalError) {
+      const timer = setTimeout(() => setCategoryModalError(''), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [categoryModalError]);
+
+  // Focus category input when category modal opens
+  useEffect(() => {
+    if (showCategoryModal && categoryInputRef.current) {
+      setTimeout(() => {
+        categoryInputRef.current?.focus();
+      }, 100);
+    }
+  }, [showCategoryModal]);
 
   // Fetch categories
   const fetchCategories = async () => {
@@ -377,20 +404,23 @@ const SpeciesManagement = () => {
     }
   };
 
-  // Handle Add Category with strong validation
+  // Handle Add Category with strong line-by-line validation
   const handleAddCategory = async (e) => {
     e.preventDefault();
     setCategoryTouched(true);
     const catErr = validateCategoryInput(newCategoryName, categoriesList);
     if (catErr) {
       setCategoryError(catErr);
+      if (categoryInputRef.current) {
+        categoryInputRef.current.focus();
+      }
       return;
     }
     setCategoryError('');
 
     setCategorySubmitting(true);
-    setActionError('');
-    setActionSuccess('');
+    setCategoryModalError('');
+    setCategoryModalSuccess('');
 
     try {
       const res = await authFetch('/species/categories', {
@@ -404,8 +434,9 @@ const SpeciesManagement = () => {
         throw new Error(resJson.error || 'Failed to add category.');
       }
 
-      setActionSuccess(`New category "${newCategoryName.trim()}" added successfully!`);
       const addedName = newCategoryName.trim();
+      setCategoryModalSuccess(`Category "${addedName}" added successfully!`);
+      setActionSuccess(`New taxonomy category "${addedName}" registered in catalog.`);
       setNewCategoryName('');
       setCategoryTouched(false);
       setCategoryError('');
@@ -413,11 +444,11 @@ const SpeciesManagement = () => {
       // Refresh categories list
       await fetchCategories();
       
-      // Auto-select the newly added category in the form
+      // Auto-select the newly added category in the species form
       setFormData(prev => ({ ...prev, category: addedName }));
     } catch (err) {
       console.error('Error adding category:', err);
-      setActionError(err.message || 'Server error adding category.');
+      setCategoryModalError(err.message || 'Server error adding category.');
     } finally {
       setCategorySubmitting(false);
     }
@@ -446,7 +477,8 @@ const SpeciesManagement = () => {
           throw new Error(delJson.error || 'Failed to delete category.');
         }
 
-        setActionSuccess(`Category "${categoryName}" removed.`);
+        setCategoryModalSuccess(`Category "${categoryName}" removed.`);
+        setActionSuccess(`Category "${categoryName}" removed from catalog.`);
         await fetchCategories();
         if (selectedCategory === categoryName) {
           setSelectedCategory('All');
@@ -454,7 +486,7 @@ const SpeciesManagement = () => {
       }
     } catch (err) {
       console.error('Error deleting category:', err);
-      setActionError(err.message || 'Error removing category.');
+      setCategoryModalError(err.message || 'Error removing category.');
     }
   };
 
@@ -653,7 +685,14 @@ const SpeciesManagement = () => {
           </button>
 
           <button 
-            onClick={() => { setCategoryTouched(false); setCategoryError(''); setShowCategoryModal(true); }}
+            onClick={() => {
+              setNewCategoryName('');
+              setCategoryTouched(false);
+              setCategoryError('');
+              setCategoryModalError('');
+              setCategoryModalSuccess('');
+              setShowCategoryModal(true);
+            }}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(157, 78, 221, 0.4)', color: '#d8b4fe' }}
           >
@@ -833,7 +872,14 @@ const SpeciesManagement = () => {
           ))}
 
           <button
-            onClick={() => { setCategoryTouched(false); setCategoryError(''); setShowCategoryModal(true); }}
+            onClick={() => {
+              setNewCategoryName('');
+              setCategoryTouched(false);
+              setCategoryError('');
+              setCategoryModalError('');
+              setCategoryModalSuccess('');
+              setShowCategoryModal(true);
+            }}
             style={{
               padding: '6px 12px',
               borderRadius: '8px',
@@ -1160,7 +1206,14 @@ const SpeciesManagement = () => {
                     <label className="form-label" style={{ margin: 0 }}>Taxonomy Category *</label>
                     <button
                       type="button"
-                      onClick={() => { setCategoryTouched(false); setCategoryError(''); setShowCategoryModal(true); }}
+                      onClick={() => {
+                        setNewCategoryName('');
+                        setCategoryTouched(false);
+                        setCategoryError('');
+                        setCategoryModalError('');
+                        setCategoryModalSuccess('');
+                        setShowCategoryModal(true);
+                      }}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -1315,15 +1368,16 @@ const SpeciesManagement = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: CATEGORY MANAGEMENT MODAL WITH LINE-BY-LINE VALIDATION */}
+      {/* MODAL 2: CATEGORY MANAGEMENT MODAL WITH COMPREHENSIVE STRONG VALIDATION */}
       {/* ========================================================================= */}
       {showCategoryModal && (
         <div className="modal-overlay" onClick={() => setShowCategoryModal(false)}>
           <div 
             className="modal-card" 
             onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '520px', width: '92%', display: 'flex', flexDirection: 'column', gap: '18px' }}
+            style={{ maxWidth: '530px', width: '92%', display: 'flex', flexDirection: 'column', gap: '18px' }}
           >
+            {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
               <div>
                 <h3 style={{ fontSize: '1.25rem', color: '#ffffff', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1331,7 +1385,7 @@ const SpeciesManagement = () => {
                   Taxonomy Category Manager
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  Add or remove categories for marine species classification.
+                  Add or curate taxonomy classes for marine biodiversity classification.
                 </span>
               </div>
               <button onClick={() => setShowCategoryModal(false)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
@@ -1339,19 +1393,68 @@ const SpeciesManagement = () => {
               </button>
             </div>
 
-            {/* Add Category Form with Line-by-Line Validation */}
-            <form onSubmit={handleAddCategory} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', gap: '10px' }}>
+            {/* In-Modal Alert Notifications */}
+            {categoryModalSuccess && (
+              <div style={{
+                padding: '10px 14px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid #10b981',
+                borderRadius: '8px',
+                color: '#10b981',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.82rem'
+              }}>
+                <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                <span>{categoryModalSuccess}</span>
+              </div>
+            )}
+
+            {categoryModalError && (
+              <div style={{
+                padding: '10px 14px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                borderRadius: '8px',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.82rem'
+              }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                <span>{categoryModalError}</span>
+              </div>
+            )}
+
+            {/* Add Category Form with Line-by-Line Character & Length Validation */}
+            <form onSubmit={handleAddCategory} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="form-label" style={{ margin: 0 }}>
+                  Category Name *
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
+                    (Letters only, min 3 chars)
+                  </span>
+                </label>
+                <span style={{ fontSize: '0.7rem', color: newCategoryName.length > 35 ? '#ef4444' : 'var(--text-muted)' }}>
+                  {newCategoryName.length}/40
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
                 <input
+                  ref={categoryInputRef}
                   type="text"
                   className="form-control"
                   placeholder="Enter new category (e.g. Mollusks, Echinoderms)..."
                   value={newCategoryName}
                   onChange={(e) => {
-                    setNewCategoryName(e.target.value);
-                    if (categoryTouched) {
-                      setCategoryError(validateCategoryInput(e.target.value, categoriesList));
-                    }
+                    // Strictly allow only alphabet letters and spaces
+                    const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                    setNewCategoryName(val);
+                    setCategoryTouched(true);
+                    setCategoryError(validateCategoryInput(val, categoriesList));
                   }}
                   onBlur={() => {
                     setCategoryTouched(true);
@@ -1359,8 +1462,9 @@ const SpeciesManagement = () => {
                   }}
                   style={{
                     flex: 1,
-                    borderColor: categoryTouched && categoryError ? '#ef4444' : undefined,
-                    boxShadow: categoryTouched && categoryError ? '0 0 0 2px rgba(239, 68, 68, 0.25)' : undefined
+                    borderColor: categoryTouched && categoryError ? '#ef4444' : categoryTouched && !categoryError && newCategoryName.trim() ? 'rgba(16, 185, 129, 0.7)' : 'rgba(255, 255, 255, 0.12)',
+                    boxShadow: categoryTouched && categoryError ? '0 0 0 2px rgba(239, 68, 68, 0.25)' : undefined,
+                    transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
                   }}
                   maxLength={40}
                 />
@@ -1368,11 +1472,13 @@ const SpeciesManagement = () => {
                   type="submit"
                   className="btn btn-primary"
                   disabled={categorySubmitting}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '0 18px' }}
                 >
-                  <Plus size={16} /> Add
+                  <Plus size={16} /> {categorySubmitting ? 'Adding...' : 'Add'}
                 </button>
               </div>
+
+              {/* Line-by-Line Error Message */}
               {categoryTouched && categoryError && (
                 <div style={{
                   display: 'flex',
@@ -1380,6 +1486,7 @@ const SpeciesManagement = () => {
                   gap: '5px',
                   color: '#ef4444',
                   fontSize: '0.74rem',
+                  marginTop: '4px',
                   fontWeight: '500'
                 }}>
                   <AlertCircle size={13} style={{ flexShrink: 0 }} />
@@ -1390,8 +1497,9 @@ const SpeciesManagement = () => {
 
             {/* Category List with Delete Option */}
             <div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Active Categories ({categoriesList.length})
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Active Categories</span>
+                <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>{categoriesList.length} Total</span>
               </div>
               <div style={{
                 maxHeight: '260px',
@@ -1411,7 +1519,8 @@ const SpeciesManagement = () => {
                       padding: '10px 14px',
                       borderRadius: '8px',
                       background: 'rgba(10, 25, 48, 0.6)',
-                      border: '1px solid rgba(0, 229, 255, 0.15)'
+                      border: '1px solid rgba(0, 229, 255, 0.15)',
+                      transition: 'border-color 0.2s ease'
                     }}
                   >
                     <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.88rem' }}>
