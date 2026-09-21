@@ -125,7 +125,7 @@ const SPECIES_CATALOG = [
     threats: 'Ghost nets, marine plastic consumption, ship impacts',
     sensitivity: 'High',
     notes: 'Rare migratory sightings logged offshore.',
-    image: 'https://images.unsplash.com/photo-1560275669-46c5a88d6a4c?auto=format&fit=crop&w=400&q=80'
+    image: '/images/whale_shark.png'
   },
   {
     id: 'sp5',
@@ -149,7 +149,7 @@ const SPECIES_CATALOG = [
     threats: 'Acidification, petroleum hydrocarbons, microplastics',
     sensitivity: 'High',
     notes: 'Primary food source. Abundance drop indicates chemical contamination.',
-    image: 'https://images.unsplash.com/photo-1507624905133-fe72207e32e5?auto=format&fit=crop&w=400&q=80'
+    image: '/images/zooplankton_copepods.png'
   },
   {
     id: 'sp7',
@@ -161,7 +161,7 @@ const SPECIES_CATALOG = [
     threats: 'Habitat loss, chemical runoff, heavy metals',
     sensitivity: 'Medium',
     notes: 'Crucial for mangrove soil aeration. Accumulates bio-toxins.',
-    image: 'https://images.unsplash.com/photo-1604313271701-d00e57207604?auto=format&fit=crop&w=400&q=80'
+    image: '/images/mangrove_crab.png'
   },
   {
     id: 'sp8',
@@ -185,7 +185,7 @@ const SPECIES_CATALOG = [
     threats: 'Bioaccumulation of poisons, nest disturbance',
     sensitivity: 'Medium',
     notes: 'Top predator. High concentration of plastics in nesting materials.',
-    image: 'https://images.unsplash.com/photo-1610996162232-a5e2a39d892d?auto=format&fit=crop&w=400&q=80'
+    image: '/images/white_bellied_sea_eagle.png'
   }
 ];
 
