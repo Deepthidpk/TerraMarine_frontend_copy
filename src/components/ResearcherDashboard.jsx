@@ -494,6 +494,9 @@ const ResearcherDashboard = ({
 
   // Tab 3: Species Explorer
   const [speciesCatalogList, setSpeciesCatalogList] = useState(SPECIES_CATALOG);
+  const [speciesCategories, setSpeciesCategories] = useState([
+    'Mammals', 'Fish', 'Reptiles', 'Corals', 'Crustaceans', 'Microorganisms', 'Plants', 'Coastal Birds'
+  ]);
   const [speciesSearch, setSpeciesSearch] = useState('');
   const [speciesCategory, setSpeciesCategory] = useState('All');
   const [selectedSpecies, setSelectedSpecies] = useState(null);
@@ -633,13 +636,22 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
         setSavedReports(data.reports || []);
       }
 
-      // 6. Dynamic Species Catalog (includes authority additions)
+      // 6. Dynamic Species Catalog & Categories (includes authority additions)
       try {
-        const speciesRes = await authFetch('/species');
+        const [speciesRes, catRes] = await Promise.all([
+          authFetch('/species'),
+          authFetch('/species/categories')
+        ]);
         if (speciesRes.ok) {
           const sData = await speciesRes.json();
           if (sData.species && sData.species.length > 0) {
             setSpeciesCatalogList(sData.species);
+          }
+        }
+        if (catRes.ok) {
+          const cData = await catRes.json();
+          if (cData.categories && cData.categories.length > 0) {
+            setSpeciesCategories(cData.categories.map(c => c.name));
           }
         }
       } catch (sErr) {
@@ -656,20 +668,34 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
   const syncSpeciesCatalog = async () => {
     setSpeciesLoading(true);
     try {
-      const speciesRes = await authFetch('/species');
+      const [speciesRes, catRes] = await Promise.all([
+        authFetch('/species'),
+        authFetch('/species/categories')
+      ]);
       if (speciesRes.ok) {
         const sData = await speciesRes.json();
         if (sData.species && sData.species.length > 0) {
           setSpeciesCatalogList(sData.species);
-          setSuccessMessage('Species catalog synchronized with official marine registry.');
         }
       }
+      if (catRes.ok) {
+        const cData = await catRes.json();
+        if (cData.categories && cData.categories.length > 0) {
+          setSpeciesCategories(cData.categories.map(c => c.name));
+        }
+      }
+      setSuccessMessage('Species catalog synchronized with official marine registry.');
     } catch (err) {
       console.error('Error syncing species:', err);
     } finally {
       setSpeciesLoading(false);
     }
   };
+
+  const dynamicSpeciesCategories = useMemo(() => {
+    const fromSpecies = speciesCatalogList.map(s => s.category).filter(Boolean);
+    return Array.from(new Set(['All', ...speciesCategories, ...fromSpecies]));
+  }, [speciesCategories, speciesCatalogList]);
 
   const resolveCatalogImage = (img) => {
     if (!img) return '/images/whale_shark.png';
@@ -1743,7 +1769,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
-              {['All', 'Mammals', 'Fish', 'Reptiles', 'Corals', 'Crustaceans', 'Microorganisms', 'Plants', 'Coastal Birds'].map(cat => (
+              {dynamicSpeciesCategories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSpeciesCategory(cat)}

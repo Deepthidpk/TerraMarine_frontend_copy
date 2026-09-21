@@ -17,22 +17,12 @@ import {
   Layers, 
   ChevronRight,
   Info,
-  Fish
+  Fish,
+  FolderPlus,
+  Settings
 } from 'lucide-react';
 
-const CATEGORIES = [
-  'All',
-  'Mammals',
-  'Fish',
-  'Reptiles',
-  'Corals',
-  'Crustaceans',
-  'Microorganisms',
-  'Plants',
-  'Coastal Birds'
-];
-
-const FORM_CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'Mammals',
   'Fish',
   'Reptiles',
@@ -63,19 +53,25 @@ const SpeciesManagement = () => {
   const { user, authFetch } = useAuth();
   
   const [speciesList, setSpeciesList] = useState([]);
+  const [categoriesList, setCategoriesList] = useState(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   
-  // Modal states
+  // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
-  // Form state
+  // Category Management Form State
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categorySubmitting, setCategorySubmitting] = useState(false);
+
+  // Species Form state
   const [formData, setFormData] = useState({
     name: '',
     scientific_name: '',
@@ -84,8 +80,7 @@ const SpeciesManagement = () => {
     sensitivity: 'High',
     habitat: '',
     threats: '',
-    notes: '',
-    image_url: ''
+    notes: ''
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -94,31 +89,57 @@ const SpeciesManagement = () => {
   // Auto-dismiss notifications
   useEffect(() => {
     if (actionSuccess) {
-      const timer = setTimeout(() => setActionSuccess(''), 3000);
+      const timer = setTimeout(() => setActionSuccess(''), 3500);
       return () => clearTimeout(timer);
     }
   }, [actionSuccess]);
 
   useEffect(() => {
     if (actionError) {
-      const timer = setTimeout(() => setActionError(''), 4000);
+      const timer = setTimeout(() => setActionError(''), 4500);
       return () => clearTimeout(timer);
     }
   }, [actionError]);
+
+  // Fetch categories
+  const fetchCategories = async () => {
+    try {
+      const res = await authFetch('/species/categories');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.categories && data.categories.length > 0) {
+          setCategoriesList(data.categories.map(c => c.name));
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching species categories:', err);
+    }
+  };
 
   // Fetch species catalog
   const fetchSpecies = async () => {
     setRefreshing(true);
     try {
-      const res = await authFetch('/species');
-      if (res.ok) {
-        const data = await res.json();
+      const [spRes, catRes] = await Promise.all([
+        authFetch('/species'),
+        authFetch('/species/categories')
+      ]);
+
+      if (spRes.ok) {
+        const data = await spRes.json();
         setSpeciesList(data.species || []);
       } else {
         throw new Error('Failed to load species catalog.');
       }
+
+      if (catRes.ok) {
+        const cData = await catRes.json();
+        if (cData.categories && cData.categories.length > 0) {
+          setCategoriesList(cData.categories.map(c => c.name));
+        }
+      }
     } catch (err) {
-      console.error('Error fetching species:', err);
+      console.error('Error fetching data:', err);
       setActionError('Could not load marine species from server.');
     } finally {
       setLoading(false);
@@ -152,18 +173,93 @@ const SpeciesManagement = () => {
     setFormData({
       name: '',
       scientific_name: '',
-      category: 'Reptiles',
+      category: categoriesList[0] || 'Reptiles',
       status: 'Endangered',
       sensitivity: 'High',
       habitat: '',
       threats: '',
-      notes: '',
-      image_url: ''
+      notes: ''
     });
     setImageFile(null);
     setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle Add Category
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) {
+      return setActionError('Please enter a category name.');
+    }
+
+    setCategorySubmitting(true);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const res = await authFetch('/species/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCategoryName.trim() })
+      });
+
+      const resJson = await res.json();
+      if (!res.ok) {
+        throw new Error(resJson.error || 'Failed to add category.');
+      }
+
+      setActionSuccess(`New category "${newCategoryName.trim()}" added successfully!`);
+      const addedName = newCategoryName.trim();
+      setNewCategoryName('');
+      
+      // Refresh categories list
+      await fetchCategories();
+      
+      // Auto-select the newly added category in the form
+      setFormData(prev => ({ ...prev, category: addedName }));
+    } catch (err) {
+      console.error('Error adding category:', err);
+      setActionError(err.message || 'Server error adding category.');
+    } finally {
+      setCategorySubmitting(false);
+    }
+  };
+
+  // Handle Delete Category
+  const handleDeleteCategory = async (categoryName) => {
+    if (!window.confirm(`Are you sure you want to remove category "${categoryName}"?`)) {
+      return;
+    }
+
+    try {
+      // Find category id or delete by querying categories
+      const catRes = await authFetch('/species/categories');
+      if (catRes.ok) {
+        const data = await catRes.json();
+        const target = (data.categories || []).find(c => c.name.toLowerCase() === categoryName.toLowerCase());
+        if (!target) {
+          throw new Error('Category not found.');
+        }
+
+        const delRes = await authFetch(`/species/categories/${target.category_id || target.id}`, {
+          method: 'DELETE'
+        });
+        const delJson = await delRes.json();
+        if (!delRes.ok) {
+          throw new Error(delJson.error || 'Failed to delete category.');
+        }
+
+        setActionSuccess(`Category "${categoryName}" removed.`);
+        await fetchCategories();
+        if (selectedCategory === categoryName) {
+          setSelectedCategory('All');
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting category:', err);
+      setActionError(err.message || 'Error removing category.');
     }
   };
 
@@ -194,8 +290,6 @@ const SpeciesManagement = () => {
 
       if (imageFile) {
         data.append('image', imageFile);
-      } else if (formData.image_url) {
-        data.append('image_url', formData.image_url.trim());
       }
 
       const res = await authFetch('/species', {
@@ -250,6 +344,11 @@ const SpeciesManagement = () => {
     return `${serverUrl}${img}`;
   };
 
+  // Combined Category Filter Options: 'All' + dynamic categories
+  const filterCategories = useMemo(() => {
+    return ['All', ...categoriesList];
+  }, [categoriesList]);
+
   // Filtered Species
   const filteredSpecies = useMemo(() => {
     return speciesList.filter(sp => {
@@ -273,12 +372,10 @@ const SpeciesManagement = () => {
   const stats = useMemo(() => {
     const total = speciesList.length;
     const endangered = speciesList.filter(s => s.status === 'Endangered' || s.status === 'Critically Endangered').length;
-    const vulnerable = speciesList.filter(s => s.status === 'Vulnerable').length;
-    const categoriesCount = new Set(speciesList.map(s => s.category)).size;
-    const customAdded = speciesList.filter(s => s.created_by != null || s.created_by_name != null).length;
+    const categoriesCount = categoriesList.length;
 
-    return { total, endangered, vulnerable, categoriesCount, customAdded };
-  }, [speciesList]);
+    return { total, endangered, categoriesCount };
+  }, [speciesList, categoriesList]);
 
   return (
     <div style={{ paddingBottom: '40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -302,11 +399,11 @@ const SpeciesManagement = () => {
             Marine Species Catalog & Registry
           </h1>
           <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '750px' }}>
-            Register, curate, and publish marine biodiversity profiles. All species added here are instantly synchronized and accessible to marine researchers on their Species Explorer workspace.
+            Register, curate, and publish marine biodiversity profiles. All species and taxonomy categories added here are immediately synchronized and accessible to marine researchers on their Species Explorer workspace.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button 
             onClick={fetchSpecies}
             className="btn btn-secondary"
@@ -316,6 +413,15 @@ const SpeciesManagement = () => {
           >
             <RefreshCw size={16} className={refreshing ? 'spin-icon' : ''} />
             <span>Sync</span>
+          </button>
+
+          <button 
+            onClick={() => setShowCategoryModal(true)}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(157, 78, 221, 0.4)', color: '#d8b4fe' }}
+          >
+            <Layers size={16} />
+            <span>Manage Categories</span>
           </button>
 
           <button 
@@ -466,9 +572,9 @@ const SpeciesManagement = () => {
           )}
         </div>
 
-        {/* Category Pills */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-          {CATEGORIES.map(cat => (
+        {/* Dynamic Category Pills */}
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', alignItems: 'center' }}>
+          {filterCategories.map(cat => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -488,6 +594,27 @@ const SpeciesManagement = () => {
               {cat}
             </button>
           ))}
+
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              border: '1px dashed rgba(157, 78, 221, 0.5)',
+              background: 'rgba(157, 78, 221, 0.1)',
+              color: '#d8b4fe',
+              cursor: 'pointer',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap'
+            }}
+            title="Add or remove categories"
+          >
+            <Plus size={14} /> Category
+          </button>
         </div>
       </div>
 
@@ -774,17 +901,35 @@ const SpeciesManagement = () => {
               {/* Taxonomy Class & Conservation Status */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Taxonomy Category *</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Taxonomy Category *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoryModal(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--accent-primary)',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontWeight: '600'
+                      }}
+                    >
+                      + Manage Categories
+                    </button>
+                  </div>
                   <select
                     className="form-control"
                     value={formData.category}
                     onChange={(e) => setFormData(p => ({ ...p, category: e.target.value }))}
                   >
-                    {FORM_CATEGORIES.map(cat => (
+                    {categoriesList.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
                 </div>
+
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Conservation Status *</label>
                   <select
@@ -799,30 +944,18 @@ const SpeciesManagement = () => {
                 </div>
               </div>
 
-              {/* Sensitivity Level & Image URL fallback */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Pollution Sensitivity Index</label>
-                  <select
-                    className="form-control"
-                    value={formData.sensitivity}
-                    onChange={(e) => setFormData(p => ({ ...p, sensitivity: e.target.value }))}
-                  >
-                    {SENSITIVITY_LEVELS.map(lvl => (
-                      <option key={lvl} value={lvl}>{lvl} Sensitivity</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Photo URL (Optional fallback)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="https://... or /images/..."
-                    value={formData.image_url}
-                    onChange={(e) => setFormData(p => ({ ...p, image_url: e.target.value }))}
-                  />
-                </div>
+              {/* Sensitivity Level */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Pollution Sensitivity Index</label>
+                <select
+                  className="form-control"
+                  value={formData.sensitivity}
+                  onChange={(e) => setFormData(p => ({ ...p, sensitivity: e.target.value }))}
+                >
+                  {SENSITIVITY_LEVELS.map(lvl => (
+                    <option key={lvl} value={lvl}>{lvl} Sensitivity</option>
+                  ))}
+                </select>
               </div>
 
               {/* Habitat */}
@@ -886,7 +1019,118 @@ const SpeciesManagement = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: DETAILED SPECIES PROFILE MODAL (Exact match to screenshot) */}
+      {/* MODAL 2: CATEGORY MANAGEMENT MODAL */}
+      {/* ========================================================================= */}
+      {showCategoryModal && (
+        <div className="modal-overlay" onClick={() => setShowCategoryModal(false)}>
+          <div 
+            className="modal-card" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ maxWidth: '520px', width: '92%', display: 'flex', flexDirection: 'column', gap: '18px' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', color: '#ffffff', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Layers size={18} color="var(--accent-primary)" />
+                  Taxonomy Category Manager
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Add or remove categories for marine species classification.
+                </span>
+              </div>
+              <button onClick={() => setShowCategoryModal(false)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Add Category Form */}
+            <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Enter new category (e.g. Mollusks, Echinoderms)..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                style={{ flex: 1 }}
+                required
+              />
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={categorySubmitting}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+              >
+                <Plus size={16} /> Add
+              </button>
+            </form>
+
+            {/* Category List with Delete Option */}
+            <div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Active Categories ({categoriesList.length})
+              </div>
+              <div style={{
+                maxHeight: '260px',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                paddingRight: '4px'
+              }}>
+                {categoriesList.map((cat) => (
+                  <div
+                    key={cat}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(10, 25, 48, 0.6)',
+                      border: '1px solid rgba(0, 229, 255, 0.15)'
+                    }}
+                  >
+                    <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.88rem' }}>
+                      {cat}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(cat)}
+                      title={`Remove "${cat}" category`}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'rgba(239, 68, 68, 0.7)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(239, 68, 68, 0.7)'}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCategoryModal(false)}
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: '6px' }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: DETAILED SPECIES PROFILE MODAL */}
       {/* ========================================================================= */}
       {selectedSpecies && (
         <div className="modal-overlay" onClick={() => setSelectedSpecies(null)}>
