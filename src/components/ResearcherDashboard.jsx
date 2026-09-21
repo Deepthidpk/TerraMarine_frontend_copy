@@ -173,7 +173,7 @@ const SPECIES_CATALOG = [
     threats: 'Turbidity block (no sunlight), dredging, oil spills',
     sensitivity: 'High',
     notes: 'Forms carbon sinks. Requires high light penetration.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80'
+    image: '/images/seagrass_tape_grass.png'
   },
   {
     id: 'sp9',
