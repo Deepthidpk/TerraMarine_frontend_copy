@@ -516,6 +516,8 @@ const ResearcherDashboard = ({
     start_date: '',
     end_date: ''
   });
+  const [projectFormErrors, setProjectFormErrors] = useState({});
+  const [projectFormTouched, setProjectFormTouched] = useState({});
 
   // Tab 8: My Observations
   const [biodiversityObs, setBiodiversityObs] = useState([]);
@@ -796,11 +798,137 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
   };
 
   // -------------------------------------------------------------------------
-  // Project operations
+  // Project operations & Strong Line-by-Line Validation
   // -------------------------------------------------------------------------
+  const validateProjectField = (field, value, allValues = projectForm) => {
+    const val = typeof value === 'string' ? value.trim() : '';
+    switch (field) {
+      case 'title':
+        if (!val) return 'Project title is required.';
+        if (val.length < 5) return 'Title must be at least 5 characters long.';
+        if (val.length > 150) return 'Title cannot exceed 150 characters.';
+        return null;
+
+      case 'study_area':
+        if (!val) return 'Study sector or geographic area is required.';
+        if (val.length < 3) return 'Study area must be at least 3 characters.';
+        if (val.length > 100) return 'Study area cannot exceed 100 characters.';
+        return null;
+
+      case 'start_date':
+        if (value && allValues.end_date) {
+          if (new Date(value) > new Date(allValues.end_date)) {
+            return 'Start date cannot be after end date.';
+          }
+        }
+        return null;
+
+      case 'end_date':
+        if (value && allValues.start_date) {
+          if (new Date(value) < new Date(allValues.start_date)) {
+            return 'End date cannot be earlier than start date.';
+          }
+        }
+        return null;
+
+      case 'objectives':
+        if (val && val.length < 10) return 'Objectives must be at least 10 characters if provided.';
+        if (val && val.length > 1000) return 'Objectives cannot exceed 1000 characters.';
+        return null;
+
+      case 'description':
+        if (!val) return 'Project description is required to define the research scope.';
+        if (val.length < 15) return 'Description must be at least 15 characters long.';
+        if (val.length > 2000) return 'Description cannot exceed 2000 characters.';
+        return null;
+
+      default:
+        return null;
+    }
+  };
+
+  const validateAllProjectFields = (values = projectForm) => {
+    const errors = {};
+    const titleErr = validateProjectField('title', values.title, values);
+    if (titleErr) errors.title = titleErr;
+
+    const areaErr = validateProjectField('study_area', values.study_area, values);
+    if (areaErr) errors.study_area = areaErr;
+
+    const startErr = validateProjectField('start_date', values.start_date, values);
+    if (startErr) errors.start_date = startErr;
+
+    const endErr = validateProjectField('end_date', values.end_date, values);
+    if (endErr) errors.end_date = endErr;
+
+    const objErr = validateProjectField('objectives', values.objectives, values);
+    if (objErr) errors.objectives = objErr;
+
+    const descErr = validateProjectField('description', values.description, values);
+    if (descErr) errors.description = descErr;
+
+    return errors;
+  };
+
+  const handleProjectInputChange = (field, value) => {
+    const updatedForm = { ...projectForm, [field]: value };
+    setProjectForm(updatedForm);
+
+    if (projectFormTouched[field]) {
+      const error = validateProjectField(field, value, updatedForm);
+      setProjectFormErrors(prev => ({ ...prev, [field]: error }));
+      if (field === 'start_date' && projectFormTouched.end_date) {
+        const endErr = validateProjectField('end_date', updatedForm.end_date, updatedForm);
+        setProjectFormErrors(prev => ({ ...prev, end_date: endErr }));
+      } else if (field === 'end_date' && projectFormTouched.start_date) {
+        const startErr = validateProjectField('start_date', updatedForm.start_date, updatedForm);
+        setProjectFormErrors(prev => ({ ...prev, start_date: startErr }));
+      }
+    }
+  };
+
+  const handleProjectInputBlur = (field) => {
+    setProjectFormTouched(prev => ({ ...prev, [field]: true }));
+    const error = validateProjectField(field, projectForm[field], projectForm);
+    setProjectFormErrors(prev => ({ ...prev, [field]: error }));
+    if (field === 'start_date' && projectForm.end_date) {
+      const endErr = validateProjectField('end_date', projectForm.end_date, projectForm);
+      setProjectFormErrors(prev => ({ ...prev, end_date: endErr }));
+    } else if (field === 'end_date' && projectForm.start_date) {
+      const startErr = validateProjectField('start_date', projectForm.start_date, projectForm);
+      setProjectFormErrors(prev => ({ ...prev, start_date: startErr }));
+    }
+  };
+
+  const handleOpenProjectModal = () => {
+    setProjectFormErrors({});
+    setProjectFormTouched({});
+    setShowProjectModal(true);
+  };
+
+  const handleCloseProjectModal = () => {
+    setProjectFormErrors({});
+    setProjectFormTouched({});
+    setShowProjectModal(false);
+  };
+
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    if (!projectForm.title) return;
+    setProjectFormTouched({
+      title: true,
+      study_area: true,
+      start_date: true,
+      end_date: true,
+      objectives: true,
+      description: true
+    });
+
+    const errors = validateAllProjectFields(projectForm);
+    setProjectFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
 
     try {
       const res = await authFetch('/researcher/projects', {
@@ -818,6 +946,8 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
           start_date: '',
           end_date: ''
         });
+        setProjectFormErrors({});
+        setProjectFormTouched({});
         setShowProjectModal(false);
         fetchResearchData();
       } else {
@@ -2182,7 +2312,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Active Research Projects</h3>
-            <button className="btn btn-primary" onClick={() => setShowProjectModal(true)}>
+            <button className="btn btn-primary" onClick={handleOpenProjectModal}>
               <Plus size={16} /> Launch New Project
             </button>
           </div>
@@ -2232,81 +2362,158 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
             <div className="modal-overlay">
               <div className="modal-card" style={{ maxWidth: '550px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                  <h3 style={{ fontSize: '1.25rem' }}>Launch Research Project</h3>
-                  <button onClick={() => setShowProjectModal(false)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.25rem' }}>Launch Research Project</h3>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      Define research parameters and track field observation datasets.
+                    </p>
+                  </div>
+                  <button onClick={handleCloseProjectModal} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
                     <X size={18} />
                   </button>
                 </div>
                 
-                <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <form onSubmit={handleCreateProject} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div className="form-group">
-                    <label className="form-label">Project Title</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="form-label">Project Title *</label>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{projectForm.title.length}/150</span>
+                    </div>
                     <input
                       type="text"
                       className="form-control"
                       placeholder="e.g. Impact of Microplastics on Humpback Dolphin Migration"
                       value={projectForm.title}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, title: e.target.value }))}
-                      required
+                      onChange={(e) => handleProjectInputChange('title', e.target.value)}
+                      onBlur={() => handleProjectInputBlur('title')}
+                      style={{
+                        border: projectFormErrors.title ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)',
+                        boxShadow: projectFormErrors.title ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                      }}
                     />
+                    {projectFormErrors.title && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {projectFormErrors.title}
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Study Sector / Area</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="form-label">Study Sector / Area *</label>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{projectForm.study_area.length}/100</span>
+                    </div>
                     <input
                       type="text"
                       className="form-control"
+                      placeholder="e.g. Fort Kochi Estuary or Cherai Mangroves"
                       value={projectForm.study_area}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, study_area: e.target.value }))}
+                      onChange={(e) => handleProjectInputChange('study_area', e.target.value)}
+                      onBlur={() => handleProjectInputBlur('study_area')}
+                      style={{
+                        border: projectFormErrors.study_area ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)',
+                        boxShadow: projectFormErrors.study_area ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                      }}
                     />
+                    {projectFormErrors.study_area && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {projectFormErrors.study_area}
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                     <div className="form-group">
-                      <label className="form-label">Start Date</label>
+                      <label className="form-label">Start Date (Optional)</label>
                       <input
                         type="date"
                         className="form-control"
                         value={projectForm.start_date}
-                        onChange={(e) => setProjectForm(prev => ({ ...prev, start_date: e.target.value }))}
+                        onChange={(e) => handleProjectInputChange('start_date', e.target.value)}
+                        onBlur={() => handleProjectInputBlur('start_date')}
+                        style={{
+                          border: projectFormErrors.start_date ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)',
+                          boxShadow: projectFormErrors.start_date ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                        }}
                       />
+                      {projectFormErrors.start_date && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {projectFormErrors.start_date}
+                        </span>
+                      )}
                     </div>
                     <div className="form-group">
-                      <label className="form-label">End Date</label>
+                      <label className="form-label">End Date (Optional)</label>
                       <input
                         type="date"
                         className="form-control"
                         value={projectForm.end_date}
-                        onChange={(e) => setProjectForm(prev => ({ ...prev, end_date: e.target.value }))}
+                        onChange={(e) => handleProjectInputChange('end_date', e.target.value)}
+                        onBlur={() => handleProjectInputBlur('end_date')}
+                        style={{
+                          border: projectFormErrors.end_date ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)',
+                          boxShadow: projectFormErrors.end_date ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                        }}
                       />
+                      {projectFormErrors.end_date && (
+                        <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {projectFormErrors.end_date}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Project Objectives</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="form-label">Project Objectives (Optional)</label>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{projectForm.objectives.length}/1000</span>
+                    </div>
                     <textarea
                       className="form-control"
                       rows="2"
-                      placeholder="List objectives..."
+                      placeholder="e.g. Quantify microplastic density in benthic sediment and identify species feeding risk."
                       value={projectForm.objectives}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, objectives: e.target.value }))}
+                      onChange={(e) => handleProjectInputChange('objectives', e.target.value)}
+                      onBlur={() => handleProjectInputBlur('objectives')}
+                      style={{
+                        border: projectFormErrors.objectives ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)',
+                        boxShadow: projectFormErrors.objectives ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                      }}
                     ></textarea>
+                    {projectFormErrors.objectives && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {projectFormErrors.objectives}
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Description</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="form-label">Description *</label>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{projectForm.description.length}/2000</span>
+                    </div>
                     <textarea
                       className="form-control"
                       rows="3"
-                      placeholder="Detailed project summary..."
+                      placeholder="Provide a comprehensive project summary, hypothesis, methodology, and expected outcomes..."
                       value={projectForm.description}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, description: e.target.value }))}
+                      onChange={(e) => handleProjectInputChange('description', e.target.value)}
+                      onBlur={() => handleProjectInputBlur('description')}
+                      style={{
+                        border: projectFormErrors.description ? '1px solid #ff4d4d' : '1px solid rgba(0, 229, 255, 0.2)',
+                        boxShadow: projectFormErrors.description ? '0 0 8px rgba(255, 77, 77, 0.3)' : 'none'
+                      }}
                     ></textarea>
+                    {projectFormErrors.description && (
+                      <span style={{ color: '#ff4d4d', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {projectFormErrors.description}
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
                     <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Launch Project</button>
-                    <button type="button" className="btn btn-secondary" onClick={() => setShowProjectModal(false)}>Cancel</button>
+                    <button type="button" className="btn btn-secondary" onClick={handleCloseProjectModal}>Cancel</button>
                   </div>
                 </form>
               </div>
