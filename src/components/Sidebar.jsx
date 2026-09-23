@@ -240,12 +240,9 @@ const Sidebar = () => {
         { to: '/dashboard?tab=biodiversity-hotspots', tabKey: 'biodiversity-hotspots', label: 'Biodiversity', icon: <Layers size={18} /> },
         { to: '/dashboard?tab=pollution-analysis', tabKey: 'pollution-analysis', label: 'Pollution Analysis', icon: <BarChart3 size={18} /> },
         { to: '/dashboard?tab=water-quality', tabKey: 'water-quality', label: 'Water Quality', icon: <Sliders size={18} /> },
-        { to: '/dashboard?tab=research-projects', tabKey: 'research-projects', label: 'Research Projects', icon: <FolderOpen size={18} /> },
         { to: '/dashboard?tab=my-observations', tabKey: 'my-observations', label: 'My Observations', icon: <Camera size={18} /> },
-        { to: '/dashboard?tab=datasets', tabKey: 'datasets', label: 'Datasets', icon: <Database size={18} /> },
         { to: '/dashboard?tab=research-reports', tabKey: 'research-reports', label: 'Research Reports', icon: <FileText size={18} /> },
-        { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Octo AI Assistant', icon: <MessageSquare size={18} /> },
-        { to: '/dashboard?tab=research-alerts', tabKey: 'research-alerts', label: 'Research Alerts', icon: <AlertCircle size={18} /> }
+        { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Octo AI Assistant', icon: <MessageSquare size={18} /> }
       ];
     }
 
