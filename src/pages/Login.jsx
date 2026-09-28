@@ -57,6 +57,12 @@ const Login = () => {
         navigate('/reports');
       } else if (user.role === 'Volunteer') {
         navigate('/tasks');
+      } else if (user.role === 'Fisherman') {
+        if (!user.location_completed) {
+          navigate('/fisherman/location-setup');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         navigate('/dashboard');
       }
@@ -126,6 +132,12 @@ const Login = () => {
         navigate('/reports');
       } else if (loggedUser?.role === 'Volunteer') {
         navigate('/tasks');
+      } else if (loggedUser?.role === 'Fisherman') {
+        if (!loggedUser.location_completed) {
+          navigate('/fisherman/location-setup');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         navigate('/dashboard');
       }

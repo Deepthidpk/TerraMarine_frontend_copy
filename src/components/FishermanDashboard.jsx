@@ -5,6 +5,12 @@ import {
   Wind, Compass, Bell, CheckCircle, Clock, Info, X, Radio, Navigation, Eye, CheckCircle2, ChevronRight,
   RefreshCw, Send, AlertTriangle, Layers, Droplet, Fish, AlertCircle, FileText, Check, Filter, ExternalLink
 } from 'lucide-react';
+import {
+  calculateMarineAlert,
+  calculateWeatherAlert,
+  calculateOverallSafety,
+  parseBulletinValidity
+} from '../utils/marineSafetyEvaluator';
 
 const FishermanDashboard = ({ 
   user, 
@@ -32,6 +38,7 @@ const FishermanDashboard = ({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Dynamic categories & waste types
   const [categoriesList, setCategoriesList] = useState(['Pollution', 'Emergency']);
@@ -60,6 +67,66 @@ const FishermanDashboard = ({
     fetchWastes();
   }, []);
 
+  // Strong field validation function matching standard platform rules
+  const getFieldError = (name, value, extraFile) => {
+    if (name === 'title') {
+      const val = (value || '').trim();
+      if (!val) return 'Title is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Title must start with a letter or number.';
+      if (val.length < 3) return 'Title must be at least 3 characters.';
+      if (val.length > 100) return 'Title must not exceed 100 characters.';
+      if (!/^[A-Za-z0-9][A-Za-z0-9\s.,'-]*$/.test(val)) return "Title can only contain letters, numbers, spaces, and basic punctuation (.,'-).";
+    } else if (name === 'category') {
+      if (!value || String(value).trim() === '') return 'Category selection is required.';
+    } else if (name === 'wasteType') {
+      if (!value || String(value).trim() === '') return 'Incident / waste type selection is required.';
+    } else if (name === 'locationName') {
+      const val = (value || '').trim();
+      if (!val) return 'Location / Coastal Zone is required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Location name must start with a letter or number.';
+      if (val.length < 3) return 'Location name must be at least 3 characters.';
+      if (val.length > 150) return 'Location name must not exceed 150 characters.';
+      if (!/^[A-Za-z0-9][A-Za-z0-9\s.,/-]*$/.test(val)) return 'Location name can only contain letters, numbers, spaces, and basic punctuation (.,/-).';
+    } else if (name === 'latitude') {
+      const val = (value || '').toString().trim();
+      const latNum = parseFloat(val);
+      if (!val) return 'Latitude is required. Use GPS button or enter coordinates.';
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(val)) return 'Latitude must be a valid decimal number.';
+      if (isNaN(latNum) || latNum < -90 || latNum > 90) return 'Latitude must be between -90 and 90 degrees.';
+    } else if (name === 'longitude') {
+      const val = (value || '').toString().trim();
+      const lngNum = parseFloat(val);
+      if (!val) return 'Longitude is required. Use GPS button or enter coordinates.';
+      if (!/^-?[0-9]+(?:\.[0-9]+)?$/.test(val)) return 'Longitude must be a valid decimal number.';
+      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) return 'Longitude must be between -180 and 180 degrees.';
+    } else if (name === 'description') {
+      const val = (value || '').trim();
+      if (!val) return 'Description notes are required.';
+      if (!/^[A-Za-z0-9]/.test(val)) return 'Description must start with a letter or number.';
+      if (val.length < 5) return 'Description must be at least 5 characters.';
+      if (val.length > 1000) return 'Description must not exceed 1000 characters.';
+      if (!/^[A-Za-z0-9\s.,!?'"()#&%+-]*$/.test(val)) return 'Description contains invalid characters.';
+    } else if (name === 'image') {
+      const fileToValidate = extraFile !== undefined ? extraFile : imageFile;
+      if (fileToValidate) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+        if (!allowedTypes.includes(fileToValidate.type)) {
+          return 'Only JPEG, PNG, or WebP image formats are supported.';
+        }
+        if (fileToValidate.size > 10 * 1024 * 1024) {
+          return 'Image size must not exceed 10MB.';
+        }
+      }
+    }
+    return '';
+  };
+
+  const validateField = (name, value, extraFile) => {
+    const errorMsg = getFieldError(name, value, extraFile);
+    setFieldErrors((prev) => ({ ...prev, [name]: errorMsg }));
+    return errorMsg;
+  };
+
   // 2. REPORT DETAILS & TRACKING STEPPER MODAL STATE
   const [activeReportDetails, setActiveReportDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -76,66 +143,55 @@ const FishermanDashboard = ({
   const [joinedCampaignIds, setJoinedCampaignIds] = useState(new Set());
   const [joiningCampaignId, setJoiningCampaignId] = useState(null);
 
-  // 6. REAL-DATA IMD MARINE & COASTAL SAFETY STATE
-  const [selectedLayer, setSelectedLayer] = useState('All');
-  const [marineStatus, setMarineStatus] = useState(null);
-  const [seaBulletins, setSeaBulletins] = useState([]);
-  const [coastalBulletins, setCoastalBulletins] = useState([]);
-  const [activeOfficialWarnings, setActiveOfficialWarnings] = useState([]);
-  const [availableLayers, setAvailableLayers] = useState([]);
+  // 6. REAL-DATA IMD MARINE & COASTAL SAFETY STATE (STRICTLY LOCATION FILTERED)
+  const [relevantData, setRelevantData] = useState(null);
   const [marineLoading, setMarineLoading] = useState(true);
   const [marineError, setMarineError] = useState('');
-  const [marineLastUpdated, setMarineLastUpdated] = useState(null);
   const [selectedBulletin, setSelectedBulletin] = useState(null);
   const [showBulletinModal, setShowBulletinModal] = useState(false);
 
-  const fetchMarineData = async (layer = selectedLayer, forceRefresh = false) => {
+  const fetchMarineData = async (forceRefresh = false) => {
     setMarineLoading(true);
     setMarineError('');
     try {
-      let url = `/fisherman/marine/status`;
-      const queryParams = [];
-      if (layer && layer !== 'All') queryParams.push(`layer=${encodeURIComponent(layer)}`);
-      if (forceRefresh) queryParams.push(`refresh=true`);
-      if (queryParams.length > 0) url += `?${queryParams.join('&')}`;
-
+      const url = forceRefresh ? '/fisherman/marine/relevant-alerts?refresh=true' : '/fisherman/marine/relevant-alerts';
       const res = await authFetch(url);
       if (res.ok) {
         const data = await res.json();
-        setMarineStatus(data.status);
-        setSeaBulletins(data.seaBulletins || []);
-        setCoastalBulletins(data.coastalBulletins || []);
-        setActiveOfficialWarnings(data.activeOfficialWarnings || []);
-        setMarineLastUpdated(data.lastUpdated);
-        if (data.availableLayers && data.availableLayers.length > 0) {
-          setAvailableLayers(data.availableLayers);
-        }
+        setRelevantData(data);
       } else {
-        setMarineError('Unable to retrieve the latest IMD marine information.');
+        setMarineError('Location-specific marine information is currently unavailable.');
       }
     } catch (err) {
-      console.error('Error fetching IMD marine safety data:', err);
-      setMarineError('Unable to retrieve the latest IMD marine information.');
+      console.error('Error fetching relevant IMD marine data:', err);
+      setMarineError('Unable to retrieve location-specific IMD warnings.');
     } finally {
       setMarineLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMarineData(selectedLayer);
-  }, [selectedLayer]);
+    fetchMarineData();
+  }, [user?.location_coastal_area, user?.location_district]);
 
   // Auto-detect GPS coordinates
   const handleDetectGPS = () => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setLatitude(pos.coords.latitude.toFixed(6));
-          setLongitude(pos.coords.longitude.toFixed(6));
+          const latStr = pos.coords.latitude.toFixed(6);
+          const lngStr = pos.coords.longitude.toFixed(6);
+          setLatitude(latStr);
+          setLongitude(lngStr);
+          setFieldErrors((prev) => ({ ...prev, latitude: '', longitude: '' }));
           setFormSuccess('GPS coordinates auto-detected!');
           setTimeout(() => setFormSuccess(''), 2500);
         },
-        () => setFormError('GPS access denied or unavailable. Enter manually.'),
+        () => {
+          setFormError('GPS access denied or unavailable. Enter coordinates manually.');
+          validateField('latitude', latitude);
+          validateField('longitude', longitude);
+        },
         { enableHighAccuracy: true, timeout: 8000 }
       );
     }
@@ -143,6 +199,7 @@ const FishermanDashboard = ({
 
   // Quick Preset Selector for Floating Waste / Emergency
   const handleApplyPreset = (presetType) => {
+    setFieldErrors({});
     if (presetType === 'plastic') {
       setModalCategory('Pollution');
       setModalWasteType('Plastic');
@@ -186,6 +243,7 @@ const FishermanDashboard = ({
     setLatitude('');
     setLongitude('');
     setImageFile(null);
+    setFieldErrors({});
     setFormError('');
     setFormSuccess('');
     setShowReportModal(true);
@@ -195,14 +253,28 @@ const FishermanDashboard = ({
 
   const handleSubmitReport = async (e) => {
     e.preventDefault();
-    if (!reportTitle.trim() || reportTitle.length < 3) {
-      return setFormError('Title must be at least 3 characters.');
-    }
-    if (!locationName.trim()) {
-      return setFormError('Location name or fishing zone is required.');
-    }
-    if (!latitude || !longitude) {
-      return setFormError('Latitude & Longitude GPS coordinates are required.');
+
+    // Validate all fields strictly
+    const errors = {
+      title: getFieldError('title', reportTitle),
+      category: getFieldError('category', modalCategory),
+      wasteType: getFieldError('wasteType', modalWasteType),
+      locationName: getFieldError('locationName', locationName),
+      latitude: getFieldError('latitude', latitude),
+      longitude: getFieldError('longitude', longitude),
+      description: getFieldError('description', reportDesc),
+      image: getFieldError('image', null, imageFile)
+    };
+
+    const activeErrors = {};
+    Object.keys(errors).forEach((key) => {
+      if (errors[key]) activeErrors[key] = errors[key];
+    });
+
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
+      setFormError('Please fix the highlighted field errors before submitting.');
+      return;
     }
 
     setSubmitting(true);
@@ -279,6 +351,99 @@ const FishermanDashboard = ({
   // TerraMarine environmental alerts (user/system submitted)
   const envAlerts = alerts || [];
 
+  const getSimplifiedDisplay = (text, type) => {
+    if (!text || text === 'N/A' || text === 'NIL') return <span style={{color: '#94a3b8'}}>N/A</span>;
+    const str = String(text).toLowerCase();
+    
+    let icon = '';
+    let simpleText = text;
+    let color = '#cbd5e1';
+
+    if (type === 'wind') {
+      icon = '💨';
+      const match = str.match(/(\d+)\s*(to|-)\s*(\d+)\s*knots?/i);
+      const gustMatch = str.match(/gusting\s*to\s*(\d+)\s*knots?/i);
+      if (match) {
+        simpleText = `${match[1]}-${match[3]} Knots`;
+        if (gustMatch) simpleText += ` (Gusts ${gustMatch[1]})`;
+        
+        const speed = parseInt(match[3]);
+        if (speed > 25) color = '#ef4444';
+        else if (speed > 15) color = '#f59e0b';
+        else color = '#10b981';
+      } else {
+        simpleText = text.length > 40 ? text.substring(0, 37) + '...' : text;
+      }
+    } else if (type === 'sea') {
+      icon = '🌊';
+      if (str.includes('rough') || str.includes('high') || str.includes('very')) {
+        simpleText = 'Rough (Dangerous)';
+        color = '#ef4444';
+      } else if (str.includes('moderate')) {
+        simpleText = 'Moderate (Caution)';
+        color = '#f59e0b';
+      } else if (str.includes('slight') || str.includes('smooth')) {
+        simpleText = 'Calm / Slight (Safe)';
+        color = '#10b981';
+      } else {
+        simpleText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      }
+    } else if (type === 'weather') {
+      icon = '🌧️';
+      if (str.includes('thunder') || str.includes('squall')) {
+        simpleText = 'Thunderstorms / Squall';
+        color = '#ef4444';
+        icon = '⛈️';
+      } else if (str.includes('rain') || str.includes('shower')) {
+        simpleText = 'Rain / Showers';
+        color = '#3b82f6';
+      } else if (str.includes('cloud')) {
+        simpleText = 'Cloudy';
+        color = '#94a3b8';
+        icon = '☁️';
+      } else if (str.includes('clear') || str.includes('fair')) {
+        simpleText = 'Clear Skies';
+        color = '#10b981';
+        icon = '☀️';
+      } else {
+        simpleText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      }
+    } else if (type === 'visibility') {
+      icon = '👁️';
+      if (str.includes('very poor')) {
+        simpleText = 'Very Poor';
+        color = '#ef4444';
+      } else if (str.includes('poor')) {
+        simpleText = 'Poor Visibility';
+        color = '#f59e0b';
+      } else if (str.includes('moderate')) {
+        simpleText = 'Moderate';
+        color = '#fbbf24';
+      } else if (str.includes('good')) {
+        simpleText = 'Good Visibility';
+        color = '#10b981';
+      } else {
+         simpleText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      }
+    } else if (type === 'portSignal') {
+       icon = '🚩';
+       if (str.includes('nil') || str === 'n/a') {
+         simpleText = 'No Signal (Safe)';
+         color = '#10b981';
+       } else {
+         simpleText = `Signal: ${text}`;
+         color = '#ef4444';
+       }
+    }
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span style={{ fontSize: '1.1rem' }}>{icon}</span>
+        <span style={{ color: color, fontWeight: '700', fontSize: '0.85rem' }}>{simpleText}</span>
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -341,6 +506,86 @@ const FishermanDashboard = ({
         </div>
       </div>
 
+      {/* REGISTERED COASTAL LOCATION BADGE & IMD COVERAGE ACTION */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.1) 0%, rgba(2, 132, 199, 0.15) 100%)',
+        border: '1px solid rgba(0, 229, 255, 0.35)',
+        borderRadius: '16px',
+        padding: '18px 24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '16px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              background: 'rgba(0, 229, 255, 0.18)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#00e5ff'
+            }}>
+              <MapPin size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#00e5ff', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                YOUR REGISTERED FISHING ZONE
+              </div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ffffff', marginTop: '2px' }}>
+                📍 {user?.location_coastal_area || relevantData?.location?.coastalArea || 'Ponnani Light House & Harbour'}
+                <span style={{ fontSize: '0.86rem', fontWeight: 500, color: '#cbd5e1', marginLeft: '8px' }}>
+                  ({user?.location_municipality || relevantData?.location?.municipality || 'Ponnani Municipality'}, {user?.location_district || relevantData?.location?.district || 'Malappuram'}, {user?.location_state || relevantData?.location?.state || 'Kerala'})
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            padding: '8px 16px',
+            borderRadius: '12px',
+            background: 'rgba(0, 229, 255, 0.12)',
+            border: '1px solid rgba(0, 229, 255, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <Compass size={18} color="#00e5ff" />
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IMD COVERAGE REGION</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#00e5ff' }}>
+                🌊 {relevantData?.imdCoverage?.region || 'North Kerala Coast'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => navigate('/fisherman/location-setup?edit=true')}
+          style={{
+            padding: '9px 18px',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            border: '1px solid rgba(0, 229, 255, 0.4)',
+            color: '#00e5ff',
+            fontSize: '0.84rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <Navigation size={14} /> Edit Coastal Location
+        </button>
+      </div>
+
       {/* 2. REAL-DATA IMD MARINE & COASTAL SAFETY MODULE (PROMINENT SECTION) */}
       <div className="glass-panel" style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(8, 24, 48, 0.95) 0%, rgba(5, 18, 38, 0.98) 100%)', border: '1px solid rgba(0, 229, 255, 0.3)' }}>
         
@@ -365,37 +610,19 @@ const FishermanDashboard = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            {/* Location / Region Filter Dropdown */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 12px', borderRadius: '10px', border: '1px solid rgba(0, 229, 255, 0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.8)', padding: '8px 14px', borderRadius: '10px', border: '1px solid rgba(0, 229, 255, 0.25)' }}>
               <Filter size={14} color="#00e5ff" />
-              <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: '600' }}>Coastal Region:</span>
-              <select
-                value={selectedLayer}
-                onChange={(e) => setSelectedLayer(e.target.value)}
-                style={{
-                  background: 'transparent',
-                  color: '#00e5ff',
-                  border: 'none',
-                  fontSize: '0.82rem',
-                  fontWeight: '700',
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="All" style={{ background: '#0f172a', color: '#ffffff' }}>All Coastal Regions</option>
-                {availableLayers.map((layer) => (
-                  <option key={layer} value={layer} style={{ background: '#0f172a', color: '#ffffff' }}>
-                    {layer}
-                  </option>
-                ))}
-              </select>
+              <span style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600' }}>IMD Coverage:</span>
+              <span style={{ fontSize: '0.85rem', color: '#00e5ff', fontWeight: '800' }}>
+                🌊 {relevantData?.imdCoverage?.region || 'North Kerala Coast'}
+              </span>
             </div>
 
             <button
-              onClick={() => fetchMarineData(selectedLayer, true)}
+              onClick={() => fetchMarineData(true)}
               disabled={marineLoading}
               style={{
-                padding: '7px 14px',
+                padding: '8px 16px',
                 borderRadius: '10px',
                 background: 'rgba(0, 229, 255, 0.1)',
                 border: '1px solid rgba(0, 229, 255, 0.3)',
@@ -414,229 +641,404 @@ const FishermanDashboard = ({
           </div>
         </div>
 
-        {/* Marine Safety Status Indicator Banner */}
-        {marineError ? (
-          <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(148, 163, 184, 0.1)', border: '1px solid rgba(148, 163, 184, 0.3)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <AlertCircle size={20} color="#94a3b8" />
-            <div>
-              <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#cbd5e1', fontWeight: '700' }}>Information Unavailable</h4>
-              <p style={{ margin: '2px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>{marineError}</p>
-            </div>
-          </div>
-        ) : marineStatus ? (
-          <div style={{
-            padding: '16px 20px',
-            borderRadius: '14px',
-            background: marineStatus.statusCode === 'WARNING_ACTIVE' ? 'rgba(239, 68, 68, 0.12)' : marineStatus.statusCode === 'ADVISORY_CAUTION' ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-            border: `1px solid ${marineStatus.badgeColor}50`,
-            marginBottom: '20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '14px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                backgroundColor: marineStatus.badgeColor,
-                boxShadow: `0 0 12px ${marineStatus.badgeColor}`
-              }} />
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800' }}>
-                    Status: <span style={{ color: marineStatus.badgeColor }}>{marineStatus.statusText}</span>
-                  </h4>
-                  <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '6px', background: `${marineStatus.badgeColor}25`, color: marineStatus.badgeColor, fontWeight: '700' }}>
-                    OFFICIAL IMD CLASSIFICATION
-                  </span>
-                </div>
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#cbd5e1' }}>
-                  {marineStatus.message}
-                </p>
-              </div>
-            </div>
+        {/* 2.1 DETERMINISTIC DUAL LIGHT INDICATOR SYSTEM: MARINE ALERT & WEATHER ALERT */}
+        {(() => {
+          const renderTrafficLight = (level, size = 18) => {
+            let color = '#22c55e';
+            let glow = '0 0 16px rgba(34, 197, 94, 0.85)';
+            if (level === 'RED') {
+              color = '#ef4444';
+              glow = '0 0 18px rgba(239, 68, 68, 0.95)';
+            } else if (level === 'YELLOW') {
+              color = '#f59e0b';
+              glow = '0 0 16px rgba(245, 158, 11, 0.85)';
+            } else if (level === 'UNAVAILABLE') {
+              color = '#94a3b8';
+              glow = '0 0 10px rgba(148, 163, 184, 0.4)';
+            }
 
-            <div style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'right' }}>
-              <div>IMD Issued: <strong style={{ color: '#ffffff' }}>{marineLastUpdated ? new Date(marineLastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}</strong></div>
-              <div>Validity: <strong style={{ color: '#00e5ff' }}>12 Hours</strong></div>
-            </div>
-          </div>
-        ) : null}
+            return (
+              <div
+                style={{
+                  width: `${size}px`,
+                  height: `${size}px`,
+                  borderRadius: '50%',
+                  backgroundColor: color,
+                  boxShadow: glow,
+                  flexShrink: 0,
+                  border: '2px solid rgba(255, 255, 255, 0.4)',
+                  transition: 'all 0.3s ease'
+                }}
+              />
+            );
+          };
 
-        {/* Official Warnings Card Banner (If Warning is Active) */}
-        {activeOfficialWarnings.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '0.92rem', color: '#ff4d4d', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ShieldAlert size={18} color="#ff4d4d" />
-              OFFICIAL IMD MARINE WARNINGS ACTIVE ({activeOfficialWarnings.length})
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {activeOfficialWarnings.map((warn, idx) => (
-                <div key={idx} style={{
-                  padding: '14px 16px',
-                  borderRadius: '12px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
+          // 1. Check if server already evaluated alerts
+          let marineAlert = relevantData?.marineAlert;
+          let weatherAlert = relevantData?.weatherAlert;
+          let overallStatus = relevantData?.overallStatus;
+          let validity = relevantData?.validity;
+
+          // 2. Client-side deterministic evaluation fallback if backend payload was from cache or missing fields
+          if (!marineAlert && (relevantData?.relevantSeaBulletin || relevantData?.relevantCoastalBulletin)) {
+            const locObj = {
+              state: user?.location_state || relevantData?.location?.state || 'Kerala',
+              district: user?.location_district || relevantData?.location?.district || 'Malappuram',
+              municipality: user?.location_municipality || relevantData?.location?.municipality || 'Ponnani Municipality',
+              coastalArea: user?.location_coastal_area || relevantData?.location?.coastalArea || 'Ponnani Light House & Harbour'
+            };
+            const covObj = relevantData?.imdCoverage || { region: 'North Kerala Coast', state: 'Kerala' };
+            
+            marineAlert = calculateMarineAlert({
+              coastalBulletin: relevantData?.relevantCoastalBulletin,
+              seaBulletin: relevantData?.relevantSeaBulletin,
+              portWarning: relevantData?.relevantPortWarning,
+              cycloneWarning: relevantData?.cycloneWarning,
+              location: locObj,
+              coverage: covObj
+            });
+
+            weatherAlert = calculateWeatherAlert({
+              coastalBulletin: relevantData?.relevantCoastalBulletin,
+              seaBulletin: relevantData?.relevantSeaBulletin,
+              cycloneWarning: relevantData?.cycloneWarning,
+              location: locObj,
+              coverage: covObj
+            });
+
+            overallStatus = calculateOverallSafety(marineAlert, weatherAlert);
+
+            const coastalValidity = relevantData?.relevantCoastalBulletin ? parseBulletinValidity(relevantData?.relevantCoastalBulletin) : null;
+            const seaValidity = relevantData?.relevantSeaBulletin ? parseBulletinValidity(relevantData?.relevantSeaBulletin) : null;
+            validity = coastalValidity || seaValidity;
+          }
+
+          const mLevel = marineError ? 'UNAVAILABLE' : (marineAlert?.level || 'UNAVAILABLE');
+          const wLevel = marineError ? 'UNAVAILABLE' : (weatherAlert?.level || 'UNAVAILABLE');
+          const oLevel = marineError ? 'UNAVAILABLE' : (overallStatus?.level || 'UNAVAILABLE');
+
+          return (
+            <>
+              {/* Dual Alert Indicators Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+                
+                {/* 🌊 MARINE ALERT CARD */}
+                <div style={{
+                  padding: '20px',
+                  borderRadius: '16px',
+                  background: mLevel === 'RED' ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              mLevel === 'YELLOW' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              mLevel === 'GREEN' ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              'linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                  border: `1px solid ${mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}60`,
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '12px'
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
                 }}>
                   <div>
-                    <div style={{ fontSize: '0.88rem', fontWeight: '800', color: '#ffffff', marginBottom: '2px' }}>
-                      Region: <span style={{ color: '#ff4d4d' }}>{warn.layer}</span> | Issued By: {warn.issuedBy || 'IMD'}
-                    </div>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#fca5a5' }}>
-                      ⚠️ <strong>Warning Detail:</strong> {warn.warning}
-                    </p>
-                    {warn.validFrom && (
-                      <div style={{ fontSize: '0.76rem', color: '#cbd5e1', marginTop: '4px' }}>
-                        📅 Valid: {warn.validFrom}
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.3rem' }}>🌊</span>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                          Marine Alert
+                        </h3>
                       </div>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', background: 'rgba(239, 68, 68, 0.3)', color: '#ffffff', padding: '4px 10px', borderRadius: '6px', fontWeight: '700' }}>
-                    IMD OFFICIAL WARNING
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {renderTrafficLight(mLevel, 16)}
+                        <span style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '800',
+                          padding: '3px 10px',
+                          borderRadius: '8px',
+                          background: `${mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}25`,
+                          color: mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8',
+                          border: `1px solid ${mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}50`
+                        }}>
+                          {mLevel === 'RED' ? '🔴 RED' : mLevel === 'YELLOW' ? '🟡 YELLOW' : mLevel === 'GREEN' ? '🟢 GREEN' : '⚪ DATA UNAVAILABLE'}
+                        </span>
+                      </div>
+                    </div>
 
-        {/* Bulletins Section: Sea Area & Coastal Bulletins */}
+                    {/* Status & Reason */}
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '1.25rem',
+                        fontWeight: '900',
+                        color: mLevel === 'RED' ? '#ef4444' : mLevel === 'YELLOW' ? '#f59e0b' : mLevel === 'GREEN' ? '#22c55e' : '#cbd5e1',
+                        letterSpacing: '-0.01em',
+                        marginBottom: '6px'
+                      }}>
+                        {marineError ? 'DATA UNAVAILABLE' : marineAlert?.label || (mLevel === 'GREEN' ? 'SAFE TO GO TO SEA' : mLevel === 'YELLOW' ? 'CAUTION' : mLevel === 'RED' ? 'DO NOT GO TO SEA' : 'DATA UNAVAILABLE')}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.86rem', color: '#e2e8f0', lineHeight: 1.45 }}>
+                        {marineError ? 'Unable to retrieve current official IMD conditions.' : (marineAlert?.reason || (mLevel === 'GREEN' ? 'No significant official marine hazard detected for your registered area.' : 'Current official marine information could not be verified.'))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Footer Meta */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', marginTop: '14px', fontSize: '0.74rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <span>Source: <strong style={{ color: '#cbd5e1' }}>IMD</strong></span>
+                    <span>Valid Until: <strong style={{ color: '#00e5ff' }}>{marineAlert?.formattedValidUntil || validity?.formattedValidUntil || 'Current Cycle'}</strong></span>
+                  </div>
+                </div>
+
+                {/* ☁️ WEATHER ALERT CARD */}
+                <div style={{
+                  padding: '20px',
+                  borderRadius: '16px',
+                  background: wLevel === 'RED' ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              wLevel === 'YELLOW' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              wLevel === 'GREEN' ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)' :
+                              'linear-gradient(135deg, rgba(148, 163, 184, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                  border: `1px solid ${wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}60`,
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}>
+                  <div>
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.3rem' }}>☁️</span>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: '800', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                          Weather Alert
+                        </h3>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {renderTrafficLight(wLevel, 16)}
+                        <span style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '800',
+                          padding: '3px 10px',
+                          borderRadius: '8px',
+                          background: `${wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}25`,
+                          color: wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8',
+                          border: `1px solid ${wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}50`
+                        }}>
+                          {wLevel === 'RED' ? '🔴 RED' : wLevel === 'YELLOW' ? '🟡 YELLOW' : wLevel === 'GREEN' ? '🟢 GREEN' : '⚪ DATA UNAVAILABLE'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status & Reason */}
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '1.25rem',
+                        fontWeight: '900',
+                        color: wLevel === 'RED' ? '#ef4444' : wLevel === 'YELLOW' ? '#f59e0b' : wLevel === 'GREEN' ? '#22c55e' : '#cbd5e1',
+                        letterSpacing: '-0.01em',
+                        marginBottom: '6px'
+                      }}>
+                        {marineError ? 'DATA UNAVAILABLE' : weatherAlert?.label || (wLevel === 'GREEN' ? 'SAFE TO GO TO SEA' : wLevel === 'YELLOW' ? 'CAUTION' : wLevel === 'RED' ? 'DO NOT GO TO SEA' : 'DATA UNAVAILABLE')}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.86rem', color: '#e2e8f0', lineHeight: 1.45 }}>
+                        {marineError ? 'Unable to retrieve current official IMD conditions.' : (weatherAlert?.reason || (wLevel === 'GREEN' ? 'No significant official weather hazard detected for your registered area.' : 'Current official weather information could not be verified.'))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Footer Meta */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', marginTop: '14px', fontSize: '0.74rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <span>Source: <strong style={{ color: '#cbd5e1' }}>IMD</strong></span>
+                    <span>Valid Until: <strong style={{ color: '#00e5ff' }}>{weatherAlert?.formattedValidUntil || validity?.formattedValidUntil || 'Current Cycle'}</strong></span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* OVERALL SAFETY STATUS BANNER */}
+              <div style={{
+                padding: '16px 20px',
+                borderRadius: '14px',
+                background: oLevel === 'RED' ? 'rgba(239, 68, 68, 0.15)' :
+                            oLevel === 'YELLOW' ? 'rgba(245, 158, 11, 0.15)' :
+                            oLevel === 'GREEN' ? 'rgba(34, 197, 94, 0.15)' :
+                            'rgba(148, 163, 184, 0.12)',
+                border: `1px solid ${oLevel === 'RED' ? '#ef4444' : oLevel === 'YELLOW' ? '#f59e0b' : oLevel === 'GREEN' ? '#22c55e' : '#94a3b8'}60`,
+                marginBottom: '22px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '14px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  {renderTrafficLight(oLevel, 18)}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        OVERALL STATUS:
+                      </span>
+                      <h4 style={{ margin: 0, fontSize: '1.05rem', color: oLevel === 'RED' ? '#ef4444' : oLevel === 'YELLOW' ? '#f59e0b' : oLevel === 'GREEN' ? '#22c55e' : '#cbd5e1', fontWeight: '900' }}>
+                        {oLevel === 'RED' ? '🔴 DO NOT GO TO SEA' : oLevel === 'YELLOW' ? '🟡 PROCEED WITH CAUTION' : oLevel === 'GREEN' ? '🟢 NO SIGNIFICANT OFFICIAL HAZARD' : '⚪ INFORMATION UNAVAILABLE'}
+                      </h4>
+                    </div>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#cbd5e1' }}>
+                      {marineError ? 'Unable to verify current official IMD conditions. Check official VHF/coastal broadcasts.' : (overallStatus?.message || (oLevel === 'GREEN' ? 'No significant official hazards detected. Safe to venture to sea.' : 'Proceed with caution.'))}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'right' }}>
+                  <div>Source: <strong style={{ color: '#00e5ff' }}>India Meteorological Department (IMD)</strong></div>
+                  <div>Updated: <strong style={{ color: '#ffffff' }}>{relevantData?.retrievedAt ? new Date(relevantData.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}</strong></div>
+                  <div>Valid Until: <strong style={{ color: '#00e5ff' }}>{validity?.formattedValidUntil || 'Current cycle'}</strong></div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+
+        {/* Bulletins Section: Strictly Filtered Relevant Coastal & Sea Area Bulletins */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
           
-          {/* Sea Area Bulletins Card */}
-          <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '10px', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Wind size={18} color="#00e5ff" />
-                <h4 style={{ margin: 0, fontSize: '1rem', color: '#ffffff', fontWeight: '700' }}>
-                  Sea Area Bulletins ({seaBulletins.length})
-                </h4>
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: '700' }}>IMD Official</span>
-            </div>
-
-            {seaBulletins.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '20px' }}>
-                No Sea Area bulletins match the selected region.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {seaBulletins.map((bulletin, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => { setSelectedBulletin(bulletin); setShowBulletinModal(true); }}
-                    style={{
-                      padding: '14px',
-                      borderRadius: '10px',
-                      background: 'rgba(15, 23, 42, 0.9)',
-                      border: '1px solid rgba(0, 229, 255, 0.25)',
-                      cursor: 'pointer',
-                      transition: 'border-color 0.2s'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#ffffff' }}>
-                        📍 {bulletin.layer}
-                      </span>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        {bulletin.issuedBy}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '8px' }}>
-                      <div>💨 <strong>Wind:</strong> {bulletin.wind || 'N/A'}</div>
-                      <div>🌊 <strong>Sea:</strong> {bulletin.seaCondition || 'N/A'}</div>
-                      <div>🌧️ <strong>Weather:</strong> {bulletin.weather || 'N/A'}</div>
-                      <div>👁️ <strong>Visibility:</strong> {bulletin.visibility || 'N/A'}</div>
-                    </div>
-
-                    {bulletin.warning && bulletin.warning !== 'NIL' && (
-                      <div style={{ fontSize: '0.76rem', color: '#ffb703', background: 'rgba(255, 183, 3, 0.1)', padding: '6px', borderRadius: '6px', marginTop: '4px' }}>
-                        ⚠️ <strong>Warning:</strong> {bulletin.warning}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', pt: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.72rem', color: '#64748b' }}>
-                      <span>Source: India Meteorological Department</span>
-                      <span style={{ color: '#00e5ff', display: 'flex', alignItems: 'center', gap: '2px' }}>View Details <ChevronRight size={12} /></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Coastal Bulletins Card */}
-          <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '10px', marginBottom: '14px' }}>
+          {/* Relevant Coastal Bulletin Card */}
+          <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Navigation size={18} color="#00f5d4" />
                 <h4 style={{ margin: 0, fontSize: '1rem', color: '#ffffff', fontWeight: '700' }}>
-                  Coastal Bulletins ({coastalBulletins.length})
+                  Applicable Coastal Bulletin ({relevantData?.counts?.coastal || 0})
                 </h4>
               </div>
               <span style={{ fontSize: '0.72rem', color: '#00f5d4', fontWeight: '700' }}>IMD Official</span>
             </div>
 
-            {coastalBulletins.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '20px' }}>
-                No Coastal bulletins match the selected region.
-              </p>
+            {!relevantData?.relevantCoastalBulletin ? (
+              <div style={{ padding: '24px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '10px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>
+                  No active coastal bulletin found specifically for <strong>{relevantData?.imdCoverage?.region || 'your area'}</strong>.
+                </p>
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {coastalBulletins.map((bulletin, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => { setSelectedBulletin(bulletin); setShowBulletinModal(true); }}
-                    style={{
-                      padding: '14px',
-                      borderRadius: '10px',
-                      background: 'rgba(15, 23, 42, 0.9)',
-                      border: '1px solid rgba(0, 245, 212, 0.25)',
-                      cursor: 'pointer',
-                      transition: 'border-color 0.2s'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#ffffff' }}>
-                        ⚓ {bulletin.layer}
-                      </span>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        {bulletin.issuedBy}
-                      </span>
-                    </div>
+              <div 
+                onClick={() => { setSelectedBulletin(relevantData.relevantCoastalBulletin); setShowBulletinModal(true); }}
+                style={{
+                  padding: '16px',
+                  borderRadius: '12px',
+                  background: 'rgba(15, 23, 42, 0.9)',
+                  border: '1px solid rgba(0, 245, 212, 0.3)',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#00f5d4' }}>
+                    ⚓ {relevantData.relevantCoastalBulletin.layer}
+                  </span>
+                  <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                    {relevantData.relevantCoastalBulletin.issuedBy}
+                  </span>
+                </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '8px' }}>
-                      <div>💨 <strong>Wind:</strong> {bulletin.wind || 'N/A'}</div>
-                      <div>🌊 <strong>Sea:</strong> {bulletin.seaCondition || 'N/A'}</div>
-                      <div>🌧️ <strong>Weather:</strong> {bulletin.weather || 'N/A'}</div>
-                      <div>🚩 <strong>Port Signal:</strong> {bulletin.portSignal || 'NIL'}</div>
-                    </div>
-
-                    {bulletin.warning && bulletin.warning !== 'NIL' && bulletin.warning !== 'NIL.' && (
-                      <div style={{ fontSize: '0.76rem', color: '#ffb703', background: 'rgba(255, 183, 3, 0.1)', padding: '6px', borderRadius: '6px', marginTop: '4px' }}>
-                        ⚠️ <strong>Warning:</strong> {bulletin.warning}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', pt: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.72rem', color: '#64748b' }}>
-                      <span>Source: India Meteorological Department</span>
-                      <span style={{ color: '#00f5d4', display: 'flex', alignItems: 'center', gap: '2px' }}>View Details <ChevronRight size={12} /></span>
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.8rem', marginBottom: '10px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Wind</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.wind, 'wind')}
                   </div>
-                ))}
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Sea Condition</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.seaCondition, 'sea')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Weather</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.weather, 'weather')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Port Signal</div>
+                    {getSimplifiedDisplay(relevantData.relevantCoastalBulletin.portSignal, 'portSignal')}
+                  </div>
+                </div>
+
+                {relevantData.relevantCoastalBulletin.warning && relevantData.relevantCoastalBulletin.warning !== 'NIL' && (
+                  <div style={{ fontSize: '0.78rem', color: '#ffb703', background: 'rgba(255, 183, 3, 0.12)', padding: '8px 10px', borderRadius: '8px', marginTop: '6px' }}>
+                    ⚠️ <strong>Official Warning:</strong> {relevantData.relevantCoastalBulletin.warning}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: '0.74rem', color: '#64748b' }}>
+                  <span>Source: India Meteorological Department</span>
+                  <span style={{ color: '#00f5d4', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>View Full Details <ChevronRight size={13} /></span>
+                </div>
               </div>
             )}
           </div>
 
+          {/* Relevant Sea Area Bulletin Card */}
+          <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(8, 20, 42, 0.8)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 229, 255, 0.15)', paddingBottom: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Wind size={18} color="#00e5ff" />
+                <h4 style={{ margin: 0, fontSize: '1rem', color: '#ffffff', fontWeight: '700' }}>
+                  Applicable Sea Area Bulletin ({relevantData?.counts?.seaArea || 0})
+                </h4>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: '700' }}>IMD Official</span>
+            </div>
+
+            {!relevantData?.relevantSeaBulletin ? (
+              <div style={{ padding: '24px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '10px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>
+                  No active sea-area bulletin match for your coverage region.
+                </p>
+              </div>
+            ) : (
+              <div 
+                onClick={() => { setSelectedBulletin(relevantData.relevantSeaBulletin); setShowBulletinModal(true); }}
+                style={{
+                  padding: '16px',
+                  borderRadius: '12px',
+                  background: 'rgba(15, 23, 42, 0.9)',
+                  border: '1px solid rgba(0, 229, 255, 0.3)',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#00e5ff' }}>
+                    📍 {relevantData.relevantSeaBulletin.layer}
+                  </span>
+                  <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                    {relevantData.relevantSeaBulletin.issuedBy}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.8rem', marginBottom: '10px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Wind</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.wind, 'wind')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Sea Condition</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.seaCondition, 'sea')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Weather</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.weather, 'weather')}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Visibility</div>
+                    {getSimplifiedDisplay(relevantData.relevantSeaBulletin.visibility, 'visibility')}
+                  </div>
+                </div>
+
+                {relevantData.relevantSeaBulletin.warning && relevantData.relevantSeaBulletin.warning !== 'NIL' && (
+                  <div style={{ fontSize: '0.78rem', color: '#ffb703', background: 'rgba(255, 183, 3, 0.12)', padding: '8px 10px', borderRadius: '8px', marginTop: '6px' }}>
+                    ⚠️ <strong>Official Warning:</strong> {relevantData.relevantSeaBulletin.warning}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: '0.74rem', color: '#64748b' }}>
+                  <span>Source: India Meteorological Department</span>
+                  <span style={{ color: '#00e5ff', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>View Full Details <ChevronRight size={13} /></span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -955,81 +1357,186 @@ const FishermanDashboard = ({
 
             <form onSubmit={handleSubmitReport} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Title</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                  Title <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input 
                   type="text" 
                   className="form-control" 
                   value={reportTitle} 
-                  onChange={(e) => setReportTitle(e.target.value)} 
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} 
+                  placeholder="e.g. Floating Plastic Debris Sighting"
+                  onChange={(e) => { setReportTitle(e.target.value); validateField('title', e.target.value); }}
+                  onBlur={(e) => validateField('title', e.target.value)}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.title ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.title ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }} 
                 />
+                {fieldErrors.title && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.title}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Category</label>
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Category <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
                   <select 
                     className="form-control" 
                     value={modalCategory} 
-                    onChange={(e) => setModalCategory(e.target.value)}
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                    onChange={(e) => { setModalCategory(e.target.value); validateField('category', e.target.value); }}
+                    onBlur={(e) => validateField('category', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.category ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)'
+                    }}
                   >
                     {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {fieldErrors.category && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.category}
+                    </span>
+                  )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incident Type</label>
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Incident Type <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
                   <select 
                     className="form-control" 
                     value={modalWasteType} 
-                    onChange={(e) => setModalWasteType(e.target.value)}
-                    style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                    onChange={(e) => { setModalWasteType(e.target.value); validateField('wasteType', e.target.value); }}
+                    onBlur={(e) => validateField('wasteType', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.wasteType ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)'
+                    }}
                   >
                     {wasteTypesList.map(w => <option key={w} value={w}>{w}</option>)}
                   </select>
+                  {fieldErrors.wasteType && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.wasteType}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Location / Coastal Zone</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                  Location / Coastal Zone <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input 
                   type="text" 
                   className="form-control" 
                   value={locationName} 
-                  onChange={(e) => setLocationName(e.target.value)} 
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} 
+                  placeholder="e.g. Ponnani Coastal Area / Offshore Route"
+                  onChange={(e) => { setLocationName(e.target.value); validateField('locationName', e.target.value); }}
+                  onBlur={(e) => validateField('locationName', e.target.value)}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.locationName ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.locationName ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }} 
                 />
+                {fieldErrors.locationName && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.locationName}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Latitude</label>
-                  <input type="text" className="form-control" value={latitude} onChange={(e) => setLatitude(e.target.value)} style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} />
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Latitude <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={latitude} 
+                    placeholder="e.g. 10.782000"
+                    onChange={(e) => { setLatitude(e.target.value); validateField('latitude', e.target.value); }}
+                    onBlur={(e) => validateField('latitude', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.latitude ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: fieldErrors.latitude ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                    }} 
+                  />
+                  {fieldErrors.latitude && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.latitude}
+                    </span>
+                  )}
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Longitude</label>
-                  <input type="text" className="form-control" value={longitude} onChange={(e) => setLongitude(e.target.value)} style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }} />
+                  <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                    Longitude <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={longitude} 
+                    placeholder="e.g. 75.925000"
+                    onChange={(e) => { setLongitude(e.target.value); validateField('longitude', e.target.value); }}
+                    onBlur={(e) => validateField('longitude', e.target.value)}
+                    style={{
+                      color: '#ffffff',
+                      background: 'rgba(8, 20, 42, 0.8)',
+                      border: fieldErrors.longitude ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                      boxShadow: fieldErrors.longitude ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                    }} 
+                  />
+                  {fieldErrors.longitude && (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      ⚠️ {fieldErrors.longitude}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <button 
                 type="button" 
                 onClick={handleDetectGPS} 
-                style={{ background: 'rgba(0, 229, 255, 0.1)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '6px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                style={{ background: 'rgba(0, 229, 255, 0.1)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.3)', padding: '8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
                 <MapPin size={14} /> Detect GPS Location Now
               </button>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Description Notes</label>
+                <label style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                  Description Notes <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <textarea 
                   className="form-control"
                   rows={3}
-                  placeholder="Describe quantity, direction of flow, or marine hazards..."
+                  placeholder="Describe quantity, direction of flow, hazard condition, or marine observations..."
                   value={reportDesc}
-                  onChange={(e) => setReportDesc(e.target.value)}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                  onChange={(e) => { setReportDesc(e.target.value); validateField('description', e.target.value); }}
+                  onBlur={(e) => validateField('description', e.target.value)}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.description ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                    boxShadow: fieldErrors.description ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                  }}
                 />
+                {fieldErrors.description && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.description}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1038,9 +1545,22 @@ const FishermanDashboard = ({
                   type="file" 
                   className="form-control" 
                   accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files[0])}
-                  style={{ color: '#ffffff', background: 'rgba(8, 20, 42, 0.8)' }}
+                  onChange={(e) => {
+                    const f = e.target.files[0] || null;
+                    setImageFile(f);
+                    validateField('image', null, f);
+                  }}
+                  style={{
+                    color: '#ffffff',
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: fieldErrors.image ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)'
+                  }}
                 />
+                {fieldErrors.image && (
+                  <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    ⚠️ {fieldErrors.image}
+                  </span>
+                )}
               </div>
 
               <button 

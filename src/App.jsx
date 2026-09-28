@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
@@ -17,11 +17,14 @@ import Tasks from './pages/Tasks';
 import Biodiversity from './pages/Biodiversity';
 import Payments from './pages/Payments';
 import UserApproval from './pages/UserApproval';
+import SpeciesManagement from './pages/SpeciesManagement';
 import Notifications from './pages/Notifications';
 import MyParticipations from './pages/MyParticipations';
+import LocationSetup from './pages/LocationSetup';
 
 const ProtectedLayout = ({ children }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -44,6 +47,11 @@ const ProtectedLayout = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Mandatory Location Setup Guard for Fisherman users
+  if (user.role === 'Fisherman' && !user.location_completed && location.pathname !== '/fisherman/location-setup') {
+    return <Navigate to="/fisherman/location-setup" replace />;
+  }
+
   return (
     <div className="app-container">
       <Sidebar />
@@ -52,6 +60,20 @@ const ProtectedLayout = ({ children }) => {
       </main>
     </div>
   );
+};
+
+const LocationSetupGuard = ({ children }) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isEditMode = searchParams.get('edit') === 'true';
+
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'Fisherman') return <Navigate to="/dashboard" replace />;
+  if (user.location_completed && !isEditMode) return <Navigate to="/dashboard" replace />;
+
+  return children;
 };
 
 const AdminRoute = ({ children }) => {
@@ -93,12 +115,23 @@ const App = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
+          {/* Fisherman Location Setup Route */}
+          <Route 
+            path="/fisherman/location-setup" 
+            element={
+              <LocationSetupGuard>
+                <LocationSetup />
+              </LocationSetupGuard>
+            } 
+          />
+
           {/* Protected Routes */}
           <Route path="/dashboard" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
           <Route path="/reports" element={<ProtectedLayout><Reports /></ProtectedLayout>} />
           <Route path="/campaigns" element={<ProtectedLayout><Campaigns /></ProtectedLayout>} />
           <Route path="/tasks" element={<ProtectedLayout><NonVolunteerRoute><Tasks /></NonVolunteerRoute></ProtectedLayout>} />
           <Route path="/biodiversity" element={<ProtectedLayout><NonVolunteerRoute><Biodiversity /></NonVolunteerRoute></ProtectedLayout>} />
+          <Route path="/species-management" element={<ProtectedLayout><AuthorityOrAdminRoute><SpeciesManagement /></AuthorityOrAdminRoute></ProtectedLayout>} />
           <Route path="/payments" element={<ProtectedLayout><Payments /></ProtectedLayout>} />
           <Route path="/participations" element={<ProtectedLayout><MyParticipations /></ProtectedLayout>} />
           <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />

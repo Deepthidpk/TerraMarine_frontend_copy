@@ -125,7 +125,7 @@ const SPECIES_CATALOG = [
     threats: 'Ghost nets, marine plastic consumption, ship impacts',
     sensitivity: 'High',
     notes: 'Rare migratory sightings logged offshore.',
-    image: 'https://images.unsplash.com/photo-1560275669-46c5a88d6a4c?auto=format&fit=crop&w=400&q=80'
+    image: '/images/whale_shark.png'
   },
   {
     id: 'sp5',
@@ -149,7 +149,7 @@ const SPECIES_CATALOG = [
     threats: 'Acidification, petroleum hydrocarbons, microplastics',
     sensitivity: 'High',
     notes: 'Primary food source. Abundance drop indicates chemical contamination.',
-    image: 'https://images.unsplash.com/photo-1507624905133-fe72207e32e5?auto=format&fit=crop&w=400&q=80'
+    image: '/images/zooplankton_copepods.png'
   },
   {
     id: 'sp7',
@@ -161,7 +161,7 @@ const SPECIES_CATALOG = [
     threats: 'Habitat loss, chemical runoff, heavy metals',
     sensitivity: 'Medium',
     notes: 'Crucial for mangrove soil aeration. Accumulates bio-toxins.',
-    image: 'https://images.unsplash.com/photo-1604313271701-d00e57207604?auto=format&fit=crop&w=400&q=80'
+    image: '/images/mangrove_crab.png'
   },
   {
     id: 'sp8',
@@ -173,7 +173,7 @@ const SPECIES_CATALOG = [
     threats: 'Turbidity block (no sunlight), dredging, oil spills',
     sensitivity: 'High',
     notes: 'Forms carbon sinks. Requires high light penetration.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80'
+    image: '/images/seagrass_tape_grass.png'
   },
   {
     id: 'sp9',
@@ -185,7 +185,7 @@ const SPECIES_CATALOG = [
     threats: 'Bioaccumulation of poisons, nest disturbance',
     sensitivity: 'Medium',
     notes: 'Top predator. High concentration of plastics in nesting materials.',
-    image: 'https://images.unsplash.com/photo-1610996162232-a5e2a39d892d?auto=format&fit=crop&w=400&q=80'
+    image: '/images/white_bellied_sea_eagle.png'
   }
 ];
 
@@ -225,18 +225,36 @@ const formatMessageText = (text) => {
   let inList = false;
   let listItems = [];
 
-  const parseBoldText = (str) => {
-    const parts = str.split(/\*\*([^*]+)\*\*/g);
-    return parts.map((part, i) => {
-      if (i % 2 === 1) {
-        return <strong key={i} style={{ color: '#00e5ff', fontWeight: 'bold' }}>{part}</strong>;
+  const parseInlineElements = (str) => {
+    // Parse bold, inline code, and italics
+    const codeParts = str.split(/`([^`]+)`/g);
+    return codeParts.map((cPart, cIdx) => {
+      if (cIdx % 2 === 1) {
+        return (
+          <code key={`code-${cIdx}`} style={{
+            background: 'rgba(0, 229, 255, 0.12)',
+            color: 'var(--accent-primary)',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '0.8rem'
+          }}>
+            {cPart}
+          </code>
+        );
       }
-      const italicParts = part.split(/\*([^*]+)\*/g);
-      return italicParts.map((subPart, j) => {
-        if (j % 2 === 1) {
-          return <em key={j} style={{ color: '#ffb703', fontStyle: 'italic' }}>{subPart}</em>;
+      const boldParts = cPart.split(/\*\*([^*]+)\*\*/g);
+      return boldParts.map((part, i) => {
+        if (i % 2 === 1) {
+          return <strong key={`b-${i}`} style={{ color: '#00e5ff', fontWeight: '600' }}>{part}</strong>;
         }
-        return subPart;
+        const italicParts = part.split(/\*([^*]+)\*/g);
+        return italicParts.map((subPart, j) => {
+          if (j % 2 === 1) {
+            return <em key={`em-${j}`} style={{ color: '#ffb703', fontStyle: 'italic' }}>{subPart}</em>;
+          }
+          return subPart;
+        });
       });
     });
   };
@@ -244,8 +262,8 @@ const formatMessageText = (text) => {
   const flushList = (key) => {
     if (listItems.length > 0) {
       elements.push(
-        <ul key={`list-${key}`} style={{ listStyleType: 'disc', paddingLeft: '20px', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {listItems.map((li, idx) => <li key={idx} style={{ color: '#e2e8f0' }}>{li}</li>)}
+        <ul key={`list-${key}`} style={{ listStyleType: 'disc', paddingLeft: '20px', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          {listItems.map((li, idx) => <li key={idx} style={{ color: '#e2e8f0', lineHeight: '1.45' }}>{li}</li>)}
         </ul>
       );
       listItems = [];
@@ -274,7 +292,7 @@ const formatMessageText = (text) => {
                 <tr key={rIdx} style={{ background: rIdx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   {row.map((cell, cIdx) => (
                     <td key={cIdx} style={{ padding: '8px 12px', color: '#e2e8f0' }}>
-                      {parseBoldText(cell)}
+                      {parseInlineElements(cell)}
                     </td>
                   ))}
                 </tr>
@@ -305,15 +323,29 @@ const formatMessageText = (text) => {
       }
     }
 
-    if (line.startsWith('###')) {
+    if (line.startsWith('####')) {
       flushList(i);
-      const title = line.replace('###', '').trim();
+      const title = line.replace(/^####\s*/, '').trim();
+      elements.push(
+        <h5 key={i} style={{
+          fontSize: '0.88rem',
+          fontWeight: '700',
+          color: '#38bdf8',
+          marginTop: '10px',
+          marginBottom: '4px'
+        }}>
+          {parseInlineElements(title)}
+        </h5>
+      );
+    } else if (line.startsWith('###')) {
+      flushList(i);
+      const title = line.replace(/^###\s*/, '').trim();
       elements.push(
         <h4 key={i} style={{
-          fontSize: '0.95rem',
+          fontSize: '0.98rem',
           fontWeight: '700',
           color: 'var(--accent-primary)',
-          marginTop: '14px',
+          marginTop: '12px',
           marginBottom: '6px',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
           paddingBottom: '4px',
@@ -321,22 +353,45 @@ const formatMessageText = (text) => {
           alignItems: 'center',
           gap: '6px'
         }}>
-          <Sparkles size={12} style={{ color: 'var(--accent-primary)' }} />
-          {title}
+          <Sparkles size={13} style={{ color: 'var(--accent-primary)' }} />
+          {parseInlineElements(title)}
         </h4>
       );
     } else if (line.startsWith('##')) {
       flushList(i);
-      const title = line.replace('##', '').trim();
+      const title = line.replace(/^##\s*/, '').trim();
       elements.push(
-        <h3 key={i} style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>
-          {title}
+        <h3 key={i} style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginTop: '14px', marginBottom: '8px' }}>
+          {parseInlineElements(title)}
         </h3>
+      );
+    } else if (line.startsWith('>')) {
+      flushList(i);
+      const quoteText = line.replace(/^>\s*/, '').trim();
+      elements.push(
+        <div key={i} style={{
+          margin: '10px 0',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          background: 'rgba(0, 229, 255, 0.06)',
+          borderLeft: '3px solid var(--accent-primary)',
+          fontSize: '0.8rem',
+          color: '#e2e8f0'
+        }}>
+          {parseInlineElements(quoteText)}
+        </div>
       );
     } else if (line.startsWith('*') || line.startsWith('-')) {
       inList = true;
       const content = line.substring(1).trim();
-      listItems.push(parseBoldText(content));
+      listItems.push(parseInlineElements(content));
+    } else if (/^\d+\.\s+/.test(line)) {
+      flushList(i);
+      elements.push(
+        <p key={i} style={{ margin: '5px 0', paddingLeft: '8px', lineHeight: '1.45', color: '#cbd5e1' }}>
+          {parseInlineElements(line)}
+        </p>
+      );
     } else {
       if (inList) {
         flushList(i);
@@ -344,7 +399,7 @@ const formatMessageText = (text) => {
       if (line) {
         elements.push(
           <p key={i} style={{ margin: '6px 0', lineHeight: '1.45', color: '#cbd5e1' }}>
-            {parseBoldText(line)}
+            {parseInlineElements(line)}
           </p>
         );
       }
@@ -438,9 +493,14 @@ const ResearcherDashboard = ({
   const [mapCenter, setMapCenter] = useState([9.976, 76.275]); // Fort Kochi
 
   // Tab 3: Species Explorer
+  const [speciesCatalogList, setSpeciesCatalogList] = useState(SPECIES_CATALOG);
+  const [speciesCategories, setSpeciesCategories] = useState([
+    'Mammals', 'Fish', 'Reptiles', 'Corals', 'Crustaceans', 'Microorganisms', 'Plants', 'Coastal Birds'
+  ]);
   const [speciesSearch, setSpeciesSearch] = useState('');
   const [speciesCategory, setSpeciesCategory] = useState('All');
   const [selectedSpecies, setSelectedSpecies] = useState(null);
+  const [speciesLoading, setSpeciesLoading] = useState(false);
 
   // Tab 6: Water Quality Selector
   const [selectedDevice, setSelectedDevice] = useState('all');
@@ -456,6 +516,8 @@ const ResearcherDashboard = ({
     start_date: '',
     end_date: ''
   });
+  const [projectFormErrors, setProjectFormErrors] = useState({});
+  const [projectFormTouched, setProjectFormTouched] = useState({});
 
   // Tab 8: My Observations
   const [biodiversityObs, setBiodiversityObs] = useState([]);
@@ -498,17 +560,15 @@ const ResearcherDashboard = ({
   const [generatedReport, setGeneratedReport] = useState(null);
   const [savedReports, setSavedReports] = useState([]);
 
-  // Tab 11: Research Assistant Chat
-  const [chatMessages, setChatMessages] = useState([
+  // Tab 11: Research Assistant Chat (Octo)
+  const [chatMessages, setChatMessages] = useState(() => [
     {
       sender: 'assistant',
-      text: `### TerraMarine Research Assistant
-I can query environmental indicators, water sensor history, pollution logs, and biodiversity observations in real-time.
+      text: `Hello **${user?.full_name || user?.name || 'Researcher'}**! 🐙 I am **Octo**, your **TerraMarine AI Environmental Intelligence Assistant**.
 
-**Example Inquiries:**
-1. *"What species have been observed near Kochi?"*
-2. *"List the active pollution incidents in Fort Kochi."*
-3. *"Show sensor statistics."*`,
+I am integrated directly with live coastal telemetry, community pollution records, IMD marine weather bulletins, and marine science knowledge bases.
+
+Feel free to ask me conceptual marine science questions, request cross-coastal comparisons, or query live sensor trends!`,
       time: new Date()
     }
   ]);
@@ -578,11 +638,72 @@ I can query environmental indicators, water sensor history, pollution logs, and 
         setSavedReports(data.reports || []);
       }
 
+      // 6. Dynamic Species Catalog & Categories (includes authority additions)
+      try {
+        const [speciesRes, catRes] = await Promise.all([
+          authFetch('/species'),
+          authFetch('/species/categories')
+        ]);
+        if (speciesRes.ok) {
+          const sData = await speciesRes.json();
+          if (sData.species && sData.species.length > 0) {
+            setSpeciesCatalogList(sData.species);
+          }
+        }
+        if (catRes.ok) {
+          const cData = await catRes.json();
+          if (cData.categories && cData.categories.length > 0) {
+            setSpeciesCategories(cData.categories.map(c => c.name));
+          }
+        }
+      } catch (sErr) {
+        console.warn('Species catalog API fetch note:', sErr.message);
+      }
+
     } catch (error) {
       console.error('Error fetching research workspaces:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const syncSpeciesCatalog = async () => {
+    setSpeciesLoading(true);
+    try {
+      const [speciesRes, catRes] = await Promise.all([
+        authFetch('/species'),
+        authFetch('/species/categories')
+      ]);
+      if (speciesRes.ok) {
+        const sData = await speciesRes.json();
+        if (sData.species && sData.species.length > 0) {
+          setSpeciesCatalogList(sData.species);
+        }
+      }
+      if (catRes.ok) {
+        const cData = await catRes.json();
+        if (cData.categories && cData.categories.length > 0) {
+          setSpeciesCategories(cData.categories.map(c => c.name));
+        }
+      }
+      setSuccessMessage('Species catalog synchronized with official marine registry.');
+    } catch (err) {
+      console.error('Error syncing species:', err);
+    } finally {
+      setSpeciesLoading(false);
+    }
+  };
+
+  const dynamicSpeciesCategories = useMemo(() => {
+    const fromSpecies = speciesCatalogList.map(s => s.category).filter(Boolean);
+    return Array.from(new Set(['All', ...speciesCategories, ...fromSpecies]));
+  }, [speciesCategories, speciesCatalogList]);
+
+  const resolveCatalogImage = (img) => {
+    if (!img) return '/images/whale_shark.png';
+    if (img.startsWith('http') || img.startsWith('/images/')) return img;
+    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:5000';
+    return `${serverUrl}${img}`;
   };
 
   // -------------------------------------------------------------------------
@@ -620,13 +741,18 @@ I can query environmental indicators, water sensor history, pollution logs, and 
 
   // Filtered Species Catalog
   const filteredSpecies = useMemo(() => {
-    return SPECIES_CATALOG.filter(sp => {
-      const matchSearch = sp.name.toLowerCase().includes(speciesSearch.toLowerCase()) || 
-                          sp.scientificName.toLowerCase().includes(speciesSearch.toLowerCase());
+    return speciesCatalogList.filter(sp => {
+      const spName = sp.name || '';
+      const spSci = sp.scientificName || sp.scientific_name || '';
+      const notes = sp.notes || '';
+      const query = speciesSearch.toLowerCase();
+      const matchSearch = spName.toLowerCase().includes(query) || 
+                          spSci.toLowerCase().includes(query) ||
+                          notes.toLowerCase().includes(query);
       const matchCat = speciesCategory === 'All' || sp.category === speciesCategory;
       return matchSearch && matchCat;
     });
-  }, [speciesSearch, speciesCategory]);
+  }, [speciesCatalogList, speciesSearch, speciesCategory]);
 
   // Coordinate Query handler
   const handleMapCoordinateClick = (lat, lng) => {
@@ -672,11 +798,137 @@ I can query environmental indicators, water sensor history, pollution logs, and 
   };
 
   // -------------------------------------------------------------------------
-  // Project operations
+  // Project operations & Strong Line-by-Line Validation
   // -------------------------------------------------------------------------
+  const validateProjectField = (field, value, allValues = projectForm) => {
+    const val = typeof value === 'string' ? value.trim() : '';
+    switch (field) {
+      case 'title':
+        if (!val) return 'Project title is required.';
+        if (val.length < 5) return 'Title must be at least 5 characters long.';
+        if (val.length > 150) return 'Title cannot exceed 150 characters.';
+        return null;
+
+      case 'study_area':
+        if (!val) return 'Study sector or geographic area is required.';
+        if (val.length < 3) return 'Study area must be at least 3 characters.';
+        if (val.length > 100) return 'Study area cannot exceed 100 characters.';
+        return null;
+
+      case 'start_date':
+        if (value && allValues.end_date) {
+          if (new Date(value) > new Date(allValues.end_date)) {
+            return 'Start date cannot be after end date.';
+          }
+        }
+        return null;
+
+      case 'end_date':
+        if (value && allValues.start_date) {
+          if (new Date(value) < new Date(allValues.start_date)) {
+            return 'End date cannot be earlier than start date.';
+          }
+        }
+        return null;
+
+      case 'objectives':
+        if (val && val.length < 10) return 'Objectives must be at least 10 characters if provided.';
+        if (val && val.length > 1000) return 'Objectives cannot exceed 1000 characters.';
+        return null;
+
+      case 'description':
+        if (!val) return 'Project description is required to define the research scope.';
+        if (val.length < 15) return 'Description must be at least 15 characters long.';
+        if (val.length > 2000) return 'Description cannot exceed 2000 characters.';
+        return null;
+
+      default:
+        return null;
+    }
+  };
+
+  const validateAllProjectFields = (values = projectForm) => {
+    const errors = {};
+    const titleErr = validateProjectField('title', values.title, values);
+    if (titleErr) errors.title = titleErr;
+
+    const areaErr = validateProjectField('study_area', values.study_area, values);
+    if (areaErr) errors.study_area = areaErr;
+
+    const startErr = validateProjectField('start_date', values.start_date, values);
+    if (startErr) errors.start_date = startErr;
+
+    const endErr = validateProjectField('end_date', values.end_date, values);
+    if (endErr) errors.end_date = endErr;
+
+    const objErr = validateProjectField('objectives', values.objectives, values);
+    if (objErr) errors.objectives = objErr;
+
+    const descErr = validateProjectField('description', values.description, values);
+    if (descErr) errors.description = descErr;
+
+    return errors;
+  };
+
+  const handleProjectInputChange = (field, value) => {
+    const updatedForm = { ...projectForm, [field]: value };
+    setProjectForm(updatedForm);
+
+    if (projectFormTouched[field]) {
+      const error = validateProjectField(field, value, updatedForm);
+      setProjectFormErrors(prev => ({ ...prev, [field]: error }));
+      if (field === 'start_date' && projectFormTouched.end_date) {
+        const endErr = validateProjectField('end_date', updatedForm.end_date, updatedForm);
+        setProjectFormErrors(prev => ({ ...prev, end_date: endErr }));
+      } else if (field === 'end_date' && projectFormTouched.start_date) {
+        const startErr = validateProjectField('start_date', updatedForm.start_date, updatedForm);
+        setProjectFormErrors(prev => ({ ...prev, start_date: startErr }));
+      }
+    }
+  };
+
+  const handleProjectInputBlur = (field) => {
+    setProjectFormTouched(prev => ({ ...prev, [field]: true }));
+    const error = validateProjectField(field, projectForm[field], projectForm);
+    setProjectFormErrors(prev => ({ ...prev, [field]: error }));
+    if (field === 'start_date' && projectForm.end_date) {
+      const endErr = validateProjectField('end_date', projectForm.end_date, projectForm);
+      setProjectFormErrors(prev => ({ ...prev, end_date: endErr }));
+    } else if (field === 'end_date' && projectForm.start_date) {
+      const startErr = validateProjectField('start_date', projectForm.start_date, projectForm);
+      setProjectFormErrors(prev => ({ ...prev, start_date: startErr }));
+    }
+  };
+
+  const handleOpenProjectModal = () => {
+    setProjectFormErrors({});
+    setProjectFormTouched({});
+    setShowProjectModal(true);
+  };
+
+  const handleCloseProjectModal = () => {
+    setProjectFormErrors({});
+    setProjectFormTouched({});
+    setShowProjectModal(false);
+  };
+
   const handleCreateProject = async (e) => {
     e.preventDefault();
-    if (!projectForm.title) return;
+    setProjectFormTouched({
+      title: true,
+      study_area: true,
+      start_date: true,
+      end_date: true,
+      objectives: true,
+      description: true
+    });
+
+    const errors = validateAllProjectFields(projectForm);
+    setProjectFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
 
     try {
       const res = await authFetch('/researcher/projects', {
@@ -694,6 +946,8 @@ I can query environmental indicators, water sensor history, pollution logs, and 
           start_date: '',
           end_date: ''
         });
+        setProjectFormErrors({});
+        setProjectFormTouched({});
         setShowProjectModal(false);
         fetchResearchData();
       } else {
@@ -1383,15 +1637,15 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                   </div>
                 </button>
 
-                <button onClick={() => setSearchParams({ tab: 'datasets' })} style={{
+                <button onClick={() => setSearchParams({ tab: 'species-explorer' })} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(157, 78, 221, 0.12)',
                   border: '1px solid rgba(157, 78, 221, 0.25)', borderRadius: '14px', cursor: 'pointer', textAlign: 'left',
                   transition: 'all 0.2s ease', color: '#ffffff'
                 }}>
-                  <Database size={24} style={{ color: 'var(--accent-purple)' }} />
+                  <Compass size={24} style={{ color: 'var(--accent-purple)' }} />
                   <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>Upload Oceanographic Dataset</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Connect CSV or survey logs.</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>Explore Species Catalog</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Browse marine taxonomy & status.</div>
                   </div>
                 </button>
 
@@ -1631,8 +1885,8 @@ I can query environmental indicators, water sensor history, pollution logs, and 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Filters and search */}
-          <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', padding: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', padding: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
               <Search size={18} style={{ color: 'var(--text-secondary)' }} />
               <input
                 type="text"
@@ -1644,20 +1898,31 @@ I can query environmental indicators, water sensor history, pollution logs, and 
               />
             </div>
             
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {['All', 'Mammals', 'Fish', 'Reptiles', 'Corals', 'Crustaceans', 'Microorganisms', 'Plants', 'Coastal Birds'].map(cat => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
+              {dynamicSpeciesCategories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSpeciesCategory(cat)}
                   style={{
                     padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', border: '1px solid rgba(0, 229, 255, 0.25)',
                     background: speciesCategory === cat ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'rgba(10, 25, 48, 0.5)',
-                    color: '#ffffff', cursor: 'pointer', fontWeight: '600'
+                    color: '#ffffff', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap'
                   }}
                 >
                   {cat}
                 </button>
               ))}
+
+              <button
+                onClick={syncSpeciesCatalog}
+                className="btn btn-secondary"
+                disabled={speciesLoading}
+                style={{ padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Sync species catalog from live registry"
+              >
+                <RefreshCw size={13} className={speciesLoading ? 'spin-icon' : ''} />
+                <span>Sync</span>
+              </button>
             </div>
           </div>
 
@@ -1666,13 +1931,13 @@ I can query environmental indicators, water sensor history, pollution logs, and 
             
             {filteredSpecies.map(sp => (
               <div
-                key={sp.id}
+                key={sp.id || sp.species_id}
                 className="glass-panel"
                 onClick={() => setSelectedSpecies(sp)}
                 style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', height: '360px' }}
               >
-                <div style={{ height: '160px', overflow: 'hidden', position: 'relative' }}>
-                  <img src={sp.image} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <div style={{ height: '160px', overflow: 'hidden', position: 'relative', background: 'rgba(5, 19, 41, 0.8)' }}>
+                  <img src={resolveCatalogImage(sp.image)} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   <span style={{
                     position: 'absolute', top: '12px', right: '12px', padding: '4px 10px', borderRadius: '20px',
                     fontSize: '0.65rem', fontWeight: 'bold', background: sp.status === 'Endangered' || sp.status === 'Critically Endangered' ? 'rgba(255,77,77,0.85)' : 'rgba(0,245,212,0.85)',
@@ -1688,14 +1953,14 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                       {sp.category}
                     </span>
                     <h3 style={{ fontSize: '1.15rem', marginTop: '2px' }}>{sp.name}</h3>
-                    <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{sp.scientificName}</p>
+                    <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{sp.scientificName || sp.scientific_name}</p>
                     <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {sp.notes}
+                      {sp.notes || sp.habitat}
                     </p>
                   </div>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity}</strong></span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity || 'Medium'}</strong></span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       Profile <ChevronRight size={14} />
                     </span>
@@ -1718,8 +1983,8 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                 </div>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
-                  <div style={{ borderRadius: '12px', overflow: 'hidden', height: '220px' }}>
-                    <img src={selectedSpecies.image} alt={selectedSpecies.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div style={{ borderRadius: '12px', overflow: 'hidden', height: '220px', background: 'rgba(5, 19, 41, 0.8)' }}>
+                    <img src={resolveCatalogImage(selectedSpecies.image)} alt={selectedSpecies.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
                     <div>
@@ -1728,7 +1993,7 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>Scientific Name:</span>
-                      <div style={{ fontStyle: 'italic', fontWeight: 'bold' }}>{selectedSpecies.scientificName}</div>
+                      <div style={{ fontStyle: 'italic', fontWeight: 'bold' }}>{selectedSpecies.scientificName || selectedSpecies.scientific_name}</div>
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>Taxonomy Category:</span>
@@ -1748,19 +2013,19 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px', fontSize: '0.85rem' }}>
                   <div>
                     <strong>Typical Habitat:</strong>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.habitat}</p>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.habitat || 'Not specified'}</p>
                   </div>
                   <div>
                     <strong>Anthropogenic Threats:</strong>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.threats}</p>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.threats || 'None recorded'}</p>
                   </div>
                   <div>
                     <strong>Chemical/Pollution Sensitivity Index:</strong>
-                    <p style={{ color: 'var(--accent-primary)', marginTop: '2px', fontWeight: '600' }}>{selectedSpecies.sensitivity} Sensitivity</p>
+                    <p style={{ color: 'var(--accent-primary)', marginTop: '2px', fontWeight: '600' }}>{selectedSpecies.sensitivity ? `${selectedSpecies.sensitivity} Sensitivity` : 'High Sensitivity'}</p>
                   </div>
                   <div>
                     <strong>Research Field Notes:</strong>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.notes}</p>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedSpecies.notes || 'No field notes logged.'}</p>
                   </div>
                 </div>
 
@@ -2040,148 +2305,6 @@ I can query environmental indicators, water sensor history, pollution logs, and 
       )}
 
       {/* =========================================================================
-          TAB 7: RESEARCH PROJECTS
-          ========================================================================= */}
-      {activeTab === 'research-projects' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Active Research Projects</h3>
-            <button className="btn btn-primary" onClick={() => setShowProjectModal(true)}>
-              <Plus size={16} /> Launch New Project
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
-            
-            {projects.length > 0 ? (
-              projects.map(p => (
-                <div key={p.project_id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '240px' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <span style={{ padding: '2px 8px', borderRadius: '8px', fontSize: '0.65rem', background: 'rgba(0, 229, 255, 0.15)', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
-                        {p.study_area || 'Coastal Waters'}
-                      </span>
-                      <button onClick={() => handleDeleteProject(p.project_id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    
-                    <h4 style={{ fontSize: '1.15rem', marginTop: '10px' }}>{p.title}</h4>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {p.description}
-                    </p>
-                  </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', fontSize: '0.74rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>
-                      Start: {p.start_date ? new Date(p.start_date).toLocaleDateString() : 'N/A'}
-                    </span>
-                    <span style={{ color: 'var(--text-muted)' }}>
-                      PI: {p.researcher_name || user.full_name}
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="glass-panel" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                <FolderOpen size={44} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p>No research projects launched in this workspace. Launch a project to compile observations and datasets.</p>
-              </div>
-            )}
-
-          </div>
-
-          {/* New Project Modal */}
-          {showProjectModal && (
-            <div className="modal-overlay">
-              <div className="modal-card" style={{ maxWidth: '550px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                  <h3 style={{ fontSize: '1.25rem' }}>Launch Research Project</h3>
-                  <button onClick={() => setShowProjectModal(false)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
-                    <X size={18} />
-                  </button>
-                </div>
-                
-                <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Project Title</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Impact of Microplastics on Humpback Dolphin Migration"
-                      value={projectForm.title}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, title: e.target.value }))}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Study Sector / Area</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={projectForm.study_area}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, study_area: e.target.value }))}
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Start Date</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={projectForm.start_date}
-                        onChange={(e) => setProjectForm(prev => ({ ...prev, start_date: e.target.value }))}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">End Date</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={projectForm.end_date}
-                        onChange={(e) => setProjectForm(prev => ({ ...prev, end_date: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Project Objectives</label>
-                    <textarea
-                      className="form-control"
-                      rows="2"
-                      placeholder="List objectives..."
-                      value={projectForm.objectives}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, objectives: e.target.value }))}
-                    ></textarea>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Description</label>
-                    <textarea
-                      className="form-control"
-                      rows="3"
-                      placeholder="Detailed project summary..."
-                      value={projectForm.description}
-                      onChange={(e) => setProjectForm(prev => ({ ...prev, description: e.target.value }))}
-                    ></textarea>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                    <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Launch Project</button>
-                    <button type="button" className="btn btn-secondary" onClick={() => setShowProjectModal(false)}>Cancel</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
-
-      {/* =========================================================================
           TAB 8: MY OBSERVATIONS & AI IDENTIFICATION
           ========================================================================= */}
       {activeTab === 'my-observations' && (
@@ -2355,169 +2478,6 @@ I can query environmental indicators, water sensor history, pollution logs, and 
       )}
 
       {/* =========================================================================
-          TAB 9: DATASETS REPOSITORY
-          ========================================================================= */}
-      {activeTab === 'datasets' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '28px' }}>
-            
-            {/* Upload File Form */}
-            <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700' }}>Connect Oceanographic Dataset</h3>
-              
-              <form onSubmit={handleUploadDataset} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div className="form-group">
-                  <label className="form-label">Dataset Name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Fort Kochi littoral plastics CSV"
-                    value={datasetForm.name}
-                    onChange={(e) => setDatasetForm(prev => ({ ...prev, name: e.target.value }))}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Study Project Link</label>
-                  <select
-                    className="form-control"
-                    value={datasetForm.project_id}
-                    onChange={(e) => setDatasetForm(prev => ({ ...prev, project_id: e.target.value }))}
-                  >
-                    <option value="">No Project Link</option>
-                    {projects.map(p => (
-                      <option key={p.project_id} value={p.project_id}>{p.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Data Type</label>
-                    <select
-                      className="form-control"
-                      value={datasetForm.data_type}
-                      onChange={(e) => setDatasetForm(prev => ({ ...prev, data_type: e.target.value }))}
-                    >
-                      <option value="CSV">CSV Spreadsheet</option>
-                      <option value="Excel">Excel Sheet</option>
-                      <option value="Image">Imagery / Video</option>
-                      <option value="Document">Report Document</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Data Record Count</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={datasetForm.record_count}
-                      onChange={(e) => setDatasetForm(prev => ({ ...prev, record_count: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Sector / Location</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={datasetForm.location}
-                    onChange={(e) => setDatasetForm(prev => ({ ...prev, location: e.target.value }))}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Dataset Description</label>
-                  <textarea
-                    className="form-control"
-                    rows="2"
-                    placeholder="Parameters recorded, sampling methods..."
-                    value={datasetForm.description}
-                    onChange={(e) => setDatasetForm(prev => ({ ...prev, description: e.target.value }))}
-                  ></textarea>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Select Dataset File</label>
-                  <input
-                    type="file"
-                    ref={datasetFileInputRef}
-                    onChange={(e) => setDatasetFile(e.target.files[0])}
-                    className="form-control"
-                    required
-                  />
-                </div>
-
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                  <Upload size={16} /> Upload Dataset File
-                </button>
-              </form>
-            </div>
-
-            {/* Datasets list ledger */}
-            <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700' }}>Datasets Vault</h3>
-              
-              <div className="table-container" style={{ marginTop: 0 }}>
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>File Name</th>
-                      <th>Type</th>
-                      <th>Records</th>
-                      <th>Uploaded At</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {datasets.length > 0 ? (
-                      datasets.map(d => (
-                        <tr key={d.dataset_id}>
-                          <td>
-                            <div style={{ fontWeight: 'bold' }}>{d.name}</div>
-                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{d.file_name} ({(d.file_size / 1024).toFixed(1)} KB)</div>
-                          </td>
-                          <td>
-                            <span style={{
-                              padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 'bold',
-                              background: d.data_type === 'CSV' ? 'rgba(0, 229, 255, 0.15)' : 'rgba(157, 78, 221, 0.15)',
-                              color: d.data_type === 'CSV' ? 'var(--accent-primary)' : 'var(--accent-purple)'
-                            }}>{d.data_type}</span>
-                          </td>
-                          <td>{d.record_count}</td>
-                          <td>{new Date(d.uploaded_at).toLocaleDateString()}</td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                              <a href={d.file_url} download={d.file_name} className="btn" style={{ padding: '4px', background: 'transparent', color: 'var(--accent-primary)' }}>
-                                <Download size={16} />
-                              </a>
-                              <button onClick={() => handleDeleteDataset(d.dataset_id)} className="btn" style={{ padding: '4px', background: 'transparent', color: 'var(--danger)' }}>
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
-                          No dataset spreadsheets connected in this catalog.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* =========================================================================
           TAB 10: RESEARCH REPORTS
           ========================================================================= */}
       {activeTab === 'research-reports' && (
@@ -2668,7 +2628,7 @@ I can query environmental indicators, water sensor history, pollution logs, and 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '14px' }}>
             <Sparkles size={20} style={{ color: 'var(--accent-primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>AI Assistant - TerraMarine Intelligence</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>Octo - AI Research Assistant 🐙</h3>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Analyzes live platform DB stats, sensor metrics & biodiversity logs.</div>
             </div>
           </div>
@@ -2692,39 +2652,76 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                   <RenderChatChart chart={msg.chart} />
                 )}
 
-                {/* Render Ambiguity Options */}
-                {msg.sender === 'assistant' && msg.ambiguous && msg.options && (
+                {/* Render Interactive Suggestion Chips & Locations */}
+                {msg.sender === 'assistant' && msg.options && (
                   <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Suggested locations:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {msg.options.locations.map(loc => (
-                        <button
-                          key={loc}
-                          type="button"
-                          onClick={() => handleQuickQuestionClick(`Show water quality in ${loc}`)}
-                          style={{
-                            padding: '4px 10px',
-                            fontSize: '0.72rem',
-                            borderRadius: '16px',
-                            background: 'rgba(0, 229, 255, 0.12)',
-                            border: '1px solid rgba(0, 229, 255, 0.25)',
-                            color: 'var(--accent-primary)',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.background = 'rgba(0, 229, 255, 0.2)';
-                            e.target.style.borderColor = 'rgba(0, 229, 255, 0.4)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.background = 'rgba(0, 229, 255, 0.12)';
-                            e.target.style.borderColor = 'rgba(0, 229, 255, 0.25)';
-                          }}
-                        >
-                          {loc}
-                        </button>
-                      ))}
-                    </div>
+                    {msg.options.suggestions && msg.options.suggestions.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Sparkles size={11} style={{ color: 'var(--accent-primary)' }} /> Suggested queries:
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {msg.options.suggestions.map((sug, sIdx) => (
+                            <button
+                              key={sIdx}
+                              type="button"
+                              onClick={() => handleQuickQuestionClick(sug)}
+                              disabled={chatLoading}
+                              style={{
+                                padding: '5px 12px',
+                                fontSize: '0.72rem',
+                                borderRadius: '16px',
+                                background: 'rgba(0, 229, 255, 0.08)',
+                                border: '1px solid rgba(0, 229, 255, 0.22)',
+                                color: 'var(--accent-primary)',
+                                cursor: chatLoading ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s',
+                                textAlign: 'left'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!chatLoading) {
+                                  e.currentTarget.style.background = 'rgba(0, 229, 255, 0.2)';
+                                  e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.45)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(0, 229, 255, 0.08)';
+                                e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.22)';
+                              }}
+                            >
+                              {sug}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {msg.options.locations && msg.options.locations.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Locations:</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {msg.options.locations.map(loc => (
+                            <button
+                              key={loc}
+                              type="button"
+                              onClick={() => handleQuickQuestionClick(`Show water quality in ${loc}`)}
+                              disabled={chatLoading}
+                              style={{
+                                padding: '4px 10px',
+                                fontSize: '0.72rem',
+                                borderRadius: '16px',
+                                background: 'rgba(0, 229, 255, 0.08)',
+                                border: '1px solid rgba(0, 229, 255, 0.22)',
+                                color: 'var(--accent-primary)',
+                                cursor: chatLoading ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              {loc}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2735,7 +2732,7 @@ I can query environmental indicators, water sensor history, pollution logs, and 
                 alignSelf: 'flex-start', background: 'rgba(10, 25, 48, 0.65)', border: '1px solid rgba(255,255,255,0.08)',
                 padding: '12px 16px', borderRadius: '14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px'
               }}>
-                <RefreshCw size={12} className="spin-icon" /> AI Assistant is formulating response using live query structures...
+                <RefreshCw size={12} className="spin-icon" /> Octo is formulating response using live query structures...
               </div>
             )}
             
@@ -2749,7 +2746,9 @@ I can query environmental indicators, water sensor history, pollution logs, and 
               "Compare pH between Kochi and Alappuzha",
               "Show water quality telemetry trends in Kochi",
               "Show pollution reports in Fort Kochi",
-              "List biodiversity observations near Kochi"
+              "List biodiversity observations near Kochi",
+              "What is the latest official IMD marine alert?",
+              "Explain ocean acidification"
             ].map((q, idx) => (
               <button
                 key={idx}
@@ -2789,7 +2788,7 @@ I can query environmental indicators, water sensor history, pollution logs, and 
             <input
               type="text"
               className="form-control"
-              placeholder="Ask Assistant: 'Compare pH averages' or 'What species were observed near Kochi?'"
+              placeholder="Ask Octo: 'Compare pH averages' or 'What species were observed near Kochi?'"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               disabled={chatLoading}
@@ -2803,167 +2802,7 @@ I can query environmental indicators, water sensor history, pollution logs, and 
         </div>
       )}
 
-      {/* =========================================================================
-          TAB 12: RESEARCH ALERTS CENTER
-          ========================================================================= */}
-      {activeTab === 'research-alerts' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '28px' }}>
-          
-          {/* Create Alert Rules Form */}
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700' }}>Setup Threshold Trigger</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '-8px' }}>
-              Create active ecological thresholds. When sensor readings or reports cross rules, warning items are generated automatically.
-            </p>
 
-            <form onSubmit={handleCreateAlertRule} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="form-group">
-                <label className="form-label">Alert Type Name</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={alertRuleForm.alert_type}
-                  onChange={(e) => setAlertRuleForm(prev => ({ ...prev, alert_type: e.target.value }))}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Telemetry Parameter</label>
-                  <select
-                    className="form-control"
-                    value={alertRuleForm.parameter_name}
-                    onChange={(e) => setAlertRuleForm(prev => ({ ...prev, parameter_name: e.target.value }))}
-                  >
-                    <option value="turbidity">Water Turbidity (NTU)</option>
-                    <option value="ph">Water pH Level</option>
-                    <option value="temperature">Water Temp (°C)</option>
-                    <option value="bin_fill_level">Smart Bin Fill Level %</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Operator</label>
-                  <select
-                    className="form-control"
-                    value={alertRuleForm.comparison_operator}
-                    onChange={(e) => setAlertRuleForm(prev => ({ ...prev, comparison_operator: e.target.value }))}
-                  >
-                    <option value=">">&gt; Greater than</option>
-                    <option value="<">&lt; Less than</option>
-                    <option value="=">= Equals</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Threshold Limit Value</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-control"
-                    value={alertRuleForm.threshold_value}
-                    onChange={(e) => setAlertRuleForm(prev => ({ ...prev, threshold_value: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Severity</label>
-                  <select
-                    className="form-control"
-                    value={alertRuleForm.severity}
-                    onChange={(e) => setAlertRuleForm(prev => ({ ...prev, severity: e.target.value }))}
-                  >
-                    <option value="Low">Low Alert</option>
-                    <option value="Medium">Medium Warning</option>
-                    <option value="High">Critical Danger</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Sensing location / Boundary</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={alertRuleForm.location}
-                  onChange={(e) => setAlertRuleForm(prev => ({ ...prev, location: e.target.value }))}
-                />
-              </div>
-
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                <Plus size={16} /> Deploy Alert Rule Trigger
-              </button>
-            </form>
-          </div>
-
-          {/* Trigger rules ledger */}
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700' }}>Active Alert Rules Ledger</h3>
-            
-            <div className="table-container" style={{ marginTop: 0 }}>
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th>Rule Trigger</th>
-                    <th>Threshold Statement</th>
-                    <th>Location Scope</th>
-                    <th>Severity</th>
-                    <th>Telemetry Trigger</th>
-                    <th>Remove</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {researchAlertRules.length > 0 ? (
-                    researchAlertRules.map(rule => (
-                      <tr key={rule.alert_id}>
-                        <td><strong>{rule.alert_type}</strong></td>
-                        <td style={{ fontFamily: 'monospace', color: 'var(--accent-primary)' }}>
-                          {rule.parameter_name} {rule.comparison_operator} {rule.threshold_value}
-                        </td>
-                        <td>{rule.location || 'All Sectors'}</td>
-                        <td>
-                          <span style={{
-                            padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 'bold',
-                            background: rule.severity === 'High' ? 'rgba(255, 77, 77, 0.18)' : 'rgba(255, 183, 3, 0.18)',
-                            color: rule.severity === 'High' ? 'var(--danger)' : 'var(--warning)'
-                          }}>{rule.severity}</span>
-                        </td>
-                        <td>
-                          <button
-                            onClick={() => handleToggleAlertRule(rule.alert_id, rule.is_active)}
-                            className="btn"
-                            style={{
-                              padding: '4px 10px', borderRadius: '6px', fontSize: '0.7rem',
-                              background: rule.is_active ? 'rgba(0, 245, 212, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                              color: rule.is_active ? 'var(--success)' : 'var(--text-muted)'
-                            }}
-                          >
-                            {rule.is_active ? 'Active Sentinel' : 'Deactivated'}
-                          </button>
-                        </td>
-                        <td>
-                          <button onClick={() => handleDeleteAlertRule(rule.alert_id)} className="btn" style={{ padding: '4px', background: 'transparent', color: 'var(--danger)' }}>
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
-                        No customized ecological triggers created.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
-      )}
 
     </div>
   );
