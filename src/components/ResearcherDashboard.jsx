@@ -48,7 +48,9 @@ import {
   Calendar,
   Sparkles,
   Info,
-  Activity
+  Activity,
+  Edit3,
+  Pencil
 } from 'lucide-react';
 
 // =========================================================================
@@ -501,6 +503,42 @@ const ResearcherDashboard = ({
   const [speciesCategory, setSpeciesCategory] = useState('All');
   const [selectedSpecies, setSelectedSpecies] = useState(null);
   const [speciesLoading, setSpeciesLoading] = useState(false);
+  const [speciesExplorerSubTab, setSpeciesExplorerSubTab] = useState('catalog'); // 'catalog' | 'my-submissions'
+  const [mySpeciesSubmissions, setMySpeciesSubmissions] = useState([]);
+  const [showSpeciesModal, setShowSpeciesModal] = useState(false);
+  const [speciesForm, setSpeciesForm] = useState({
+    name: '',
+    scientific_name: '',
+    category: 'Fish',
+    status: 'Least Concern',
+    sensitivity: 'Medium',
+    habitat: '',
+    threats: '',
+    notes: ''
+  });
+  const [speciesFormErrors, setSpeciesFormErrors] = useState({});
+  const [speciesFormTouched, setSpeciesFormTouched] = useState({});
+  const [speciesFormFile, setSpeciesFormFile] = useState(null);
+  const [speciesFormSubmitting, setSpeciesFormSubmitting] = useState(false);
+
+  // Edit Species Modal State
+  const [showEditSpeciesModal, setShowEditSpeciesModal] = useState(false);
+  const [editSpeciesId, setEditSpeciesId] = useState(null);
+  const [editSpeciesForm, setEditSpeciesForm] = useState({
+    name: '',
+    scientific_name: '',
+    category: 'Fish',
+    status: 'Least Concern',
+    sensitivity: 'Medium',
+    habitat: '',
+    threats: '',
+    notes: '',
+    image: ''
+  });
+  const [editSpeciesFormErrors, setEditSpeciesFormErrors] = useState({});
+  const [editSpeciesFormTouched, setEditSpeciesFormTouched] = useState({});
+  const [editSpeciesFormFile, setEditSpeciesFormFile] = useState(null);
+  const [editSpeciesSubmitting, setEditSpeciesSubmitting] = useState(false);
 
   // Tab 6: Water Quality Selector
   const [selectedDevice, setSelectedDevice] = useState('all');
@@ -638,11 +676,12 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
         setSavedReports(data.reports || []);
       }
 
-      // 6. Dynamic Species Catalog & Categories (includes authority additions)
+      // 6. Dynamic Species Catalog & Categories & My Submissions
       try {
-        const [speciesRes, catRes] = await Promise.all([
+        const [speciesRes, catRes, mySubRes] = await Promise.all([
           authFetch('/species'),
-          authFetch('/species/categories')
+          authFetch('/species/categories'),
+          authFetch('/species/my-submissions')
         ]);
         if (speciesRes.ok) {
           const sData = await speciesRes.json();
@@ -655,6 +694,10 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
           if (cData.categories && cData.categories.length > 0) {
             setSpeciesCategories(cData.categories.map(c => c.name));
           }
+        }
+        if (mySubRes.ok) {
+          const subData = await mySubRes.json();
+          setMySpeciesSubmissions(subData.submissions || []);
         }
       } catch (sErr) {
         console.warn('Species catalog API fetch note:', sErr.message);
@@ -670,9 +713,10 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
   const syncSpeciesCatalog = async () => {
     setSpeciesLoading(true);
     try {
-      const [speciesRes, catRes] = await Promise.all([
+      const [speciesRes, catRes, mySubRes] = await Promise.all([
         authFetch('/species'),
-        authFetch('/species/categories')
+        authFetch('/species/categories'),
+        authFetch('/species/my-submissions')
       ]);
       if (speciesRes.ok) {
         const sData = await speciesRes.json();
@@ -685,6 +729,10 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
         if (cData.categories && cData.categories.length > 0) {
           setSpeciesCategories(cData.categories.map(c => c.name));
         }
+      }
+      if (mySubRes.ok) {
+        const subData = await mySubRes.json();
+        setMySpeciesSubmissions(subData.submissions || []);
       }
       setSuccessMessage('Species catalog synchronized with official marine registry.');
     } catch (err) {
@@ -739,9 +787,12 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
     ];
   }, []);
 
-  // Filtered Species Catalog
+  // Filtered Species Catalog (Only Approved species displayed on researcher's dashboard!)
   const filteredSpecies = useMemo(() => {
     return speciesCatalogList.filter(sp => {
+      const isApproved = !sp.approval_status || sp.approval_status === 'Approved';
+      if (!isApproved) return false;
+
       const spName = sp.name || '';
       const spSci = sp.scientificName || sp.scientific_name || '';
       const notes = sp.notes || '';
@@ -753,6 +804,347 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
       return matchSearch && matchCat;
     });
   }, [speciesCatalogList, speciesSearch, speciesCategory]);
+
+  // Filtered Researcher's own submissions
+  const filteredMySubmissions = useMemo(() => {
+    return mySpeciesSubmissions.filter(sp => {
+      const spName = sp.name || '';
+      const spSci = sp.scientificName || sp.scientific_name || '';
+      const notes = sp.notes || '';
+      const query = speciesSearch.toLowerCase();
+      const matchSearch = spName.toLowerCase().includes(query) || 
+                          spSci.toLowerCase().includes(query) ||
+                          notes.toLowerCase().includes(query);
+      const matchCat = speciesCategory === 'All' || sp.category === speciesCategory;
+      return matchSearch && matchCat;
+    });
+  }, [mySpeciesSubmissions, speciesSearch, speciesCategory]);
+
+  // -------------------------------------------------------------------------
+  // Strong Line-by-Line Validation for Species Forms (Submit & Edit)
+  // -------------------------------------------------------------------------
+  const validateSpeciesField = (field, value, allValues, file = null, isEdit = false) => {
+    const val = typeof value === 'string' ? value.trim() : (value || '');
+
+    switch (field) {
+      case 'file':
+        if (file) {
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+          if (!allowedTypes.includes(file.type)) {
+            return 'Invalid image type. Please select a JPEG, PNG, WEBP, or GIF image.';
+          }
+          if (file.size > 10 * 1024 * 1024) {
+            return 'File size exceeds 10MB limit. Please upload a smaller image.';
+          }
+        }
+        return null;
+
+      case 'name':
+        if (!val) return 'Common name is required.';
+        if (val.length < 2) return 'Common name must be at least 2 characters long.';
+        if (val.length > 100) return 'Common name cannot exceed 100 characters.';
+        if (!/[a-zA-Z]/.test(val)) return 'Common name must contain letters.';
+        return null;
+
+      case 'scientific_name':
+        if (!val) return 'Scientific name is required.';
+        if (val.length < 3) return 'Scientific name must be at least 3 characters long.';
+        if (val.length > 150) return 'Scientific name cannot exceed 150 characters.';
+        if (!/^[a-zA-Z\s\.\-()]+$/.test(val)) {
+          return 'Scientific name should contain valid Latin nomenclature (letters, spaces, hyphens).';
+        }
+        return null;
+
+      case 'category':
+        if (!val) return 'Taxonomy category is required.';
+        return null;
+
+      case 'status':
+        if (!val) return 'Conservation status is required.';
+        return null;
+
+      case 'sensitivity':
+        if (!val) return 'Pollution sensitivity level is required.';
+        return null;
+
+      case 'habitat':
+        if (val && val.length < 3) return 'Habitat description must be at least 3 characters if provided.';
+        if (val && val.length > 500) return 'Habitat description cannot exceed 500 characters.';
+        return null;
+
+      case 'threats':
+        if (val && val.length < 3) return 'Anthropogenic threats must be at least 3 characters if provided.';
+        if (val && val.length > 500) return 'Anthropogenic threats cannot exceed 500 characters.';
+        return null;
+
+      case 'notes':
+        if (val && val.length < 5) return 'Research field notes must be at least 5 characters if provided.';
+        if (val && val.length > 2000) return 'Research field notes cannot exceed 2000 characters.';
+        return null;
+
+      default:
+        return null;
+    }
+  };
+
+  const validateAllSpeciesFields = (values, file = null, isEdit = false) => {
+    const errors = {};
+    const fileErr = validateSpeciesField('file', null, values, file, isEdit);
+    if (fileErr) errors.file = fileErr;
+
+    const nameErr = validateSpeciesField('name', values.name, values, file, isEdit);
+    if (nameErr) errors.name = nameErr;
+
+    const sciErr = validateSpeciesField('scientific_name', values.scientific_name, values, file, isEdit);
+    if (sciErr) errors.scientific_name = sciErr;
+
+    const catErr = validateSpeciesField('category', values.category, values, file, isEdit);
+    if (catErr) errors.category = catErr;
+
+    const statErr = validateSpeciesField('status', values.status, values, file, isEdit);
+    if (statErr) errors.status = statErr;
+
+    const sensErr = validateSpeciesField('sensitivity', values.sensitivity, values, file, isEdit);
+    if (sensErr) errors.sensitivity = sensErr;
+
+    const habErr = validateSpeciesField('habitat', values.habitat, values, file, isEdit);
+    if (habErr) errors.habitat = habErr;
+
+    const threatErr = validateSpeciesField('threats', values.threats, values, file, isEdit);
+    if (threatErr) errors.threats = threatErr;
+
+    const notesErr = validateSpeciesField('notes', values.notes, values, file, isEdit);
+    if (notesErr) errors.notes = notesErr;
+
+    return errors;
+  };
+
+  // Submit modal input change & blur handlers
+  const handleSpeciesInputChange = (field, value) => {
+    const updatedForm = { ...speciesForm, [field]: value };
+    setSpeciesForm(updatedForm);
+
+    if (speciesFormTouched[field]) {
+      const error = validateSpeciesField(field, value, updatedForm, speciesFormFile, false);
+      setSpeciesFormErrors(prev => ({ ...prev, [field]: error }));
+    }
+  };
+
+  const handleSpeciesInputBlur = (field) => {
+    setSpeciesFormTouched(prev => ({ ...prev, [field]: true }));
+    const error = validateSpeciesField(field, speciesForm[field], speciesForm, speciesFormFile, false);
+    setSpeciesFormErrors(prev => ({ ...prev, [field]: error }));
+  };
+
+  const handleSpeciesFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setSpeciesFormFile(file);
+    setSpeciesFormTouched(prev => ({ ...prev, file: true }));
+    const error = validateSpeciesField('file', null, speciesForm, file, false);
+    setSpeciesFormErrors(prev => ({ ...prev, file: error }));
+  };
+
+  // Edit modal input change & blur handlers
+  const handleEditSpeciesInputChange = (field, value) => {
+    const updatedForm = { ...editSpeciesForm, [field]: value };
+    setEditSpeciesForm(updatedForm);
+
+    if (editSpeciesFormTouched[field]) {
+      const error = validateSpeciesField(field, value, updatedForm, editSpeciesFormFile, true);
+      setEditSpeciesFormErrors(prev => ({ ...prev, [field]: error }));
+    }
+  };
+
+  const handleEditSpeciesInputBlur = (field) => {
+    setEditSpeciesFormTouched(prev => ({ ...prev, [field]: true }));
+    const error = validateSpeciesField(field, editSpeciesForm[field], editSpeciesForm, editSpeciesFormFile, true);
+    setEditSpeciesFormErrors(prev => ({ ...prev, [field]: error }));
+  };
+
+  const handleEditSpeciesFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setEditSpeciesFormFile(file);
+    setEditSpeciesFormTouched(prev => ({ ...prev, file: true }));
+    const error = validateSpeciesField('file', null, editSpeciesForm, file, true);
+    setEditSpeciesFormErrors(prev => ({ ...prev, file: error }));
+  };
+
+  // Researcher Submit New Species for Municipal Authority Approval
+  const handleSpeciesUploadSubmit = async (e) => {
+    e.preventDefault();
+    setSpeciesFormTouched({
+      file: true,
+      name: true,
+      scientific_name: true,
+      category: true,
+      status: true,
+      sensitivity: true,
+      habitat: true,
+      threats: true,
+      notes: true
+    });
+
+    const errors = validateAllSpeciesFields(speciesForm, speciesFormFile, false);
+    setSpeciesFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setErrorMessage('Please correct the highlighted fields before submitting.');
+      return;
+    }
+
+    setSpeciesFormSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', speciesForm.name.trim());
+      formData.append('scientific_name', speciesForm.scientific_name.trim());
+      formData.append('category', speciesForm.category);
+      formData.append('status', speciesForm.status);
+      formData.append('sensitivity', speciesForm.sensitivity);
+      formData.append('habitat', (speciesForm.habitat || '').trim());
+      formData.append('threats', (speciesForm.threats || '').trim());
+      formData.append('notes', (speciesForm.notes || '').trim());
+      if (speciesFormFile) {
+        formData.append('image', speciesFormFile);
+      }
+
+      const res = await authFetch('/species', {
+        method: 'POST',
+        body: formData
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || 'Failed to submit species details.');
+      }
+
+      setSuccessMessage('Species details submitted successfully! Awaiting Municipal Authority review and approval.');
+      setShowSpeciesModal(false);
+      setSpeciesForm({
+        name: '',
+        scientific_name: '',
+        category: 'Fish',
+        status: 'Least Concern',
+        sensitivity: 'Medium',
+        habitat: '',
+        threats: '',
+        notes: ''
+      });
+      setSpeciesFormFile(null);
+      setSpeciesFormErrors({});
+      setSpeciesFormTouched({});
+
+      // Reload submissions
+      const mySubRes = await authFetch('/species/my-submissions');
+      if (mySubRes.ok) {
+        const subData = await mySubRes.json();
+        setMySpeciesSubmissions(subData.submissions || []);
+      }
+      setSpeciesExplorerSubTab('my-submissions');
+    } catch (err) {
+      console.error('Error submitting species:', err);
+      setErrorMessage(err.message || 'Error submitting species record.');
+    } finally {
+      setSpeciesFormSubmitting(false);
+    }
+  };
+
+  // Open Edit Species Modal
+  const handleOpenEditSpecies = (sp) => {
+    const sId = sp.species_id || sp.id;
+    setEditSpeciesId(sId);
+    setEditSpeciesForm({
+      name: sp.name || '',
+      scientific_name: sp.scientific_name || sp.scientificName || '',
+      category: sp.category || 'Fish',
+      status: sp.status || 'Least Concern',
+      sensitivity: sp.sensitivity || 'Medium',
+      habitat: sp.habitat || '',
+      threats: sp.threats || '',
+      notes: sp.notes || '',
+      image: sp.image || ''
+    });
+    setEditSpeciesFormFile(null);
+    setEditSpeciesFormErrors({});
+    setEditSpeciesFormTouched({});
+    setShowEditSpeciesModal(true);
+  };
+
+  // Submit Edit Species
+  const handleEditSpeciesSubmit = async (e) => {
+    e.preventDefault();
+    setEditSpeciesFormTouched({
+      file: true,
+      name: true,
+      scientific_name: true,
+      category: true,
+      status: true,
+      sensitivity: true,
+      habitat: true,
+      threats: true,
+      notes: true
+    });
+
+    const errors = validateAllSpeciesFields(editSpeciesForm, editSpeciesFormFile, true);
+    setEditSpeciesFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setErrorMessage('Please correct the highlighted fields before resubmitting.');
+      return;
+    }
+
+    setEditSpeciesSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', editSpeciesForm.name.trim());
+      formData.append('scientific_name', editSpeciesForm.scientific_name.trim());
+      formData.append('category', editSpeciesForm.category);
+      formData.append('status', editSpeciesForm.status);
+      formData.append('sensitivity', editSpeciesForm.sensitivity);
+      formData.append('habitat', (editSpeciesForm.habitat || '').trim());
+      formData.append('threats', (editSpeciesForm.threats || '').trim());
+      formData.append('notes', (editSpeciesForm.notes || '').trim());
+      if (editSpeciesFormFile) {
+        formData.append('image', editSpeciesFormFile);
+      } else if (editSpeciesForm.image) {
+        formData.append('image_url', editSpeciesForm.image);
+      }
+
+      const res = await authFetch(`/species/${editSpeciesId}`, {
+        method: 'PUT',
+        body: formData
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || 'Failed to update species details.');
+      }
+
+      setSuccessMessage(resData.message || 'Species details updated successfully!');
+      setShowEditSpeciesModal(false);
+      setEditSpeciesFormErrors({});
+      setEditSpeciesFormTouched({});
+
+      const updatedObj = resData.species || {
+        ...editSpeciesForm,
+        id: editSpeciesId,
+        species_id: editSpeciesId,
+        scientificName: editSpeciesForm.scientific_name,
+        image: resData.species?.image || editSpeciesForm.image
+      };
+
+      if (selectedSpecies && (selectedSpecies.id === editSpeciesId || selectedSpecies.species_id === editSpeciesId)) {
+        setSelectedSpecies(updatedObj);
+      }
+
+      // Sync both catalog and my-submissions
+      syncSpeciesCatalog();
+    } catch (err) {
+      console.error('Error updating species:', err);
+      setErrorMessage(err.message || 'Error updating species record.');
+    } finally {
+      setEditSpeciesSubmitting(false);
+    }
+  };
 
   // Coordinate Query handler
   const handleMapCoordinateClick = (lat, lng) => {
@@ -1625,18 +2017,6 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
                 
-                <button onClick={() => setSearchParams({ tab: 'my-observations' })} style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(2, 132, 199, 0.12)',
-                  border: '1px solid rgba(0, 229, 255, 0.25)', borderRadius: '14px', cursor: 'pointer', textAlign: 'left',
-                  transition: 'all 0.2s ease', color: '#ffffff'
-                }}>
-                  <Camera size={24} style={{ color: 'var(--accent-primary)' }} />
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>Record Species Sighting</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Log biodiversity with AI recognition.</div>
-                  </div>
-                </button>
-
                 <button onClick={() => setSearchParams({ tab: 'species-explorer' })} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(157, 78, 221, 0.12)',
                   border: '1px solid rgba(157, 78, 221, 0.25)', borderRadius: '14px', cursor: 'pointer', textAlign: 'left',
@@ -1861,10 +2241,6 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                     </div>
                   </div>
                 </div>
-
-                <button onClick={() => setSearchParams({ tab: 'my-observations' })} className="btn btn-primary" style={{ width: '100%', fontSize: '0.82rem', padding: '10px' }}>
-                  Log Observation Here
-                </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-secondary)', textAlign: 'center' }}>
@@ -1884,6 +2260,96 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
       {activeTab === 'species-explorer' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
+          {/* Header Row: Sub-tabs & Submit Action */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+            
+            {/* View Mode Toggle */}
+            <div style={{ display: 'flex', gap: '6px', background: 'rgba(10, 25, 48, 0.8)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
+              <button
+                onClick={() => setSpeciesExplorerSubTab('catalog')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: speciesExplorerSubTab === 'catalog' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'transparent',
+                  color: speciesExplorerSubTab === 'catalog' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.84rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Compass size={16} />
+                <span>Live Species Catalog (Approved)</span>
+                <span style={{
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontSize: '0.72rem',
+                  background: speciesExplorerSubTab === 'catalog' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+                  color: '#ffffff'
+                }}>
+                  {filteredSpecies.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setSpeciesExplorerSubTab('my-submissions')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: speciesExplorerSubTab === 'my-submissions' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'transparent',
+                  color: speciesExplorerSubTab === 'my-submissions' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.84rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Camera size={16} />
+                <span>My Submitted Species</span>
+                <span style={{
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontSize: '0.72rem',
+                  background: speciesExplorerSubTab === 'my-submissions' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+                  color: '#ffffff'
+                }}>
+                  {mySpeciesSubmissions.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Submit New Species Button */}
+            <button
+              onClick={() => {
+                setSpeciesFormErrors({});
+                setSpeciesFormTouched({});
+                setShowSpeciesModal(true);
+              }}
+              className="btn btn-primary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 18px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                fontSize: '0.86rem',
+                fontWeight: '700',
+                boxShadow: '0 4px 15px rgba(2, 132, 199, 0.4)'
+              }}
+            >
+              <Plus size={16} />
+              <span>Submit New Species Details</span>
+            </button>
+
+          </div>
+
           {/* Filters and search */}
           <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', padding: '16px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
@@ -1891,7 +2357,7 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
               <input
                 type="text"
                 className="form-control"
-                placeholder="Search marine catalog by scientific name, classification, keyword..."
+                placeholder={speciesExplorerSubTab === 'catalog' ? "Search live marine catalog by common name, taxonomy, notes..." : "Search your submitted species..."}
                 value={speciesSearch}
                 onChange={(e) => setSpeciesSearch(e.target.value)}
                 style={{ border: 'none', background: 'transparent', padding: '6px 0', fontSize: '0.95rem' }}
@@ -1926,50 +2392,196 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
             </div>
           </div>
 
-          {/* Cards Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
-            
-            {filteredSpecies.map(sp => (
-              <div
-                key={sp.id || sp.species_id}
-                className="glass-panel"
-                onClick={() => setSelectedSpecies(sp)}
-                style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', height: '360px' }}
-              >
-                <div style={{ height: '160px', overflow: 'hidden', position: 'relative', background: 'rgba(5, 19, 41, 0.8)' }}>
-                  <img src={resolveCatalogImage(sp.image)} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <span style={{
-                    position: 'absolute', top: '12px', right: '12px', padding: '4px 10px', borderRadius: '20px',
-                    fontSize: '0.65rem', fontWeight: 'bold', background: sp.status === 'Endangered' || sp.status === 'Critically Endangered' ? 'rgba(255,77,77,0.85)' : 'rgba(0,245,212,0.85)',
-                    color: sp.status === 'Endangered' || sp.status === 'Critically Endangered' ? '#ffffff' : '#051329'
-                  }}>
-                    {sp.status}
-                  </span>
+          {/* VIEW MODE 1: LIVE APPROVED SPECIES CATALOG */}
+          {speciesExplorerSubTab === 'catalog' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
+              {filteredSpecies.length === 0 ? (
+                <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <Info size={32} color="#00e5ff" style={{ marginBottom: '10px' }} />
+                  <p>No approved species match your search or filter.</p>
                 </div>
-                
-                <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
-                  <div>
-                    <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
-                      {sp.category}
-                    </span>
-                    <h3 style={{ fontSize: '1.15rem', marginTop: '2px' }}>{sp.name}</h3>
-                    <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{sp.scientificName || sp.scientific_name}</p>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {sp.notes || sp.habitat}
-                    </p>
+              ) : (
+                filteredSpecies.map(sp => (
+                  <div
+                    key={sp.id || sp.species_id}
+                    className="glass-panel"
+                    onClick={() => setSelectedSpecies(sp)}
+                    style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', height: '360px' }}
+                  >
+                    <div style={{ height: '160px', overflow: 'hidden', position: 'relative', background: 'rgba(5, 19, 41, 0.8)' }}>
+                      <img src={resolveCatalogImage(sp.image)} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <span style={{
+                        position: 'absolute', top: '12px', right: '12px', padding: '4px 10px', borderRadius: '20px',
+                        fontSize: '0.65rem', fontWeight: 'bold', background: sp.status === 'Endangered' || sp.status === 'Critically Endangered' ? 'rgba(255,77,77,0.85)' : 'rgba(0,245,212,0.85)',
+                        color: sp.status === 'Endangered' || sp.status === 'Critically Endangered' ? '#ffffff' : '#051329'
+                      }}>
+                        {sp.status}
+                      </span>
+                    </div>
+                    
+                    <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
+                      <div>
+                        <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                          {sp.category}
+                        </span>
+                        <h3 style={{ fontSize: '1.15rem', marginTop: '2px' }}>{sp.name}</h3>
+                        <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{sp.scientificName || sp.scientific_name}</p>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '8px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {sp.notes || sp.habitat}
+                        </p>
+                      </div>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity || 'Medium'}</strong></span>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditSpecies(sp);
+                            }}
+                            style={{
+                              background: 'rgba(0, 229, 255, 0.12)',
+                              border: '1px solid rgba(0, 229, 255, 0.3)',
+                              color: '#00e5ff',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title="Edit species information"
+                          >
+                            <Edit3 size={11} /> Edit
+                          </button>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                            Profile <ChevronRight size={14} />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity || 'Medium'}</strong></span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      Profile <ChevronRight size={14} />
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
+          )}
 
-          </div>
+          {/* VIEW MODE 2: RESEARCHER'S OWN SUBMISSIONS */}
+          {speciesExplorerSubTab === 'my-submissions' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '24px' }}>
+              {filteredMySubmissions.length === 0 ? (
+                <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '50px 20px', borderRadius: '16px' }}>
+                  <Camera size={36} color="#00e5ff" style={{ opacity: 0.6, marginBottom: '12px' }} />
+                  <h3 style={{ color: '#ffffff', margin: '0 0 8px 0' }}>No Species Submissions Yet</h3>
+                  <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: '0 0 16px 0' }}>
+                    You have not uploaded any marine species for Municipal Authority review yet.
+                  </p>
+                  <button
+                    onClick={() => setShowSpeciesModal(true)}
+                    className="btn btn-primary"
+                    style={{ padding: '8px 18px', fontSize: '0.84rem' }}
+                  >
+                    <Plus size={15} style={{ marginRight: '6px' }} /> Submit Your First Species
+                  </button>
+                </div>
+              ) : (
+                filteredMySubmissions.map(sub => {
+                  const sStatus = sub.approval_status || 'Approved';
+                  const isPending = sStatus === 'Pending';
+                  const isApproved = sStatus === 'Approved';
+                  const isRejected = sStatus === 'Rejected';
+
+                  return (
+                    <div
+                      key={sub.id || sub.species_id}
+                      className="glass-panel"
+                      onClick={() => setSelectedSpecies(sub)}
+                      style={{
+                        padding: 0,
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: '16px',
+                        border: isPending ? '1px solid rgba(245, 158, 11, 0.4)' : isApproved ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)'
+                      }}
+                    >
+                      <div style={{ height: '160px', overflow: 'hidden', position: 'relative', background: 'rgba(5, 19, 41, 0.8)' }}>
+                        <img src={resolveCatalogImage(sub.image)} alt={sub.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        
+                        {/* Approval Status Badge */}
+                        <span style={{
+                          position: 'absolute', top: '12px', left: '12px', padding: '4px 10px', borderRadius: '20px',
+                          fontSize: '0.68rem', fontWeight: '800',
+                          background: isPending ? 'rgba(245, 158, 11, 0.95)' : isApproved ? 'rgba(16, 185, 129, 0.95)' : 'rgba(239, 68, 68, 0.95)',
+                          color: isPending ? '#051329' : '#ffffff'
+                        }}>
+                          {isPending ? '⏳ Pending Authority Approval' : isApproved ? '✅ Approved & Live' : '❌ Revision Required'}
+                        </span>
+                      </div>
+
+                      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                        <div>
+                          <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                            {sub.category}
+                          </span>
+                          <h3 style={{ fontSize: '1.1rem', margin: '2px 0 0 0', color: '#ffffff' }}>{sub.name}</h3>
+                          <p style={{ fontSize: '0.76rem', fontStyle: 'italic', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                            {sub.scientificName || sub.scientific_name}
+                          </p>
+                        </div>
+
+                        {/* Rejection Feedback box if rejected */}
+                        {isRejected && sub.rejection_reason && (
+                          <div style={{
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            fontSize: '0.74rem',
+                            color: '#fca5a5'
+                          }}>
+                            <strong>Authority Feedback: </strong>{sub.rejection_reason}
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: '#94a3b8' }}>
+                          <span>Submitted: {new Date(sub.created_at || Date.now()).toLocaleDateString()}</span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditSpecies(sub);
+                              }}
+                              style={{
+                                background: 'rgba(0, 229, 255, 0.15)',
+                                border: '1px solid rgba(0, 229, 255, 0.35)',
+                                color: '#00e5ff',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '0.72rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Edit submitted species record"
+                            >
+                              <Edit3 size={11} /> Edit
+                            </button>
+                            <span style={{ color: '#00e5ff', fontWeight: '700' }}>Details &rarr;</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
 
           {/* Details modal drawer */}
           {selectedSpecies && (
@@ -2029,7 +2641,595 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                   </div>
                 </div>
 
-                <button onClick={() => setSelectedSpecies(null)} className="btn btn-secondary" style={{ width: '100%' }}>Close Profile</button>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+                  <button 
+                    onClick={() => handleOpenEditSpecies(selectedSpecies)} 
+                    className="btn btn-primary" 
+                    style={{ 
+                      flex: 1.2, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '8px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)',
+                      color: '#041126',
+                      fontWeight: '700',
+                      boxShadow: '0 4px 15px rgba(0, 229, 255, 0.35)',
+                      padding: '10px 16px',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    <Edit3 size={16} /> Edit Species Profile
+                  </button>
+                  <button 
+                    onClick={() => setSelectedSpecies(null)} 
+                    className="btn btn-secondary" 
+                    style={{ flex: 1, padding: '10px 16px', borderRadius: '8px' }}
+                  >
+                    Close Profile
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: EDIT SPECIES PROFILE (RESEARCHER) */}
+          {showEditSpeciesModal && (
+            <div className="modal-overlay" onClick={() => setShowEditSpeciesModal(false)}>
+              <div 
+                className="modal-card glass-panel" 
+                onClick={(e) => e.stopPropagation()} 
+                style={{ maxWidth: '640px', width: '95%', maxHeight: '90vh', overflowY: 'auto', borderRadius: '20px', padding: '26px' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                  <div>
+                    <h2 style={{ fontSize: '1.35rem', margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Edit3 size={20} color="#00e5ff" /> Edit Species Profile
+                    </h2>
+                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Updated information will be resubmitted for Municipal Authority review and published upon approval.
+                    </span>
+                  </div>
+                  <button onClick={() => setShowEditSpeciesModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleEditSpeciesSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  
+                  {/* Photo Upload & Preview */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Specimen Photograph</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '4px' }}>
+                      <div style={{ width: '64px', height: '64px', borderRadius: '10px', overflow: 'hidden', background: 'rgba(5, 19, 41, 0.8)', border: editSpeciesFormErrors.file ? '1px solid #ef4444' : '1px solid rgba(0,229,255,0.3)', flexShrink: 0 }}>
+                        <img 
+                          src={editSpeciesFormFile ? URL.createObjectURL(editSpeciesFormFile) : resolveCatalogImage(editSpeciesForm.image)} 
+                          alt="Preview" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEditSpeciesFileChange}
+                          className="form-control"
+                          style={{
+                            background: 'rgba(8, 20, 42, 0.8)',
+                            color: '#ffffff',
+                            fontSize: '0.8rem',
+                            border: editSpeciesFormErrors.file ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                            boxShadow: editSpeciesFormErrors.file ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+                          Upload a new image (JPEG, PNG, WEBP, max 10MB) or keep current photo.
+                        </span>
+                      </div>
+                    </div>
+                    {editSpeciesFormErrors.file && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {editSpeciesFormErrors.file}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Names Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Common Name *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Galapagos sea lion"
+                        value={editSpeciesForm.name}
+                        onChange={(e) => handleEditSpeciesInputChange('name', e.target.value)}
+                        onBlur={() => handleEditSpeciesInputBlur('name')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: editSpeciesFormErrors.name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: editSpeciesFormErrors.name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      />
+                      {editSpeciesFormErrors.name && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {editSpeciesFormErrors.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Scientific Name *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Zalophus wollebaeki"
+                        value={editSpeciesForm.scientific_name}
+                        onChange={(e) => handleEditSpeciesInputChange('scientific_name', e.target.value)}
+                        onBlur={() => handleEditSpeciesInputBlur('scientific_name')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: editSpeciesFormErrors.scientific_name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: editSpeciesFormErrors.scientific_name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      />
+                      {editSpeciesFormErrors.scientific_name && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {editSpeciesFormErrors.scientific_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category & Status Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Category</label>
+                      <select
+                        className="form-control"
+                        value={editSpeciesForm.category}
+                        onChange={(e) => handleEditSpeciesInputChange('category', e.target.value)}
+                        onBlur={() => handleEditSpeciesInputBlur('category')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: editSpeciesFormErrors.category ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: editSpeciesFormErrors.category ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      >
+                        {speciesCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {editSpeciesFormErrors.category && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {editSpeciesFormErrors.category}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Conservation Status</label>
+                      <select
+                        className="form-control"
+                        value={editSpeciesForm.status}
+                        onChange={(e) => handleEditSpeciesInputChange('status', e.target.value)}
+                        onBlur={() => handleEditSpeciesInputBlur('status')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: editSpeciesFormErrors.status ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: editSpeciesFormErrors.status ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      >
+                        <option value="Least Concern">Least Concern</option>
+                        <option value="Near Threatened">Near Threatened</option>
+                        <option value="Vulnerable">Vulnerable</option>
+                        <option value="Endangered">Endangered</option>
+                        <option value="Critically Endangered">Critically Endangered</option>
+                        <option value="Data Deficient">Data Deficient</option>
+                      </select>
+                      {editSpeciesFormErrors.status && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {editSpeciesFormErrors.status}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Pollution Sensitivity</label>
+                      <select
+                        className="form-control"
+                        value={editSpeciesForm.sensitivity}
+                        onChange={(e) => handleEditSpeciesInputChange('sensitivity', e.target.value)}
+                        onBlur={() => handleEditSpeciesInputBlur('sensitivity')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: editSpeciesFormErrors.sensitivity ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: editSpeciesFormErrors.sensitivity ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                      </select>
+                      {editSpeciesFormErrors.sensitivity && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {editSpeciesFormErrors.sensitivity}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Habitat */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Typical Habitat</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      placeholder="e.g. Shallow coral sand shores, coastal lagoons, and seagrass flats"
+                      value={editSpeciesForm.habitat}
+                      onChange={(e) => handleEditSpeciesInputChange('habitat', e.target.value)}
+                      onBlur={() => handleEditSpeciesInputBlur('habitat')}
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        border: editSpeciesFormErrors.habitat ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: editSpeciesFormErrors.habitat ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    {editSpeciesFormErrors.habitat && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {editSpeciesFormErrors.habitat}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Anthropogenic Threats */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Anthropogenic Threats</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      placeholder="e.g. Plastic ingestion, ghost net entanglement, vessel noise"
+                      value={editSpeciesForm.threats}
+                      onChange={(e) => handleEditSpeciesInputChange('threats', e.target.value)}
+                      onBlur={() => handleEditSpeciesInputBlur('threats')}
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        border: editSpeciesFormErrors.threats ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: editSpeciesFormErrors.threats ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    {editSpeciesFormErrors.threats && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {editSpeciesFormErrors.threats}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Field Notes */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Research Field Notes</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      placeholder="Enter detailed field observations or ecological analysis..."
+                      value={editSpeciesForm.notes}
+                      onChange={(e) => handleEditSpeciesInputChange('notes', e.target.value)}
+                      onBlur={() => handleEditSpeciesInputBlur('notes')}
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        border: editSpeciesFormErrors.notes ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: editSpeciesFormErrors.notes ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    {editSpeciesFormErrors.notes && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {editSpeciesFormErrors.notes}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditSpeciesModal(false)}
+                      className="btn btn-secondary"
+                      style={{ flex: 1, padding: '10px' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={editSpeciesSubmitting}
+                      className="btn btn-primary"
+                      style={{ flex: 1.5, padding: '10px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+                    >
+                      {editSpeciesSubmitting ? 'Saving...' : 'Save & Resubmit Species'}
+                    </button>
+                  </div>
+
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: SUBMIT NEW SPECIES (RESEARCHER CONTRIBUTION) */}
+          {showSpeciesModal && (
+            <div className="modal-overlay" onClick={() => setShowSpeciesModal(false)}>
+              <div 
+                className="modal-card glass-panel" 
+                onClick={(e) => e.stopPropagation()} 
+                style={{ maxWidth: '640px', width: '95%', maxHeight: '90vh', overflowY: 'auto', borderRadius: '20px', padding: '26px' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                  <div>
+                    <h2 style={{ fontSize: '1.35rem', margin: 0, color: '#ffffff' }}>Submit Species for Review</h2>
+                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Submissions are verified and approved by the Municipal Authority before publication.
+                    </span>
+                  </div>
+                  <button onClick={() => setShowSpeciesModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSpeciesUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  
+                  {/* Photo Upload */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Specimen Photograph</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSpeciesFileChange}
+                      className="form-control"
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        fontSize: '0.8rem',
+                        border: speciesFormErrors.file ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: speciesFormErrors.file ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+                      Accepted formats: JPEG, PNG, WEBP, GIF (Max size: 10MB).
+                    </span>
+                    {speciesFormErrors.file && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {speciesFormErrors.file}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Names Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Common Name *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Green Sea Turtle"
+                        value={speciesForm.name}
+                        onChange={(e) => handleSpeciesInputChange('name', e.target.value)}
+                        onBlur={() => handleSpeciesInputBlur('name')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: speciesFormErrors.name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: speciesFormErrors.name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      />
+                      {speciesFormErrors.name && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {speciesFormErrors.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Scientific Name *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="e.g. Chelonia mydas"
+                        value={speciesForm.scientific_name}
+                        onChange={(e) => handleSpeciesInputChange('scientific_name', e.target.value)}
+                        onBlur={() => handleSpeciesInputBlur('scientific_name')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: speciesFormErrors.scientific_name ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: speciesFormErrors.scientific_name ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      />
+                      {speciesFormErrors.scientific_name && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {speciesFormErrors.scientific_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category & Status Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Category</label>
+                      <select
+                        className="form-control"
+                        value={speciesForm.category}
+                        onChange={(e) => handleSpeciesInputChange('category', e.target.value)}
+                        onBlur={() => handleSpeciesInputBlur('category')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: speciesFormErrors.category ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: speciesFormErrors.category ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      >
+                        {speciesCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {speciesFormErrors.category && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {speciesFormErrors.category}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Conservation Status</label>
+                      <select
+                        className="form-control"
+                        value={speciesForm.status}
+                        onChange={(e) => handleSpeciesInputChange('status', e.target.value)}
+                        onBlur={() => handleSpeciesInputBlur('status')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: speciesFormErrors.status ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: speciesFormErrors.status ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      >
+                        <option value="Least Concern">Least Concern</option>
+                        <option value="Near Threatened">Near Threatened</option>
+                        <option value="Vulnerable">Vulnerable</option>
+                        <option value="Endangered">Endangered</option>
+                        <option value="Critically Endangered">Critically Endangered</option>
+                        <option value="Data Deficient">Data Deficient</option>
+                      </select>
+                      {speciesFormErrors.status && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {speciesFormErrors.status}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Pollution Sensitivity</label>
+                      <select
+                        className="form-control"
+                        value={speciesForm.sensitivity}
+                        onChange={(e) => handleSpeciesInputChange('sensitivity', e.target.value)}
+                        onBlur={() => handleSpeciesInputBlur('sensitivity')}
+                        style={{
+                          background: 'rgba(8, 20, 42, 0.8)',
+                          color: '#ffffff',
+                          border: speciesFormErrors.sensitivity ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                          boxShadow: speciesFormErrors.sensitivity ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                        }}
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                      </select>
+                      {speciesFormErrors.sensitivity && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                          ⚠️ {speciesFormErrors.sensitivity}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Habitat */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Typical Habitat</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      placeholder="e.g. Shallow coral sand shores, coastal lagoons, and seagrass flats"
+                      value={speciesForm.habitat}
+                      onChange={(e) => handleSpeciesInputChange('habitat', e.target.value)}
+                      onBlur={() => handleSpeciesInputBlur('habitat')}
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        border: speciesFormErrors.habitat ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: speciesFormErrors.habitat ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    {speciesFormErrors.habitat && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {speciesFormErrors.habitat}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Anthropogenic Threats */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Anthropogenic Threats</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      placeholder="e.g. Plastic ingestion, ghost net entanglement, vessel noise"
+                      value={speciesForm.threats}
+                      onChange={(e) => handleSpeciesInputChange('threats', e.target.value)}
+                      onBlur={() => handleSpeciesInputBlur('threats')}
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        border: speciesFormErrors.threats ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: speciesFormErrors.threats ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    {speciesFormErrors.threats && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {speciesFormErrors.threats}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Field Notes */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: '600' }}>Research Field Notes</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      placeholder="Enter detailed field observations or ecological analysis..."
+                      value={speciesForm.notes}
+                      onChange={(e) => handleSpeciesInputChange('notes', e.target.value)}
+                      onBlur={() => handleSpeciesInputBlur('notes')}
+                      style={{
+                        background: 'rgba(8, 20, 42, 0.8)',
+                        color: '#ffffff',
+                        border: speciesFormErrors.notes ? '1px solid #ef4444' : '1px solid rgba(0, 229, 255, 0.25)',
+                        boxShadow: speciesFormErrors.notes ? '0 0 8px rgba(239, 68, 68, 0.3)' : 'none'
+                      }}
+                    />
+                    {speciesFormErrors.notes && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                        ⚠️ {speciesFormErrors.notes}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowSpeciesModal(false)}
+                      className="btn btn-secondary"
+                      style={{ flex: 1, padding: '10px' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={speciesFormSubmitting}
+                      className="btn btn-primary"
+                      style={{ flex: 1.5, padding: '10px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+                    >
+                      {speciesFormSubmitting ? 'Submitting...' : 'Submit for Authority Approval'}
+                    </button>
+                  </div>
+
+                </form>
               </div>
             </div>
           )}
@@ -2299,179 +3499,6 @@ Feel free to ask me conceptual marine science questions, request cross-coastal c
                 <Line type="monotone" dataKey="temp" name="Temperature (°C)" stroke="var(--accent-primary)" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-
-        </div>
-      )}
-
-      {/* =========================================================================
-          TAB 8: MY OBSERVATIONS & AI IDENTIFICATION
-          ========================================================================= */}
-      {activeTab === 'my-observations' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '28px' }}>
-          
-          {/* Observations Recording Form */}
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Record Biodiversity Observation</h3>
-            
-            {/* AI assisted analysis drop zone */}
-            <div style={{
-              border: '2px dashed rgba(0, 229, 255, 0.3)', padding: '20px', borderRadius: '14px',
-              textAlign: 'center', background: 'rgba(10, 25, 48, 0.4)', position: 'relative'
-            }}>
-              <Camera size={32} style={{ color: 'var(--accent-primary)', opacity: 0.8, marginBottom: '8px' }} />
-              <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>AI-Assisted Species Identification</div>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px', marginBottom: '12px' }}>
-                Upload a sighting photograph. The platform analyzer will estimate taxonomy details.
-              </p>
-              
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleUploadImageIdentify}
-                style={{ display: 'none' }}
-                accept="image/*"
-              />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '6px 14px', fontSize: '0.76rem' }}
-                onClick={() => fileInputRef.current.click()}
-              >
-                Choose Photo
-              </button>
-
-              {identifying && (
-                <div style={{ marginTop: '10px', fontSize: '0.76rem', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <RefreshCw size={12} className="spin-icon" /> Analyzing marine specimen details...
-                </div>
-              )}
-
-              {aiResult && (
-                <div style={{
-                  marginTop: '12px', padding: '10px', background: 'rgba(0, 245, 212, 0.1)', border: '1px solid rgba(0, 245, 212, 0.3)',
-                  borderRadius: '10px', textAlign: 'left', fontSize: '0.75rem'
-                }}>
-                  <div style={{ color: 'var(--success)', fontWeight: 'bold' }}>Sighting Match: {aiResult.possibleSpecies} ({aiResult.confidence}%)</div>
-                  <div style={{ fontStyle: 'italic', color: 'var(--text-secondary)', marginTop: '2px' }}>Scientific: {aiResult.scientificName}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '4px' }}>Alternatives: {aiResult.alternatives.map(a => `${a.name} (${a.confidence}%)`).join(', ')}</div>
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleCreateObservation} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div className="form-group">
-                  <label className="form-label">Common Name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Green Sea Turtle"
-                    value={obsForm.species_name}
-                    onChange={(e) => setObsForm(prev => ({ ...prev, species_name: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Scientific Name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Chelonia mydas"
-                    value={obsForm.scientific_name}
-                    onChange={(e) => setObsForm(prev => ({ ...prev, scientific_name: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div className="form-group">
-                  <label className="form-label">Latitude</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={obsForm.latitude}
-                    onChange={(e) => setObsForm(prev => ({ ...prev, latitude: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Longitude</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={obsForm.longitude}
-                    onChange={(e) => setObsForm(prev => ({ ...prev, longitude: e.target.value }))}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Observed Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={obsForm.observed_date}
-                  onChange={(e) => setObsForm(prev => ({ ...prev, observed_date: e.target.value }))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Observation Notes / Field Logs</label>
-                <textarea
-                  className="form-control"
-                  rows="3"
-                  placeholder="Behavior, health status, plastic interaction..."
-                  value={obsForm.observation}
-                  onChange={(e) => setObsForm(prev => ({ ...prev, observation: e.target.value }))}
-                ></textarea>
-              </div>
-
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Log Sighting Record</button>
-            </form>
-          </div>
-
-          {/* Observations List */}
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', maxHeight: '580px' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Sighting Logs Ledger</h3>
-            
-            {biodiversityObs.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {biodiversityObs.map(obs => (
-                  <div key={obs.record_id} style={{
-                    padding: '14px', background: 'rgba(10, 25, 48, 0.6)', border: '1px solid rgba(0, 229, 255, 0.15)',
-                    borderRadius: '12px', position: 'relative'
-                  }}>
-                    {obs.image && (
-                      <div style={{
-                        float: 'right', width: '50px', height: '50px', borderRadius: '8px', overflow: 'hidden',
-                        marginLeft: '12px', border: '1px solid rgba(0,229,255,0.2)'
-                      }}>
-                        <img src={obs.image} alt={obs.species_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                    )}
-                    
-                    <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
-                      Logged Sighting
-                    </span>
-                    <h4 style={{ fontSize: '1rem', marginTop: '2px' }}>{obs.species_name}</h4>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{obs.observation}</p>
-                    
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '10px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      <span>Area: ({obs.latitude}, {obs.longitude})</span>
-                      <span>•</span>
-                      <span>Date: {new Date(obs.observed_date).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                <Camera size={36} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p style={{ fontSize: '0.85rem' }}>No observations recorded by your account yet.</p>
-              </div>
-            )}
           </div>
 
         </div>

@@ -384,31 +384,35 @@ const Campaigns = () => {
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.error && data.error.includes('already registered')) {
-          setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
-          setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
-          setError('You have already registered for this campaign.');
-        } else {
-          throw new Error(data.error || 'Could not join campaign.');
+        if (data.registration_status) {
+          if (data.registration_status === 'Approved') {
+            setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+          }
+          setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { 
+            ...c, 
+            is_joined: data.registration_status === 'Approved',
+            registration_status: data.registration_status 
+          } : c));
         }
+        throw new Error(data.error || 'Could not join campaign.');
       } else {
-        const isPrivate = campaigns.find(c => c.campaign_id === campaignId)?.visibility === 'Private';
-        const regStatus = isPrivate ? 'Pending' : 'Approved';
-        setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
-        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true, registration_status: regStatus, volunteer_count: isPrivate ? c.volunteer_count : (parseInt(c.volunteer_count) || 0) + 1 } : c));
-        setSuccess(data.message || 'Successfully registered for campaign.');
+        const isApproved = data.registration_status === 'Approved';
+        if (isApproved) {
+          setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
+        }
+        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { 
+          ...c, 
+          is_joined: isApproved, 
+          registration_status: data.registration_status, 
+          volunteer_count: isApproved ? (parseInt(c.volunteer_count) || 0) + 1 : c.volunteer_count 
+        } : c));
+        setSuccess(data.message || 'Join request submitted successfully.');
       }
 
       // Also trigger a refresh from the server to ensure absolute sync
       fetchCampaigns();
     } catch (err) {
-      if (err.message && err.message.includes('already registered')) {
-        setJoinedCampaignIds(prev => new Set([...prev, campaignId]));
-        setCampaigns(prev => prev.map(c => c.campaign_id === campaignId ? { ...c, is_joined: true } : c));
-        setError('You have already registered for this campaign.');
-      } else {
-        setError(err.message || 'Failed to join campaign.');
-      }
+      setError(err.message || 'Failed to join campaign.');
     }
   };
 
@@ -934,7 +938,7 @@ const Campaigns = () => {
                 {filteredCampaigns.map((camp) => {
                   const volCount = parseInt(camp.volunteer_count) || 0;
                   const maxVol = camp.maximum_volunteers || null;
-                  const isJoined = Boolean(camp.is_joined) || camp.is_joined === 'true' || camp.is_joined === 't' || camp.is_joined === 1 || joinedCampaignIds.has(camp.campaign_id);
+                  const isJoined = (camp.registration_status === 'Approved') || ((Boolean(camp.is_joined) || camp.is_joined === 'true' || camp.is_joined === 't' || camp.is_joined === 1 || joinedCampaignIds.has(camp.campaign_id)) && camp.registration_status !== 'Pending');
 
                   return (
                     <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
@@ -1016,7 +1020,31 @@ const Campaigns = () => {
                             Details
                           </button>
 
-                          {isJoined ? (
+                          {camp.registration_status === 'Pending' ? (
+                            <button 
+                              disabled
+                              title="Your join request is pending approval from the organizer"
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '0.72rem',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: 'rgba(255, 183, 3, 0.15)',
+                                color: '#ffb703',
+                                border: '1px solid rgba(255, 183, 3, 0.4)',
+                                fontWeight: '700',
+                                cursor: 'default',
+                                width: '100%',
+                                maxWidth: '75px',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <Clock size={12} />
+                              Pending
+                            </button>
+                          ) : (isJoined || camp.registration_status === 'Approved') ? (
                             <button 
                               disabled
                               style={{
@@ -1026,9 +1054,9 @@ const Campaigns = () => {
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '4px',
-                                background: camp.registration_status === 'Pending' ? 'rgba(255, 183, 3, 0.15)' : 'rgba(16, 185, 129, 0.2)',
-                                color: camp.registration_status === 'Pending' ? '#ffb703' : '#00f5d4',
-                                border: `1px solid ${camp.registration_status === 'Pending' ? 'rgba(255, 183, 3, 0.4)' : 'rgba(0, 245, 212, 0.4)'}`,
+                                background: 'rgba(16, 185, 129, 0.2)',
+                                color: '#00f5d4',
+                                border: '1px solid rgba(0, 245, 212, 0.4)',
                                 fontWeight: '700',
                                 cursor: 'default',
                                 width: '100%',
@@ -1036,8 +1064,8 @@ const Campaigns = () => {
                                 justifyContent: 'center'
                               }}
                             >
-                              {camp.registration_status === 'Pending' ? <Clock size={12} /> : <Check size={12} />}
-                              {camp.registration_status === 'Pending' ? 'Pending' : 'Joined'}
+                              <Check size={12} />
+                              Joined
                             </button>
                           ) : (
                             ['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
@@ -1059,7 +1087,7 @@ const Campaigns = () => {
                                 }}
                               >
                                 <Users size={12} />
-                                {camp.visibility === 'Private' ? 'Request' : 'Join'}
+                                Join
                               </button>
                             )
                           )}
@@ -1703,11 +1731,15 @@ const Campaigns = () => {
                           {item.certificate_status ? (
                             <button
                               onClick={() => setSelectedCert({
+                                ...item,
                                 certificate_id: item.certificate_id,
-                                volunteer_name: user.full_name,
+                                volunteer_name: item.volunteer_name || user?.full_name || 'Valued Coastal Volunteer',
                                 campaign_name: item.campaign_name,
+                                description: item.description,
                                 location: item.location,
                                 campaign_date: item.campaign_date,
+                                start_time: item.start_time,
+                                end_time: item.end_time,
                                 issued_date: item.issued_date,
                                 organization_name: item.organization_name || item.creator_name
                               })}

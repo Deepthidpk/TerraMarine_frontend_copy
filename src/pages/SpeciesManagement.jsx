@@ -1,1059 +1,1043 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { 
-  Plus, 
-  Search, 
-  Trash2, 
-  Eye, 
-  X, 
-  RefreshCw, 
-  Upload, 
-  Camera, 
-  Sparkles, 
-  AlertTriangle, 
-  AlertCircle,
-  ShieldCheck, 
-  CheckCircle2, 
-  Compass, 
-  Layers, 
-  ChevronRight,
+import {
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Search,
+  Filter,
+  RefreshCw,
+  Eye,
+  AlertTriangle,
   Info,
-  Fish,
-  FolderPlus,
-  Settings
+  Check,
+  X,
+  Trash2,
+  ChevronRight,
+  Sparkles,
+  Layers,
+  FileText,
+  User,
+  Calendar,
+  Compass,
+  ArrowRight,
+  ExternalLink,
+  MessageSquare
 } from 'lucide-react';
-
-const DEFAULT_CATEGORIES = [
-  'Mammals',
-  'Fish',
-  'Reptiles',
-  'Corals',
-  'Crustaceans',
-  'Microorganisms',
-  'Plants',
-  'Coastal Birds'
-];
-
-const CONSERVATION_STATUSES = [
-  'Critically Endangered',
-  'Endangered',
-  'Vulnerable',
-  'Near Threatened',
-  'Least Concern',
-  'Stable'
-];
-
-const SENSITIVITY_LEVELS = [
-  'Critical',
-  'High',
-  'Medium',
-  'Low'
-];
-
-// Regular expressions for strict line-by-line field validation
-const ALPHANUMERIC_REGEX = /^[a-zA-Z0-9\s\-()']+$/;
-const SCIENTIFIC_NAME_REGEX = /^[a-zA-Z0-9\s\-.'()]+$/;
-const EXTENDED_TEXT_REGEX = /^[a-zA-Z0-9\s\-.,/()'"+!?:;]+$/;
-const CATEGORY_REGEX = /^[a-zA-Z\s]+$/;
-
-// Validator for Species form fields
-const validateSpeciesField = (fieldName, value, file = null) => {
-  const trimmed = typeof value === 'string' ? value.trim() : '';
-
-  switch (fieldName) {
-    case 'image':
-      if (!file) {
-        return 'Species specimen photograph is required (max 15MB).';
-      }
-      if (file.size > 15 * 1024 * 1024) {
-        return 'Specimen photo size must be less than 15MB.';
-      }
-      if (!file.type || !file.type.startsWith('image/')) {
-        return 'Please upload a valid image file (PNG, JPG, JPEG, WEBP).';
-      }
-      return '';
-
-    case 'name':
-      if (!trimmed) {
-        return 'Species common name is required.';
-      }
-      if (trimmed.length < 3) {
-        return 'Common name must be at least 3 characters long.';
-      }
-      if (trimmed.length > 100) {
-        return 'Common name cannot exceed 100 characters.';
-      }
-      if (!ALPHANUMERIC_REGEX.test(trimmed)) {
-        return 'Only letters, digits, spaces, hyphens, and parentheses are allowed (no special symbols).';
-      }
-      if (!/[a-zA-Z]/.test(trimmed)) {
-        return 'Common name must contain at least one alphabet letter.';
-      }
-      return '';
-
-    case 'scientific_name':
-      if (!trimmed) {
-        return 'Scientific taxonomy name is required.';
-      }
-      if (trimmed.length < 3) {
-        return 'Scientific taxonomy must be at least 3 characters long.';
-      }
-      if (trimmed.length > 100) {
-        return 'Scientific taxonomy cannot exceed 100 characters.';
-      }
-      if (!SCIENTIFIC_NAME_REGEX.test(trimmed)) {
-        return 'Only letters, digits, spaces, hyphens, periods, and parentheses are allowed.';
-      }
-      if (!/[a-zA-Z]/.test(trimmed)) {
-        return 'Scientific taxonomy must contain at least one alphabet letter.';
-      }
-      return '';
-
-    case 'category':
-      if (!trimmed) {
-        return 'Please select a taxonomy category.';
-      }
-      return '';
-
-    case 'status':
-      if (!trimmed) {
-        return 'Please select a conservation status.';
-      }
-      return '';
-
-    case 'sensitivity':
-      if (!trimmed) {
-        return 'Please select a pollution sensitivity index.';
-      }
-      return '';
-
-    case 'habitat':
-      if (trimmed) {
-        if (trimmed.length < 3) {
-          return 'Typical habitat description must be at least 3 characters.';
-        }
-        if (trimmed.length > 300) {
-          return 'Typical habitat description cannot exceed 300 characters.';
-        }
-        if (!EXTENDED_TEXT_REGEX.test(trimmed)) {
-          return 'Only letters, digits, spaces, and standard punctuation (., - / () \') are allowed.';
-        }
-        if (!/[a-zA-Z]/.test(trimmed)) {
-          return 'Habitat description must contain alphabet letters.';
-        }
-      }
-      return '';
-
-    case 'threats':
-      if (trimmed) {
-        if (trimmed.length < 3) {
-          return 'Threats description must be at least 3 characters.';
-        }
-        if (trimmed.length > 300) {
-          return 'Threats description cannot exceed 300 characters.';
-        }
-        if (!EXTENDED_TEXT_REGEX.test(trimmed)) {
-          return 'Only letters, digits, spaces, and standard punctuation (., - / () \') are allowed.';
-        }
-        if (!/[a-zA-Z]/.test(trimmed)) {
-          return 'Threats description must contain alphabet letters.';
-        }
-      }
-      return '';
-
-    case 'notes':
-      if (trimmed) {
-        if (trimmed.length < 5) {
-          return 'Research field notes must be at least 5 characters.';
-        }
-        if (trimmed.length > 1000) {
-          return 'Research field notes cannot exceed 1000 characters.';
-        }
-        if (!EXTENDED_TEXT_REGEX.test(trimmed)) {
-          return 'Only letters, digits, spaces, and standard punctuation (. , - / () \' " ! ? : ;) are allowed.';
-        }
-        if (!/[a-zA-Z]/.test(trimmed)) {
-          return 'Field notes must contain alphabet letters.';
-        }
-      }
-      return '';
-
-    default:
-      return '';
-  }
-};
-
-// Validator for Category Manager input field (Letters & spaces only)
-const validateCategoryInput = (name, existingList = []) => {
-  const raw = typeof name === 'string' ? name : '';
-  const trimmed = raw.trim();
-  
-  if (!trimmed) {
-    return 'Category name is required (letters only, min 3 chars).';
-  }
-  if (!CATEGORY_REGEX.test(raw)) {
-    return 'Only alphabet letters and spaces are allowed (no numbers, hyphens, or symbols).';
-  }
-  if (trimmed.length < 3) {
-    return 'Category name must be at least 3 characters long.';
-  }
-  if (trimmed.length > 40) {
-    return 'Category name cannot exceed 40 characters.';
-  }
-  if (existingList.some(cat => cat.toLowerCase() === trimmed.toLowerCase())) {
-    return `Category "${trimmed}" already exists in the registry.`;
-  }
-  return '';
-};
 
 const SpeciesManagement = () => {
   const { user, authFetch } = useAuth();
-  
-  const [speciesList, setSpeciesList] = useState([]);
-  const [categoriesList, setCategoriesList] = useState(DEFAULT_CATEGORIES);
+
+  const [submissions, setSubmissions] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+
+  // Filters & Search
+  const [statusFilter, setStatusFilter] = useState('Pending'); // 'All' | 'Pending' | 'Approved' | 'Rejected'
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  
-  // Modals
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [selectedSpecies, setSelectedSpecies] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [actionError, setActionError] = useState('');
+
+  // Modals & Active Selections
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [rejectingItem, setRejectingItem] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  // Notifications
   const [actionSuccess, setActionSuccess] = useState('');
+  const [actionError, setActionError] = useState('');
 
-  // Category Management Modal State & Errors
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [categorySubmitting, setCategorySubmitting] = useState(false);
-  const [categoryError, setCategoryError] = useState('');
-  const [categoryTouched, setCategoryTouched] = useState(false);
-  const [categoryModalError, setCategoryModalError] = useState('');
-  const [categoryModalSuccess, setCategoryModalSuccess] = useState('');
-  const categoryInputRef = useRef(null);
-
-  // Species Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    scientific_name: '',
-    category: 'Reptiles',
-    status: 'Endangered',
-    sensitivity: 'High',
-    habitat: '',
-    threats: '',
-    notes: ''
-  });
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const fileInputRef = useRef(null);
-
-  // Form Field Validation Tracking
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-
-  // Auto-dismiss notifications
+  // Auto-dismiss alerts
   useEffect(() => {
     if (actionSuccess) {
-      const timer = setTimeout(() => setActionSuccess(''), 3500);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setActionSuccess(''), 4000);
+      return () => clearTimeout(t);
     }
   }, [actionSuccess]);
 
   useEffect(() => {
     if (actionError) {
-      const timer = setTimeout(() => setActionError(''), 4500);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setActionError(''), 5000);
+      return () => clearTimeout(t);
     }
   }, [actionError]);
 
-  useEffect(() => {
-    if (categoryModalSuccess) {
-      const timer = setTimeout(() => setCategoryModalSuccess(''), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [categoryModalSuccess]);
-
-  useEffect(() => {
-    if (categoryModalError) {
-      const timer = setTimeout(() => setCategoryModalError(''), 4500);
-      return () => clearTimeout(timer);
-    }
-  }, [categoryModalError]);
-
-  // Focus category input when category modal opens
-  useEffect(() => {
-    if (showCategoryModal && categoryInputRef.current) {
-      setTimeout(() => {
-        categoryInputRef.current?.focus();
-      }, 100);
-    }
-  }, [showCategoryModal]);
-
-  // Fetch categories
-  const fetchCategories = async () => {
+  // Fetch Submissions and Stats
+  const fetchSubmissions = async () => {
+    setLoading(true);
     try {
-      const res = await authFetch('/species/categories');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.categories && data.categories.length > 0) {
-          setCategoriesList(data.categories.map(c => c.name));
-        }
-      }
-    } catch (err) {
-      console.warn('Error fetching species categories:', err);
-    }
-  };
-
-  // Fetch species catalog
-  const fetchSpecies = async () => {
-    setRefreshing(true);
-    try {
-      const [spRes, catRes] = await Promise.all([
-        authFetch('/species'),
+      const [subsRes, catsRes] = await Promise.all([
+        authFetch('/species/submissions'),
         authFetch('/species/categories')
       ]);
 
-      if (spRes.ok) {
-        const data = await spRes.json();
-        setSpeciesList(data.species || []);
+      if (subsRes.ok) {
+        const data = await subsRes.json();
+        setSubmissions(data.submissions || []);
+        if (data.stats) {
+          setStats(data.stats);
+        }
       } else {
-        throw new Error('Failed to load species catalog.');
+        throw new Error('Failed to load researcher species submissions.');
       }
 
-      if (catRes.ok) {
-        const cData = await catRes.json();
-        if (cData.categories && cData.categories.length > 0) {
-          setCategoriesList(cData.categories.map(c => c.name));
-        }
+      if (catsRes.ok) {
+        const cData = await catsRes.json();
+        setCategoriesList(cData.categories || []);
       }
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setActionError('Could not load marine species from server.');
+      console.error('Fetch species submissions error:', err);
+      setActionError(err.message || 'Error connecting to marine species registry.');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchSpecies();
+    fetchSubmissions();
   }, []);
 
-  // Field change handler with live validation
-  const handleFieldChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (touched[field]) {
-      const err = validateSpeciesField(field, value);
-      setErrors(prev => ({ ...prev, [field]: err }));
-    }
-  };
-
-  // Field blur handler
-  const handleFieldBlur = (field) => {
-    setTouched(prev => ({ ...prev, [field]: true }));
-    const err = validateSpeciesField(field, formData[field]);
-    setErrors(prev => ({ ...prev, [field]: err }));
-  };
-
-  // Handle image file change with validation and live preview
-  const handleImageChange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    setTouched(prev => ({ ...prev, image: true }));
-    
-    if (file) {
-      const err = validateSpeciesField('image', null, file);
-      setErrors(prev => ({ ...prev, image: err }));
-      if (err) {
-        setImageFile(null);
-        setImagePreview(null);
-        return;
+  // Filtered Submissions List
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((sub) => {
+      // 1. Status Filter
+      const currentStatus = sub.approval_status || 'Approved';
+      if (statusFilter !== 'All' && currentStatus !== statusFilter) {
+        return false;
       }
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onload = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      const err = validateSpeciesField('image', null, null);
-      setErrors(prev => ({ ...prev, image: err }));
-      setImageFile(null);
-      setImagePreview(null);
-    }
-  };
 
-  // Form reset
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      scientific_name: '',
-      category: categoriesList[0] || 'Reptiles',
-      status: 'Endangered',
-      sensitivity: 'High',
-      habitat: '',
-      threats: '',
-      notes: ''
+      // 2. Category Filter
+      if (categoryFilter !== 'All' && sub.category !== categoryFilter) {
+        return false;
+      }
+
+      // 3. Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = (sub.name || '').toLowerCase().includes(q);
+        const sciMatch = (sub.scientificName || sub.scientific_name || '').toLowerCase().includes(q);
+        const authorMatch = (sub.author_name || sub.created_by_name || '').toLowerCase().includes(q);
+        const notesMatch = (sub.notes || '').toLowerCase().includes(q);
+        const habitatMatch = (sub.habitat || '').toLowerCase().includes(q);
+        if (!nameMatch && !sciMatch && !authorMatch && !notesMatch && !habitatMatch) {
+          return false;
+        }
+      }
+
+      return true;
     });
-    setImageFile(null);
-    setImagePreview(null);
-    setErrors({});
-    setTouched({});
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  }, [submissions, statusFilter, categoryFilter, searchQuery]);
+
+  // Actions: Approve
+  const handleApprove = async (speciesId, speciesName) => {
+    try {
+      const res = await authFetch(`/species/${speciesId}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to approve species submission.');
+      }
+
+      setActionSuccess(`"${speciesName}" has been approved and published to the Researcher Species Explorer!`);
+      if (selectedSubmission && (selectedSubmission.id === speciesId || selectedSubmission.species_id === speciesId)) {
+        setSelectedSubmission(null);
+      }
+      fetchSubmissions();
+    } catch (err) {
+      console.error('Approve error:', err);
+      setActionError(err.message || 'Error approving species.');
     }
   };
 
-  // Handle Add Category with strong line-by-line validation
-  const handleAddCategory = async (e) => {
+  // Actions: Open Reject Modal
+  const handleOpenReject = (item) => {
+    setRejectingItem(item);
+    setRejectionReason('');
+  };
+
+  // Actions: Submit Rejection
+  const handleConfirmReject = async (e) => {
     e.preventDefault();
-    setCategoryTouched(true);
-    const catErr = validateCategoryInput(newCategoryName, categoriesList);
-    if (catErr) {
-      setCategoryError(catErr);
-      if (categoryInputRef.current) {
-        categoryInputRef.current.focus();
-      }
+    if (!rejectingItem) return;
+
+    if (!rejectionReason.trim()) {
+      setActionError('Please specify a reason or guidance note for rejecting this submission.');
       return;
     }
-    setCategoryError('');
 
-    setCategorySubmitting(true);
-    setCategoryModalError('');
-    setCategoryModalSuccess('');
-
+    setRejectSubmitting(true);
     try {
-      const res = await authFetch('/species/categories', {
-        method: 'POST',
+      const sId = rejectingItem.id || rejectingItem.species_id;
+      const res = await authFetch(`/species/${sId}/reject`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategoryName.trim() })
+        body: JSON.stringify({ reason: rejectionReason.trim() })
       });
 
-      const resJson = await res.json();
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error(resJson.error || 'Failed to add category.');
+        throw new Error(data.error || 'Failed to reject submission.');
       }
 
-      const addedName = newCategoryName.trim();
-      setCategoryModalSuccess(`Category "${addedName}" added successfully!`);
-      setActionSuccess(`New taxonomy category "${addedName}" registered in catalog.`);
-      setNewCategoryName('');
-      setCategoryTouched(false);
-      setCategoryError('');
-      
-      // Refresh categories list
-      await fetchCategories();
-      
-      // Auto-select the newly added category in the species form
-      setFormData(prev => ({ ...prev, category: addedName }));
+      setActionSuccess(`Submission for "${rejectingItem.name}" marked as rejected with feedback sent to the researcher.`);
+      setRejectingItem(null);
+      setRejectionReason('');
+      if (selectedSubmission && (selectedSubmission.id === sId || selectedSubmission.species_id === sId)) {
+        setSelectedSubmission(null);
+      }
+      fetchSubmissions();
     } catch (err) {
-      console.error('Error adding category:', err);
-      setCategoryModalError(err.message || 'Server error adding category.');
+      console.error('Reject error:', err);
+      setActionError(err.message || 'Error rejecting submission.');
     } finally {
-      setCategorySubmitting(false);
+      setRejectSubmitting(false);
     }
   };
 
-  // Handle Delete Category
-  const handleDeleteCategory = async (categoryName) => {
-    if (!window.confirm(`Are you sure you want to remove category "${categoryName}"?`)) {
+  // Actions: Delete
+  const handleDelete = async (speciesId, speciesName) => {
+    if (!window.confirm(`Permanently remove the submission for "${speciesName}"?`)) {
       return;
     }
 
     try {
-      const catRes = await authFetch('/species/categories');
-      if (catRes.ok) {
-        const data = await catRes.json();
-        const target = (data.categories || []).find(c => c.name.toLowerCase() === categoryName.toLowerCase());
-        if (!target) {
-          throw new Error('Category not found.');
-        }
-
-        const delRes = await authFetch(`/species/categories/${target.category_id || target.id}`, {
-          method: 'DELETE'
-        });
-        const delJson = await delRes.json();
-        if (!delRes.ok) {
-          throw new Error(delJson.error || 'Failed to delete category.');
-        }
-
-        setCategoryModalSuccess(`Category "${categoryName}" removed.`);
-        setActionSuccess(`Category "${categoryName}" removed from catalog.`);
-        await fetchCategories();
-        if (selectedCategory === categoryName) {
-          setSelectedCategory('All');
-        }
-      }
-    } catch (err) {
-      console.error('Error deleting category:', err);
-      setCategoryModalError(err.message || 'Error removing category.');
-    }
-  };
-
-  // Handle Form Submission with comprehensive validation pass
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Mark all fields as touched
-    const allTouched = {
-      image: true,
-      name: true,
-      scientific_name: true,
-      category: true,
-      status: true,
-      sensitivity: true,
-      habitat: true,
-      threats: true,
-      notes: true
-    };
-    setTouched(allTouched);
-
-    // Compute errors for every field
-    const validationErrors = {
-      image: validateSpeciesField('image', null, imageFile),
-      name: validateSpeciesField('name', formData.name),
-      scientific_name: validateSpeciesField('scientific_name', formData.scientific_name),
-      category: validateSpeciesField('category', formData.category),
-      status: validateSpeciesField('status', formData.status),
-      sensitivity: validateSpeciesField('sensitivity', formData.sensitivity),
-      habitat: validateSpeciesField('habitat', formData.habitat),
-      threats: validateSpeciesField('threats', formData.threats),
-      notes: validateSpeciesField('notes', formData.notes)
-    };
-
-    setErrors(validationErrors);
-
-    const firstError = Object.values(validationErrors).find(err => Boolean(err));
-    if (firstError) {
-      setActionError('Please correct the validation errors highlighted in the form before publishing.');
-      return;
-    }
-
-    setSubmitting(true);
-    setActionError('');
-    setActionSuccess('');
-
-    try {
-      const data = new FormData();
-      data.append('name', formData.name.trim());
-      data.append('scientific_name', formData.scientific_name.trim());
-      data.append('category', formData.category);
-      data.append('status', formData.status);
-      data.append('sensitivity', formData.sensitivity);
-      data.append('habitat', formData.habitat.trim());
-      data.append('threats', formData.threats.trim());
-      data.append('notes', formData.notes.trim());
-
-      if (imageFile) {
-        data.append('image', imageFile);
-      }
-
-      const res = await authFetch('/species', {
-        method: 'POST',
-        body: data
+      const res = await authFetch(`/species/${speciesId}`, {
+        method: 'DELETE'
       });
-
-      const resJson = await res.json();
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error(resJson.error || 'Failed to register species.');
+        throw new Error(data.error || 'Failed to delete species record.');
       }
 
-      setActionSuccess(`"${formData.name}" added to catalog! Researchers can now view this species in their Species Explorer.`);
-      resetForm();
-      setShowAddModal(false);
-      fetchSpecies();
+      setActionSuccess(`Submission "${speciesName}" removed.`);
+      if (selectedSubmission && (selectedSubmission.id === speciesId || selectedSubmission.species_id === speciesId)) {
+        setSelectedSubmission(null);
+      }
+      fetchSubmissions();
     } catch (err) {
-      console.error('Error adding species:', err);
-      setActionError(err.message || 'Server error occurred while adding species.');
-    } finally {
-      setSubmitting(false);
+      console.error('Delete error:', err);
+      setActionError(err.message || 'Error deleting species record.');
     }
   };
 
-  // Helper for input styles based on validation state
-  const getInputStyle = (fieldName, baseStyle = {}) => {
-    const hasError = touched[fieldName] && Boolean(errors[fieldName]);
-    const isValid = touched[fieldName] && !errors[fieldName] && (formData[fieldName] || (fieldName === 'image' && imageFile));
-
-    return {
-      ...baseStyle,
-      borderColor: hasError ? '#ef4444' : isValid ? 'rgba(16, 185, 129, 0.6)' : 'rgba(255, 255, 255, 0.12)',
-      boxShadow: hasError ? '0 0 0 2px rgba(239, 68, 68, 0.25)' : undefined,
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
-    };
-  };
-
-  // Helper for rendering line-by-line error message
-  const renderFieldError = (fieldName) => {
-    if (touched[fieldName] && errors[fieldName]) {
-      return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-          color: '#ef4444',
-          fontSize: '0.74rem',
-          marginTop: '5px',
-          fontWeight: '500',
-          lineHeight: '1.3'
-        }}>
-          <AlertCircle size={13} style={{ flexShrink: 0 }} />
-          <span>{errors[fieldName]}</span>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Helper for resolving image URL
-  const resolveImage = (img) => {
+  // Resolve image URL
+  const resolveSpecimenImage = (img) => {
     if (!img) return '/images/whale_shark.png';
     if (img.startsWith('http') || img.startsWith('/images/')) return img;
     const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:5000';
     return `${serverUrl}${img}`;
   };
 
-  // Combined Category Filter Options: 'All' + dynamic categories
-  const filterCategories = useMemo(() => {
-    return ['All', ...categoriesList];
-  }, [categoriesList]);
-
-  // Filtered Species
-  const filteredSpecies = useMemo(() => {
-    return speciesList.filter(sp => {
-      const name = sp.name || '';
-      const sciName = sp.scientificName || sp.scientific_name || '';
-      const notes = sp.notes || '';
-      const threats = sp.threats || '';
-      const query = searchQuery.toLowerCase();
-
-      const matchSearch = name.toLowerCase().includes(query) ||
-                          sciName.toLowerCase().includes(query) ||
-                          notes.toLowerCase().includes(query) ||
-                          threats.toLowerCase().includes(query);
-
-      const matchCat = selectedCategory === 'All' || sp.category === selectedCategory;
-      return matchSearch && matchCat;
-    });
-  }, [speciesList, searchQuery, selectedCategory]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    const total = speciesList.length;
-    const endangered = speciesList.filter(s => s.status === 'Endangered' || s.status === 'Critically Endangered').length;
-    const categoriesCount = categoriesList.length;
-
-    return { total, endangered, categoriesCount };
-  }, [speciesList, categoriesList]);
+  // Preset rejection templates
+  const presetReasons = [
+    'Specimen photograph is unclear or lacks key morphological markers.',
+    'Taxonomy or scientific classification appears inaccurate; please verify genus and species nomenclature.',
+    'Insufficient typical habitat or ecological threat notes provided.',
+    'Duplicate species record already cataloged in the live registry.'
+  ];
 
   return (
-    <div style={{ paddingBottom: '40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '60px' }}>
       
-      {/* Header Banner */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        flexWrap: 'wrap',
-        gap: '16px',
-        borderBottom: '1px solid rgba(0, 229, 255, 0.15)',
-        paddingBottom: '20px'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)', fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            <Compass size={18} />
-            <span>Municipal Authority Environmental Registry</span>
-          </div>
-          <h1 style={{ fontSize: '1.85rem', margin: '4px 0 6px 0', color: '#ffffff', fontWeight: 800 }}>
-            Marine Species Catalog & Registry
-          </h1>
-          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '750px' }}>
-            Register, curate, and publish marine biodiversity profiles. All species and taxonomy categories added here are immediately synchronized and accessible to marine researchers on their Species Explorer workspace.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button 
-            onClick={fetchSpecies}
-            className="btn btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            disabled={refreshing}
-            title="Refresh species catalog from database"
-          >
-            <RefreshCw size={16} className={refreshing ? 'spin-icon' : ''} />
-            <span>Sync</span>
-          </button>
-
-          <button 
-            onClick={() => {
-              setNewCategoryName('');
-              setCategoryTouched(false);
-              setCategoryError('');
-              setCategoryModalError('');
-              setCategoryModalSuccess('');
-              setShowCategoryModal(true);
-            }}
-            className="btn btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(157, 78, 221, 0.4)', color: '#d8b4fe' }}
-          >
-            <Layers size={16} />
-            <span>Manage Categories</span>
-          </button>
-
-          <button 
-            onClick={() => { resetForm(); setShowAddModal(true); }}
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 0 16px rgba(0, 229, 255, 0.35)' }}
-          >
-            <Plus size={18} />
-            <span>Add New Species</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Alert Notifications */}
+      {/* Toast Alerts */}
       {actionSuccess && (
         <div style={{
-          padding: '14px 18px',
-          background: 'rgba(16, 185, 129, 0.15)',
-          border: '1px solid #10b981',
-          borderRadius: '10px',
-          color: '#10b981',
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          color: '#ffffff',
+          padding: '14px 22px',
+          borderRadius: '12px',
+          zIndex: 9999,
+          boxShadow: '0 10px 30px rgba(16, 185, 129, 0.4)',
+          fontWeight: '600',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          fontSize: '0.9rem'
+          animation: 'fadeIn 0.3s ease'
         }}>
-          <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
+          <Check size={20} />
           <span>{actionSuccess}</span>
         </div>
       )}
 
       {actionError && (
         <div style={{
-          padding: '14px 18px',
-          background: 'rgba(239, 68, 68, 0.15)',
-          border: '1px solid #ef4444',
-          borderRadius: '10px',
-          color: '#ef4444',
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+          color: '#ffffff',
+          padding: '14px 22px',
+          borderRadius: '12px',
+          zIndex: 9999,
+          boxShadow: '0 10px 30px rgba(239, 68, 68, 0.4)',
+          fontWeight: '600',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          fontSize: '0.9rem'
+          animation: 'fadeIn 0.3s ease'
         }}>
-          <AlertTriangle size={20} style={{ flexShrink: 0 }} />
+          <AlertTriangle size={20} />
           <span>{actionError}</span>
         </div>
       )}
 
-      {/* Analytics Metric Cards */}
+      {/* ========================================================================= */}
+      {/* HEADER SECTION */}
+      {/* ========================================================================= */}
+      <div className="glass-panel" style={{
+        padding: '28px 32px',
+        position: 'relative',
+        overflow: 'hidden',
+        background: 'linear-gradient(135deg, rgba(8, 20, 42, 0.95) 0%, rgba(5, 15, 32, 0.98) 100%)',
+        border: '1px solid rgba(0, 229, 255, 0.25)',
+        borderRadius: '20px',
+        boxShadow: '0 15px 35px rgba(0, 0, 0, 0.4)'
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: '-40px',
+          right: '-40px',
+          width: '200px',
+          height: '200px',
+          background: 'radial-gradient(circle, rgba(0, 229, 255, 0.15) 0%, transparent 70%)',
+          borderRadius: '50%',
+          pointerEvents: 'none'
+        }} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px', position: 'relative', zIndex: 1 }}>
+          <div>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              background: 'rgba(0, 229, 255, 0.1)',
+              border: '1px solid rgba(0, 229, 255, 0.3)',
+              color: '#00e5ff',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              marginBottom: '10px'
+            }}>
+              <ShieldCheck size={14} />
+              <span>Municipal Authority Ecological Verification</span>
+            </div>
+
+            <h1 style={{ margin: '0 0 8px 0', fontSize: '1.85rem', fontWeight: '800', color: '#ffffff' }}>
+              Marine Species Review & Approvals
+            </h1>
+
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem', maxWidth: '720px', lineHeight: '1.5' }}>
+              Review, verify, and approve marine biodiversity profiles uploaded by research scientists. 
+              Approved species are published immediately to the <strong style={{ color: '#00e5ff' }}>Researcher Species Explorer</strong>; 
+              unapproved or rejected submissions remain hidden until resolved.
+            </p>
+          </div>
+
+          {/* Quick Actions */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              onClick={fetchSubmissions}
+              disabled={loading}
+              className="btn btn-secondary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 18px',
+                borderRadius: '12px',
+                border: '1px solid rgba(0, 229, 255, 0.3)',
+                background: 'rgba(10, 25, 48, 0.7)',
+                color: '#ffffff',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+              title="Refresh submissions list"
+            >
+              <RefreshCw size={16} className={loading ? 'spin-icon' : ''} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* STATS OVERVIEW CARDS */}
+      {/* ========================================================================= */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        <div className="glass-panel" style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(10, 25, 48, 0.6)' }}>
+        
+        {/* Card 1: Pending Approvals */}
+        <div 
+          onClick={() => setStatusFilter('Pending')}
+          style={{
+            padding: '20px',
+            borderRadius: '16px',
+            background: statusFilter === 'Pending' 
+              ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%)' 
+              : 'rgba(8, 20, 42, 0.7)',
+            border: statusFilter === 'Pending' ? '1px solid #f59e0b' : '1px solid rgba(245, 158, 11, 0.3)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: statusFilter === 'Pending' ? '0 0 20px rgba(245, 158, 11, 0.25)' : 'none'
+          }}
+        >
           <div style={{
-            width: '46px',
-            height: '46px',
+            width: '48px',
+            height: '48px',
             borderRadius: '12px',
-            background: 'rgba(0, 229, 255, 0.15)',
-            border: '1px solid rgba(0, 229, 255, 0.3)',
+            background: 'rgba(245, 158, 11, 0.15)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--accent-primary)'
+            color: '#fbbf24',
+            flexShrink: 0
           }}>
-            <Compass size={22} />
+            <Clock size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Catalog Species</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ffffff', marginTop: '2px' }}>{stats.total}</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>
+              Pending Review
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#fbbf24', marginTop: '2px' }}>
+              {stats.pending || 0}
+            </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(10, 25, 48, 0.6)' }}>
+        {/* Card 2: Approved Species */}
+        <div 
+          onClick={() => setStatusFilter('Approved')}
+          style={{
+            padding: '20px',
+            borderRadius: '16px',
+            background: statusFilter === 'Approved' 
+              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%)' 
+              : 'rgba(8, 20, 42, 0.7)',
+            border: statusFilter === 'Approved' ? '1px solid #10b981' : '1px solid rgba(16, 185, 129, 0.3)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: statusFilter === 'Approved' ? '0 0 20px rgba(16, 185, 129, 0.25)' : 'none'
+          }}
+        >
           <div style={{
-            width: '46px',
-            height: '46px',
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            background: 'rgba(16, 185, 129, 0.15)',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#34d399',
+            flexShrink: 0
+          }}>
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>
+              Approved (Live)
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#34d399', marginTop: '2px' }}>
+              {stats.approved || 0}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Rejected Submissions */}
+        <div 
+          onClick={() => setStatusFilter('Rejected')}
+          style={{
+            padding: '20px',
+            borderRadius: '16px',
+            background: statusFilter === 'Rejected' 
+              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%)' 
+              : 'rgba(8, 20, 42, 0.7)',
+            border: statusFilter === 'Rejected' ? '1px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.3)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: statusFilter === 'Rejected' ? '0 0 20px rgba(239, 68, 68, 0.25)' : 'none'
+          }}
+        >
+          <div style={{
+            width: '48px',
+            height: '48px',
             borderRadius: '12px',
             background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#ef4444'
+            color: '#f87171',
+            flexShrink: 0
           }}>
-            <AlertTriangle size={22} />
+            <XCircle size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Endangered / Critical</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ef4444', marginTop: '2px' }}>{stats.endangered}</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>
+              Rejected / Revision
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#f87171', marginTop: '2px' }}>
+              {stats.rejected || 0}
+            </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(10, 25, 48, 0.6)' }}>
+        {/* Card 4: Total Submissions */}
+        <div 
+          onClick={() => setStatusFilter('All')}
+          style={{
+            padding: '20px',
+            borderRadius: '16px',
+            background: statusFilter === 'All' 
+              ? 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(2, 132, 199, 0.1) 100%)' 
+              : 'rgba(8, 20, 42, 0.7)',
+            border: statusFilter === 'All' ? '1px solid #00e5ff' : '1px solid rgba(0, 229, 255, 0.3)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: statusFilter === 'All' ? '0 0 20px rgba(0, 229, 255, 0.25)' : 'none'
+          }}
+        >
           <div style={{
-            width: '46px',
-            height: '46px',
+            width: '48px',
+            height: '48px',
             borderRadius: '12px',
-            background: 'rgba(157, 78, 221, 0.15)',
-            border: '1px solid rgba(157, 78, 221, 0.3)',
+            background: 'rgba(0, 229, 255, 0.15)',
+            border: '1px solid rgba(0, 229, 255, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#d8b4fe'
+            color: '#00e5ff',
+            flexShrink: 0
           }}>
-            <Layers size={22} />
+            <Layers size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Taxonomy Classes</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#d8b4fe', marginTop: '2px' }}>{stats.categoriesCount}</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>
+              Total Submissions
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#00e5ff', marginTop: '2px' }}>
+              {stats.total || 0}
+            </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(10, 25, 48, 0.6)' }}>
-          <div style={{
-            width: '46px',
-            height: '46px',
-            borderRadius: '12px',
-            background: 'rgba(0, 245, 212, 0.15)',
-            border: '1px solid rgba(0, 245, 212, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--success)'
-          }}>
-            <ShieldCheck size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Researcher Visible</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--success)', marginTop: '2px' }}>100% Live</div>
-          </div>
-        </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(10, 25, 48, 0.5)', borderRadius: '8px', padding: '8px 14px', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <Search size={18} style={{ color: 'var(--text-secondary)' }} />
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Search catalog by common name, scientific taxonomy, threats, or notes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.95rem', width: '100%', color: '#ffffff' }}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <X size={16} />
-            </button>
-          )}
-        </div>
-
-        {/* Dynamic Category Pills */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', alignItems: 'center' }}>
-          {filterCategories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
+      {/* ========================================================================= */}
+      {/* FILTER & SEARCH CONTROLS BAR */}
+      {/* ========================================================================= */}
+      <div className="glass-panel" style={{
+        padding: '18px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        background: 'rgba(8, 20, 42, 0.8)',
+        borderRadius: '16px',
+        border: '1px solid rgba(0, 229, 255, 0.2)'
+      }}>
+        {/* Top Filter Row: Search + Status Tabs */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+          
+          {/* Search Box */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(10, 25, 48, 0.9)',
+            border: '1px solid rgba(0, 229, 255, 0.25)',
+            borderRadius: '12px',
+            padding: '8px 14px',
+            flex: '1 1 300px',
+            minWidth: '240px'
+          }}>
+            <Search size={18} color="#00e5ff" />
+            <input
+              type="text"
+              placeholder="Search by species name, scientific taxonomy, researcher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               style={{
-                padding: '6px 14px',
-                borderRadius: '8px',
-                fontSize: '0.78rem',
-                border: selectedCategory === cat ? '1px solid var(--accent-primary)' : '1px solid rgba(0, 229, 255, 0.2)',
-                background: selectedCategory === cat ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'rgba(10, 25, 48, 0.6)',
+                border: 'none',
+                background: 'transparent',
                 color: '#ffffff',
-                cursor: 'pointer',
-                fontWeight: '600',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease'
+                outline: 'none',
+                width: '100%',
+                fontSize: '0.88rem'
               }}
-            >
-              {cat}
-            </button>
-          ))}
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
 
-          <button
-            onClick={() => {
-              setNewCategoryName('');
-              setCategoryTouched(false);
-              setCategoryError('');
-              setCategoryModalError('');
-              setCategoryModalSuccess('');
-              setShowCategoryModal(true);
-            }}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '8px',
-              fontSize: '0.75rem',
-              border: '1px dashed rgba(157, 78, 221, 0.5)',
-              background: 'rgba(157, 78, 221, 0.1)',
-              color: '#d8b4fe',
-              cursor: 'pointer',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              whiteSpace: 'nowrap'
-            }}
-            title="Add or remove categories"
-          >
-            <Plus size={14} /> Category
-          </button>
-        </div>
-      </div>
-
-      {/* Species Cards Grid */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' }}>
-          <RefreshCw size={36} className="spin-icon" style={{ color: 'var(--accent-primary)', marginBottom: '12px' }} />
-          <p>Loading marine species registry...</p>
-        </div>
-      ) : filteredSpecies.length === 0 ? (
-        <div className="glass-panel" style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-secondary)' }}>
-          <Fish size={44} style={{ opacity: 0.3, marginBottom: '12px', color: 'var(--accent-primary)' }} />
-          <h3 style={{ fontSize: '1.1rem', color: '#ffffff', marginBottom: '6px' }}>No Marine Species Found</h3>
-          <p style={{ fontSize: '0.85rem', maxWidth: '400px', margin: '0 auto 16px auto' }}>
-            No species in the catalog match your current search or category filter.
-          </p>
-          <button 
-            onClick={() => { resetForm(); setShowAddModal(true); }}
-            className="btn btn-primary"
-            style={{ fontSize: '0.85rem' }}
-          >
-            <Plus size={16} /> Add First Specimen
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '22px' }}>
-          {filteredSpecies.map(sp => {
-            const sciName = sp.scientificName || sp.scientific_name;
-            const isDanger = sp.status === 'Endangered' || sp.status === 'Critically Endangered';
-            
-            return (
-              <div
-                key={sp.id || sp.species_id}
-                className="glass-panel"
-                onClick={() => setSelectedSpecies(sp)}
+          {/* Status Tabs */}
+          <div style={{ display: 'flex', gap: '8px', background: 'rgba(10, 25, 48, 0.8)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            {[
+              { key: 'Pending', label: 'Pending Review', count: stats.pending, color: '#fbbf24' },
+              { key: 'Approved', label: 'Approved', count: stats.approved, color: '#34d399' },
+              { key: 'Rejected', label: 'Rejected', count: stats.rejected, color: '#f87171' },
+              { key: 'All', label: 'All Submissions', count: stats.total, color: '#00e5ff' }
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
                 style={{
-                  padding: 0,
-                  overflow: 'hidden',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: statusFilter === tab.key ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'transparent',
+                  color: statusFilter === tab.key ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.82rem',
+                  fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
-                  flexDirection: 'column',
-                  height: '375px',
-                  position: 'relative',
-                  border: '1px solid rgba(0, 229, 255, 0.18)',
-                  transition: 'all 0.25s ease'
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                {/* Species Card Header Image */}
-                <div style={{ height: '165px', overflow: 'hidden', position: 'relative', background: 'rgba(5, 19, 41, 0.8)' }}>
-                  <img 
-                    src={resolveImage(sp.image)} 
-                    alt={sp.name} 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                <span>{tab.label}</span>
+                <span style={{
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  background: statusFilter === tab.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
+                  color: statusFilter === tab.key ? '#ffffff' : tab.color
+                }}>
+                  {tab.count || 0}
+                </span>
+              </button>
+            ))}
+          </div>
+
+        </div>
+
+        {/* Bottom Category Row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '600', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Filter size={14} /> Category:
+          </span>
+          <button
+            onClick={() => setCategoryFilter('All')}
+            style={{
+              padding: '5px 12px',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              border: categoryFilter === 'All' ? '1px solid #00e5ff' : '1px solid rgba(255,255,255,0.1)',
+              background: categoryFilter === 'All' ? 'rgba(0, 229, 255, 0.15)' : 'rgba(10, 25, 48, 0.5)',
+              color: categoryFilter === 'All' ? '#00e5ff' : '#cbd5e1',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            All Categories
+          </button>
+          {categoriesList.map(cat => (
+            <button
+              key={cat.id || cat.category_id || cat.name}
+              onClick={() => setCategoryFilter(cat.name)}
+              style={{
+                padding: '5px 12px',
+                borderRadius: '20px',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                border: categoryFilter === cat.name ? '1px solid #00e5ff' : '1px solid rgba(255,255,255,0.1)',
+                background: categoryFilter === cat.name ? 'rgba(0, 229, 255, 0.15)' : 'rgba(10, 25, 48, 0.5)',
+                color: categoryFilter === cat.name ? '#00e5ff' : '#cbd5e1',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SUBMISSIONS LIST / GRID */}
+      {/* ========================================================================= */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#00e5ff' }}>
+          <RefreshCw size={32} className="spin-icon" style={{ marginBottom: '12px' }} />
+          <div style={{ fontSize: '1.1rem', fontWeight: '600' }}>Loading species submissions...</div>
+        </div>
+      ) : filteredSubmissions.length === 0 ? (
+        <div className="glass-panel" style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          borderRadius: '16px',
+          background: 'rgba(8, 20, 42, 0.6)',
+          border: '1px dashed rgba(0, 229, 255, 0.25)'
+        }}>
+          <Info size={44} color="#00e5ff" style={{ opacity: 0.6, marginBottom: '12px' }} />
+          <h3 style={{ margin: '0 0 6px 0', fontSize: '1.2rem', color: '#ffffff' }}>
+            No Species Submissions Found
+          </h3>
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>
+            {statusFilter === 'Pending' 
+              ? 'Great job! There are currently no pending species submissions awaiting your review.' 
+              : 'No species match the selected filters or search keyword.'}
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '24px' }}>
+          {filteredSubmissions.map((sub) => {
+            const currentStatus = sub.approval_status || 'Approved';
+            const isPending = currentStatus === 'Pending';
+            const isApproved = currentStatus === 'Approved';
+            const isRejected = currentStatus === 'Rejected';
+
+            return (
+              <div
+                key={sub.id || sub.species_id}
+                className="glass-panel"
+                style={{
+                  padding: 0,
+                  borderRadius: '18px',
+                  overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(12, 28, 56, 0.9) 0%, rgba(8, 20, 40, 0.95) 100%)',
+                  border: isPending 
+                    ? '1px solid rgba(245, 158, 11, 0.5)' 
+                    : isApproved 
+                    ? '1px solid rgba(16, 185, 129, 0.35)' 
+                    : '1px solid rgba(239, 68, 68, 0.35)',
+                  boxShadow: isPending 
+                    ? '0 8px 24px rgba(245, 158, 11, 0.12)' 
+                    : '0 8px 20px rgba(0,0,0,0.35)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                }}
+              >
+                {/* Specimen Image Header */}
+                <div style={{ position: 'relative', height: '180px', overflow: 'hidden', background: '#051329' }}>
+                  <img
+                    src={resolveSpecimenImage(sub.image)}
+                    alt={sub.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onClick={() => setPreviewImage(resolveSpecimenImage(sub.image))}
+                    title="Click to view specimen photo"
                   />
-                  
-                  {/* Status Badge */}
-                  <span style={{
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'linear-gradient(to bottom, rgba(5, 19, 41, 0.2) 0%, rgba(5, 19, 41, 0.85) 100%)',
+                    pointerEvents: 'none'
+                  }} />
+
+                  {/* Status Badge (Top Left) */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: isPending 
+                      ? 'rgba(245, 158, 11, 0.9)' 
+                      : isApproved 
+                      ? 'rgba(16, 185, 129, 0.9)' 
+                      : 'rgba(239, 68, 68, 0.9)',
+                    color: isPending ? '#051329' : '#ffffff',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+                  }}>
+                    {isPending && <Clock size={13} />}
+                    {isApproved && <CheckCircle2 size={13} />}
+                    {isRejected && <XCircle size={13} />}
+                    <span>{isPending ? 'Pending Review' : isApproved ? 'Approved & Live' : 'Rejected'}</span>
+                  </div>
+
+                  {/* Conservation Status Badge (Top Right) */}
+                  <div style={{
                     position: 'absolute',
                     top: '12px',
                     right: '12px',
                     padding: '4px 10px',
                     borderRadius: '20px',
-                    fontSize: '0.65rem',
-                    fontWeight: 'bold',
-                    background: isDanger ? 'rgba(239, 68, 68, 0.9)' : sp.status === 'Vulnerable' ? 'rgba(245, 158, 11, 0.9)' : 'rgba(0, 245, 212, 0.9)',
-                    color: isDanger ? '#ffffff' : '#051329',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
+                    fontSize: '0.68rem',
+                    fontWeight: '700',
+                    background: sub.status === 'Endangered' || sub.status === 'Critically Endangered' 
+                      ? 'rgba(239, 68, 68, 0.85)' 
+                      : 'rgba(0, 229, 255, 0.85)',
+                    color: sub.status === 'Endangered' || sub.status === 'Critically Endangered' ? '#ffffff' : '#051329'
                   }}>
-                    {sp.status}
-                  </span>
+                    {sub.status || 'Least Concern'}
+                  </div>
 
-                  {/* Authority Contributed Pill if applicable */}
-                  {sp.created_by_name && (
-                    <span style={{
-                      position: 'absolute',
-                      bottom: '8px',
-                      left: '8px',
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.62rem',
-                      fontWeight: 'bold',
-                      background: 'rgba(4, 12, 26, 0.85)',
-                      color: 'var(--accent-primary)',
-                      border: '1px solid rgba(0, 229, 255, 0.3)'
-                    }}>
-                      Added by {sp.created_by_name}
-                    </span>
-                  )}
+                  {/* Category Pill (Bottom Left on Image) */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    left: '14px',
+                    color: '#00e5ff',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em'
+                  }}>
+                    {sub.category}
+                  </div>
                 </div>
 
                 {/* Card Body */}
-                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
+                <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+                  
+                  {/* Title & Scientific Name */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
-                        {sp.category}
-                      </span>
-                      {['Authority', 'Admin'].includes(user?.role) && (
-                        <button 
-                          onClick={(e) => handleDeleteSpecies(sp.species_id || sp.id, sp.name, e)}
-                          title="Remove species from catalog"
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'rgba(239, 68, 68, 0.7)',
-                            cursor: 'pointer',
-                            padding: '2px',
-                            borderRadius: '4px',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(239, 68, 68, 0.7)'}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
+                    <h3 style={{ margin: '0 0 2px 0', fontSize: '1.2rem', fontWeight: '800', color: '#ffffff' }}>
+                      {sub.name}
+                    </h3>
+                    <div style={{ fontSize: '0.82rem', fontStyle: 'italic', color: '#94a3b8' }}>
+                      {sub.scientificName || sub.scientific_name}
+                    </div>
+                  </div>
+
+                  {/* Researcher Attribution Card */}
+                  <div style={{
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(10, 25, 48, 0.6)',
+                    border: '1px solid rgba(0, 229, 255, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.76rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontWeight: '700',
+                        fontSize: '0.75rem',
+                        flexShrink: 0
+                      }}>
+                        {(sub.author_name || sub.created_by_name || 'R').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: '700', color: '#e2e8f0' }}>
+                          {sub.author_name || sub.created_by_name || 'Marine Researcher'}
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                          {sub.author_email || 'Researcher Submission'}
+                        </div>
+                      </div>
                     </div>
 
-                    <h3 style={{ fontSize: '1.15rem', marginTop: '4px', color: '#ffffff', fontWeight: 'bold' }}>
-                      {sp.name}
-                    </h3>
-                    <p style={{ fontSize: '0.78rem', fontStyle: 'italic', color: 'var(--text-secondary)', margin: '2px 0 6px 0' }}>
-                      {sciName}
-                    </p>
-                    <p style={{
-                      fontSize: '0.78rem',
-                      color: 'var(--text-secondary)',
-                      margin: 0,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      lineHeight: '1.4'
-                    }}>
-                      {sp.notes || sp.habitat || 'Ecological details documented in profile.'}
-                    </p>
+                    <div style={{ color: '#64748b', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      <Calendar size={12} />
+                      <span>{new Date(sub.created_at || Date.now()).toLocaleDateString()}</span>
+                    </div>
                   </div>
 
-                  {/* Card Footer */}
+                  {/* Ecological Highlights */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
+                    {sub.habitat && (
+                      <div style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: '#cbd5e1' }}>
+                        <strong style={{ color: '#94a3b8' }}>Habitat: </strong>{sub.habitat}
+                      </div>
+                    )}
+                    {sub.threats && (
+                      <div style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: '#cbd5e1' }}>
+                        <strong style={{ color: '#94a3b8' }}>Threats: </strong>{sub.threats}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* If Rejected, display Rejection Feedback */}
+                  {isRejected && sub.rejection_reason && (
+                    <div style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      fontSize: '0.76rem',
+                      color: '#fca5a5'
+                    }}>
+                      <div style={{ fontWeight: '700', color: '#ef4444', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MessageSquare size={12} /> Rejection Feedback:
+                      </div>
+                      <div>{sub.rejection_reason}</div>
+                    </div>
+                  )}
+
+                  {/* If Approved, show reviewed by badge */}
+                  {isApproved && sub.reviewed_by_name && (
+                    <div style={{ fontSize: '0.72rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={12} /> Approved by {sub.reviewed_by_name}
+                    </div>
+                  )}
+
+                  {/* Card Action Buttons */}
                   <div style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginTop: '12px',
-                    borderTop: '1px solid rgba(255,255,255,0.08)',
-                    paddingTop: '10px'
+                    gap: '8px',
+                    marginTop: 'auto',
+                    paddingTop: '12px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)'
                   }}>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      Sensitivity: <strong style={{ color: 'var(--accent-primary)' }}>{sp.sensitivity || 'Medium'}</strong>
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      View Profile <ChevronRight size={14} />
-                    </span>
+                    {/* View Full Details button */}
+                    <button
+                      onClick={() => setSelectedSubmission(sub)}
+                      className="btn btn-secondary"
+                      style={{
+                        flex: '1',
+                        padding: '8px',
+                        fontSize: '0.78rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        borderRadius: '10px',
+                        background: 'rgba(10, 25, 48, 0.7)',
+                        border: '1px solid rgba(0, 229, 255, 0.25)',
+                        color: '#00e5ff'
+                      }}
+                    >
+                      <Eye size={14} />
+                      <span>Inspect</span>
+                    </button>
+
+                    {/* Approve Action */}
+                    {isPending && (
+                      <button
+                        onClick={() => handleApprove(sub.id || sub.species_id, sub.name)}
+                        className="btn btn-primary"
+                        style={{
+                          flex: '1',
+                          padding: '8px',
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          borderRadius: '10px',
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          border: 'none',
+                          color: '#ffffff',
+                          fontWeight: '700'
+                        }}
+                      >
+                        <Check size={14} />
+                        <span>Approve</span>
+                      </button>
+                    )}
+
+                    {/* Reject Action */}
+                    {isPending && (
+                      <button
+                        onClick={() => handleOpenReject(sub)}
+                        style={{
+                          padding: '8px 12px',
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          borderRadius: '10px',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          color: '#f87171',
+                          fontWeight: '700',
+                          cursor: 'pointer'
+                        }}
+                        title="Reject submission with feedback"
+                      >
+                        <X size={14} />
+                        <span>Reject</span>
+                      </button>
+                    )}
+
+                    {/* Quick Re-Approve if previously rejected */}
+                    {isRejected && (
+                      <button
+                        onClick={() => handleApprove(sub.id || sub.species_id, sub.name)}
+                        className="btn btn-primary"
+                        style={{
+                          flex: '1',
+                          padding: '8px',
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          borderRadius: '10px',
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          border: 'none',
+                          color: '#ffffff',
+                          fontWeight: '700'
+                        }}
+                      >
+                        <Check size={14} />
+                        <span>Re-Approve</span>
+                      </button>
+                    )}
+
+                    {/* Delete junk button */}
+                    <button
+                      onClick={() => handleDelete(sub.id || sub.species_id, sub.name)}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#94a3b8',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title="Delete record"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
+
                 </div>
+
               </div>
             );
           })}
@@ -1061,623 +1045,382 @@ const SpeciesManagement = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: ADD NEW SPECIES FORM WITH STRONG LINE-BY-LINE VALIDATION */}
+      {/* MODAL 1: FULL SPECIES INSPECTION & VERIFICATION MODAL */}
       {/* ========================================================================= */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div 
-            className="modal-card" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '640px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}
+      {selectedSubmission && (
+        <div className="modal-overlay" onClick={() => setSelectedSubmission(null)}>
+          <div
+            className="modal-card glass-panel"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '720px',
+              width: '95%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              borderRadius: '24px',
+              background: 'linear-gradient(135deg, rgba(12, 28, 56, 0.98) 0%, rgba(8, 20, 40, 0.99) 100%)',
+              border: '1px solid rgba(0, 229, 255, 0.35)',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+              padding: '28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px'
+            }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', color: '#ffffff', margin: 0, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={20} color="var(--accent-primary)" />
-                  Register Marine Species
-                </h2>
-                <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-                  This specimen profile will immediately appear in the Researcher Species Explorer.
+                <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', color: '#00e5ff', letterSpacing: '0.08em' }}>
+                  Specimen Profile Dossier
                 </span>
+                <h2 style={{ margin: '2px 0 0 0', fontSize: '1.45rem', color: '#ffffff' }}>
+                  {selectedSubmission.name}
+                </h2>
               </div>
-              <button onClick={() => setShowAddModal(false)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
-                <X size={20} />
+              <button
+                onClick={() => setSelectedSubmission(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px' }}
+              >
+                <X size={22} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Specimen Hero Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
               
-              {/* Photo Upload Box with Preview & Validation */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Species Photograph *</span>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>High-res PNG, JPG (max 15MB)</span>
-                </label>
-                
-                <div 
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              {/* Photo Preview */}
+              <div 
+                style={{
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  height: '240px',
+                  background: '#051329',
+                  border: '1px solid rgba(0, 229, 255, 0.2)',
+                  position: 'relative'
+                }}
+              >
+                <img
+                  src={resolveSpecimenImage(selectedSubmission.image)}
+                  alt={selectedSubmission.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  bottom: '10px',
+                  right: '10px',
+                  background: 'rgba(0,0,0,0.7)',
+                  color: '#ffffff',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <Eye size={12} /> Specimen Photo
+                </div>
+              </div>
+
+              {/* Taxonomy Summary */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.84rem' }}>
+                <div style={{ padding: '8px 12px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '10px' }}>
+                  <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>Scientific Taxonomy</div>
+                  <div style={{ fontStyle: 'italic', fontWeight: '700', color: '#00e5ff', fontSize: '0.95rem' }}>
+                    {selectedSubmission.scientificName || selectedSubmission.scientific_name}
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 12px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '10px' }}>
+                  <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>Taxonomy Class</div>
+                  <div style={{ fontWeight: '600', color: '#ffffff' }}>
+                    {selectedSubmission.category}
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 12px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '10px' }}>
+                  <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>Conservation Status</div>
+                  <div style={{ fontWeight: '700', color: selectedSubmission.status === 'Endangered' || selectedSubmission.status === 'Critically Endangered' ? '#ef4444' : '#10b981' }}>
+                    {selectedSubmission.status}
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 12px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '10px' }}>
+                  <div style={{ color: '#94a3b8', fontSize: '0.72rem' }}>Pollution Sensitivity Index</div>
+                  <div style={{ fontWeight: '700', color: '#38bdf8' }}>
+                    {selectedSubmission.sensitivity || 'Medium'}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Researcher Attribution Block */}
+            <div style={{
+              padding: '12px 16px',
+              borderRadius: '12px',
+              background: 'rgba(2, 132, 199, 0.1)',
+              border: '1px solid rgba(0, 229, 255, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '0.82rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <User size={18} color="#00e5ff" />
+                <div>
+                  <strong style={{ color: '#ffffff' }}>Submitted by: </strong>
+                  <span>{selectedSubmission.author_name || selectedSubmission.created_by_name || 'Marine Researcher'}</span>
+                  {selectedSubmission.author_email && (
+                    <span style={{ color: '#94a3b8', marginLeft: '6px' }}>({selectedSubmission.author_email})</span>
+                  )}
+                </div>
+              </div>
+              <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                {new Date(selectedSubmission.created_at || Date.now()).toLocaleString()}
+              </div>
+            </div>
+
+            {/* Detailed Ecological Sections */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.86rem', lineHeight: '1.5' }}>
+              <div style={{ padding: '12px 16px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <strong style={{ color: '#00e5ff' }}>Typical Habitat:</strong>
+                <p style={{ margin: '4px 0 0 0', color: '#cbd5e1' }}>
+                  {selectedSubmission.habitat || 'No habitat details provided.'}
+                </p>
+              </div>
+
+              <div style={{ padding: '12px 16px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <strong style={{ color: '#f87171' }}>Anthropogenic & Chemical Threats:</strong>
+                <p style={{ margin: '4px 0 0 0', color: '#cbd5e1' }}>
+                  {selectedSubmission.threats || 'No specific threats documented.'}
+                </p>
+              </div>
+
+              <div style={{ padding: '12px 16px', background: 'rgba(10, 25, 48, 0.6)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <strong style={{ color: '#fbbf24' }}>Research Field Notes:</strong>
+                <p style={{ margin: '4px 0 0 0', color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>
+                  {selectedSubmission.notes || 'No additional research field notes logged.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <button
+                type="button"
+                onClick={() => setSelectedSubmission(null)}
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '12px', borderRadius: '12px' }}
+              >
+                Close
+              </button>
+
+              {(selectedSubmission.approval_status === 'Pending' || selectedSubmission.approval_status === 'Rejected') && (
+                <button
+                  type="button"
+                  onClick={() => handleApprove(selectedSubmission.id || selectedSubmission.species_id, selectedSubmission.name)}
+                  className="btn btn-primary"
                   style={{
-                    border: touched.image && errors.image ? '2px dashed #ef4444' : imageFile ? '2px solid rgba(16, 185, 129, 0.7)' : '2px dashed rgba(0, 229, 255, 0.35)',
+                    flex: 1.5,
+                    padding: '12px',
                     borderRadius: '12px',
-                    padding: '16px',
-                    textAlign: 'center',
-                    background: touched.image && errors.image ? 'rgba(239, 68, 68, 0.05)' : 'rgba(10, 25, 48, 0.5)',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    height: imagePreview ? '180px' : '120px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    border: 'none',
+                    fontWeight: '700',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    transition: 'all 0.2s ease'
+                    gap: '8px'
                   }}
                 >
-                  {imagePreview ? (
-                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                      <img 
-                        src={imagePreview} 
-                        alt="Preview" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} 
-                      />
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '8px',
-                        right: '8px',
-                        background: 'rgba(4, 12, 26, 0.85)',
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.72rem',
-                        color: 'var(--accent-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}>
-                        <Camera size={13} /> Change Photo
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <Camera size={30} style={{ color: touched.image && errors.image ? '#ef4444' : 'var(--accent-primary)', opacity: 0.8, marginBottom: '6px' }} />
-                      <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#ffffff' }}>Upload Specimen Photo</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        Click to select photo or drag and drop image here
-                      </div>
-                    </>
-                  )}
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleImageChange} 
-                    accept="image/*" 
-                    style={{ display: 'none' }} 
-                  />
-                </div>
-                {renderFieldError('image')}
-              </div>
-
-              {/* Names: Common & Scientific with Strict Character & Length Validation */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">
-                    Common Name * 
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                      (Letters, digits, min 3 chars)
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Olive Ridley Sea Turtle"
-                    value={formData.name}
-                    onChange={(e) => handleFieldChange('name', e.target.value)}
-                    onBlur={() => handleFieldBlur('name')}
-                    style={getInputStyle('name')}
-                    maxLength={100}
-                  />
-                  {renderFieldError('name')}
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">
-                    Scientific Taxonomy *
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                      (Latin binomial, min 3 chars)
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Lepidochelys olivacea"
-                    value={formData.scientific_name}
-                    onChange={(e) => handleFieldChange('scientific_name', e.target.value)}
-                    onBlur={() => handleFieldBlur('scientific_name')}
-                    style={getInputStyle('scientific_name')}
-                    maxLength={100}
-                  />
-                  {renderFieldError('scientific_name')}
-                </div>
-              </div>
-
-              {/* Taxonomy Class & Conservation Status */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label className="form-label" style={{ margin: 0 }}>Taxonomy Category *</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewCategoryName('');
-                        setCategoryTouched(false);
-                        setCategoryError('');
-                        setCategoryModalError('');
-                        setCategoryModalSuccess('');
-                        setShowCategoryModal(true);
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--accent-primary)',
-                        fontSize: '0.72rem',
-                        cursor: 'pointer',
-                        padding: 0,
-                        fontWeight: '600'
-                      }}
-                    >
-                      + Manage Categories
-                    </button>
-                  </div>
-                  <select
-                    className="form-control"
-                    value={formData.category}
-                    onChange={(e) => handleFieldChange('category', e.target.value)}
-                    onBlur={() => handleFieldBlur('category')}
-                    style={getInputStyle('category')}
-                  >
-                    {categoriesList.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                  {renderFieldError('category')}
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Conservation Status *</label>
-                  <select
-                    className="form-control"
-                    value={formData.status}
-                    onChange={(e) => handleFieldChange('status', e.target.value)}
-                    onBlur={() => handleFieldBlur('status')}
-                    style={getInputStyle('status')}
-                  >
-                    {CONSERVATION_STATUSES.map(st => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
-                  </select>
-                  {renderFieldError('status')}
-                </div>
-              </div>
-
-              {/* Sensitivity Level */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Pollution Sensitivity Index *</label>
-                <select
-                  className="form-control"
-                  value={formData.sensitivity}
-                  onChange={(e) => handleFieldChange('sensitivity', e.target.value)}
-                  onBlur={() => handleFieldBlur('sensitivity')}
-                  style={getInputStyle('sensitivity')}
-                >
-                  {SENSITIVITY_LEVELS.map(lvl => (
-                    <option key={lvl} value={lvl}>{lvl} Sensitivity</option>
-                  ))}
-                </select>
-                {renderFieldError('sensitivity')}
-              </div>
-
-              {/* Habitat */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">
-                  Typical Habitat
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                    (Optional, letters & digits, min 3 chars)
-                  </span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="e.g. Shallow coastal waters, sandy beaches, and offshore foraging corridors"
-                  value={formData.habitat}
-                  onChange={(e) => handleFieldChange('habitat', e.target.value)}
-                  onBlur={() => handleFieldBlur('habitat')}
-                  style={getInputStyle('habitat')}
-                  maxLength={300}
-                />
-                {renderFieldError('habitat')}
-              </div>
-
-              {/* Anthropogenic Threats */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">
-                  Anthropogenic Threats
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                    (Optional, letters & digits, min 3 chars)
-                  </span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="e.g. Trawl nets, microplastic ingestion, coastal artificial lighting"
-                  value={formData.threats}
-                  onChange={(e) => handleFieldChange('threats', e.target.value)}
-                  onBlur={() => handleFieldBlur('threats')}
-                  style={getInputStyle('threats')}
-                  maxLength={300}
-                />
-                {renderFieldError('threats')}
-              </div>
-
-              {/* Research Field Notes */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label className="form-label" style={{ margin: 0 }}>
-                    Research Field Notes / Observations
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                      (Optional, letters & digits, min 5 chars)
-                    </span>
-                  </label>
-                  <span style={{ fontSize: '0.7rem', color: formData.notes.length > 950 ? '#ef4444' : 'var(--text-muted)' }}>
-                    {formData.notes.length}/1000
-                  </span>
-                </div>
-                <textarea
-                  className="form-control"
-                  rows="3"
-                  placeholder="Behavioral traits, local sightings near Kochi/Kerala shoreline, seasonal migration dates..."
-                  value={formData.notes}
-                  onChange={(e) => handleFieldChange('notes', e.target.value)}
-                  onBlur={() => handleFieldBlur('notes')}
-                  style={getInputStyle('notes', { marginTop: '6px' })}
-                  maxLength={1000}
-                ></textarea>
-                {renderFieldError('notes')}
-              </div>
-
-              {/* Form Buttons */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary" 
-                  style={{ flex: 1, padding: '12px' }}
-                  disabled={submitting}
-                >
-                  {submitting ? 'Registering Species...' : 'Publish to Species Registry'}
+                  <Check size={18} />
+                  <span>Approve & Publish to Explorer</span>
                 </button>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Cancel
-                </button>
-              </div>
+              )}
 
-            </form>
+              {selectedSubmission.approval_status === 'Pending' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleOpenReject(selectedSubmission);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '12px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    color: '#f87171',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <X size={18} />
+                  <span>Reject with Notes</span>
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: CATEGORY MANAGEMENT MODAL WITH COMPREHENSIVE STRONG VALIDATION */}
+      {/* MODAL 2: REJECTION & FEEDBACK MODAL */}
       {/* ========================================================================= */}
-      {showCategoryModal && (
-        <div className="modal-overlay" onClick={() => setShowCategoryModal(false)}>
-          <div 
-            className="modal-card" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '530px', width: '92%', display: 'flex', flexDirection: 'column', gap: '18px' }}
+      {rejectingItem && (
+        <div className="modal-overlay" onClick={() => setRejectingItem(null)}>
+          <div
+            className="modal-card glass-panel"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '540px',
+              width: '95%',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, rgba(16, 20, 36, 0.98) 0%, rgba(10, 14, 28, 0.99) 100%)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.85)',
+              padding: '26px'
+            }}
           >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.25rem', color: '#ffffff', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Layers size={18} color="var(--accent-primary)" />
-                  Taxonomy Category Manager
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <XCircle size={24} color="#ef4444" />
+                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#ffffff' }}>
+                  Reject Species Submission
                 </h3>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  Add or curate taxonomy classes for marine biodiversity classification.
-                </span>
               </div>
-              <button onClick={() => setShowCategoryModal(false)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
+              <button onClick={() => setRejectingItem(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
 
-            {/* In-Modal Alert Notifications */}
-            {categoryModalSuccess && (
-              <div style={{
-                padding: '10px 14px',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid #10b981',
-                borderRadius: '8px',
-                color: '#10b981',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '0.82rem'
-              }}>
-                <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
-                <span>{categoryModalSuccess}</span>
-              </div>
-            )}
+            <p style={{ color: '#cbd5e1', fontSize: '0.85rem', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+              You are reviewing the submission for <strong style={{ color: '#ffffff' }}>"{rejectingItem.name}"</strong> by researcher <strong style={{ color: '#00e5ff' }}>{rejectingItem.author_name || rejectingItem.created_by_name || 'Researcher'}</strong>. 
+              Please provide constructive feedback so the researcher can update and resubmit.
+            </p>
 
-            {categoryModalError && (
-              <div style={{
-                padding: '10px 14px',
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid #ef4444',
-                borderRadius: '8px',
-                color: '#ef4444',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '0.82rem'
-              }}>
-                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
-                <span>{categoryModalError}</span>
-              </div>
-            )}
-
-            {/* Add Category Form with Line-by-Line Character & Length Validation */}
-            <form onSubmit={handleAddCategory} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="form-label" style={{ margin: 0 }}>
-                  Category Name *
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 'normal' }}>
-                    (Letters only, min 3 chars)
-                  </span>
-                </label>
-                <span style={{ fontSize: '0.7rem', color: newCategoryName.length > 35 ? '#ef4444' : 'var(--text-muted)' }}>
-                  {newCategoryName.length}/40
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                <input
-                  ref={categoryInputRef}
-                  type="text"
-                  className="form-control"
-                  placeholder="Enter new category (e.g. Mollusks, Echinoderms)..."
-                  value={newCategoryName}
-                  onChange={(e) => {
-                    // Strictly allow only alphabet letters and spaces
-                    const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                    setNewCategoryName(val);
-                    setCategoryTouched(true);
-                    setCategoryError(validateCategoryInput(val, categoriesList));
-                  }}
-                  onBlur={() => {
-                    setCategoryTouched(true);
-                    setCategoryError(validateCategoryInput(newCategoryName, categoriesList));
-                  }}
-                  style={{
-                    flex: 1,
-                    borderColor: categoryTouched && categoryError ? '#ef4444' : categoryTouched && !categoryError && newCategoryName.trim() ? 'rgba(16, 185, 129, 0.7)' : 'rgba(255, 255, 255, 0.12)',
-                    boxShadow: categoryTouched && categoryError ? '0 0 0 2px rgba(239, 68, 68, 0.25)' : undefined,
-                    transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
-                  }}
-                  maxLength={40}
-                />
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={categorySubmitting}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '0 18px' }}
-                >
-                  <Plus size={16} /> {categorySubmitting ? 'Adding...' : 'Add'}
-                </button>
-              </div>
-
-              {/* Line-by-Line Error Message */}
-              {categoryTouched && categoryError && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  color: '#ef4444',
-                  fontSize: '0.74rem',
-                  marginTop: '4px',
-                  fontWeight: '500'
-                }}>
-                  <AlertCircle size={13} style={{ flexShrink: 0 }} />
-                  <span>{categoryError}</span>
-                </div>
-              )}
-            </form>
-
-            {/* Category List with Delete Option */}
-            <div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Active Categories</span>
-                <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>{categoriesList.length} Total</span>
-              </div>
-              <div style={{
-                maxHeight: '260px',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                paddingRight: '4px'
-              }}>
-                {categoriesList.map((cat) => (
-                  <div
-                    key={cat}
+            {/* Preset Templates */}
+            <div style={{ marginBottom: '14px' }}>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600' }}>Quick Feedback Presets:</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                {presetReasons.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setRejectionReason(preset)}
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '10px 14px',
+                      textAlign: 'left',
+                      padding: '8px 12px',
                       borderRadius: '8px',
-                      background: 'rgba(10, 25, 48, 0.6)',
-                      border: '1px solid rgba(0, 229, 255, 0.15)',
-                      transition: 'border-color 0.2s ease'
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: rejectionReason === preset ? 'rgba(239, 68, 68, 0.15)' : 'rgba(10, 25, 48, 0.5)',
+                      color: rejectionReason === preset ? '#fca5a5' : '#cbd5e1',
+                      fontSize: '0.76rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
                     }}
                   >
-                    <span style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.88rem' }}>
-                      {cat}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCategory(cat)}
-                      title={`Remove "${cat}" category`}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'rgba(239, 68, 68, 0.7)',
-                        cursor: 'pointer',
-                        padding: '4px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(239, 68, 68, 0.7)'}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                    "{preset}"
+                  </button>
                 ))}
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowCategoryModal(false)}
-              className="btn btn-secondary"
-              style={{ width: '100%', marginTop: '6px' }}
-            >
-              Done
-            </button>
+            {/* Custom feedback input */}
+            <form onSubmit={handleConfirmReject}>
+              <div className="form-group" style={{ marginBottom: '18px' }}>
+                <label className="form-label" style={{ color: '#cbd5e1', fontSize: '0.82rem', fontWeight: '600' }}>
+                  Review Feedback / Reason for Rejection *
+                </label>
+                <textarea
+                  className="form-control"
+                  rows="3"
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter specific notes or guidance for the researcher..."
+                  style={{
+                    background: 'rgba(8, 20, 42, 0.8)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#ffffff',
+                    fontSize: '0.84rem'
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setRejectingItem(null)}
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={rejectSubmitting}
+                  style={{
+                    flex: 1.5,
+                    padding: '10px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {rejectSubmitting ? 'Submitting...' : 'Confirm Rejection'}
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: DETAILED SPECIES PROFILE MODAL */}
+      {/* MODAL 3: LIGHTBOX SPECIMEN PHOTO */}
       {/* ========================================================================= */}
-      {selectedSpecies && (
-        <div className="modal-overlay" onClick={() => setSelectedSpecies(null)}>
-          <div 
-            className="modal-card" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '600px', width: '92%', display: 'flex', flexDirection: 'column', gap: '18px', padding: '24px' }}
-          >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.4rem', color: '#ffffff', margin: 0, fontWeight: 800 }}>
-                Species Profile Catalog
-              </h2>
-              <button 
-                onClick={() => setSelectedSpecies(null)} 
-                style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Top Grid: Image + Details */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px', alignItems: 'center' }}>
-              <div style={{ borderRadius: '12px', overflow: 'hidden', height: '190px', background: 'rgba(5, 19, 41, 0.8)' }}>
-                <img 
-                  src={resolveImage(selectedSpecies.image)} 
-                  alt={selectedSpecies.name} 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
-                <div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Common Name:</span>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#ffffff' }}>
-                    {selectedSpecies.name}
-                  </div>
-                </div>
-
-                <div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Scientific Name:</span>
-                  <div style={{ fontStyle: 'italic', fontWeight: 'bold', color: 'var(--accent-primary)' }}>
-                    {selectedSpecies.scientificName || selectedSpecies.scientific_name}
-                  </div>
-                </div>
-
-                <div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Taxonomy Category:</span>
-                  <div style={{ color: '#ffffff' }}>{selectedSpecies.category}</div>
-                </div>
-
-                <div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Conservation Status: </span>
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '10px',
-                    fontSize: '0.7rem',
-                    fontWeight: 'bold',
-                    display: 'inline-block',
-                    marginTop: '2px',
-                    background: selectedSpecies.status === 'Endangered' || selectedSpecies.status === 'Critically Endangered' ? 'rgba(255,77,77,0.2)' : 'rgba(0,245,212,0.2)',
-                    color: selectedSpecies.status === 'Endangered' || selectedSpecies.status === 'Critically Endangered' ? 'var(--danger)' : 'var(--success)'
-                  }}>
-                    {selectedSpecies.status}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Details Section */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-              borderTop: '1px solid rgba(255,255,255,0.08)',
-              paddingTop: '16px',
-              fontSize: '0.84rem'
-            }}>
-              <div>
-                <strong style={{ color: '#ffffff', display: 'block', marginBottom: '2px' }}>Typical Habitat:</strong>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  {selectedSpecies.habitat || 'Coastal waters, lagoons, reefs, and seagrass beds'}
-                </span>
-              </div>
-
-              <div>
-                <strong style={{ color: '#ffffff', display: 'block', marginBottom: '2px' }}>Anthropogenic Threats:</strong>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  {selectedSpecies.threats || 'Plastic pollution, accidental netting, coastal development'}
-                </span>
-              </div>
-
-              <div>
-                <strong style={{ color: '#ffffff', display: 'block', marginBottom: '2px' }}>Chemical/Pollution Sensitivity Index:</strong>
-                <div style={{ color: 'var(--accent-primary)', fontWeight: 'bold', marginTop: '2px' }}>
-                  {selectedSpecies.sensitivity ? `${selectedSpecies.sensitivity} Sensitivity` : 'High Sensitivity'}
-                </div>
-              </div>
-
-              <div>
-                <strong style={{ color: '#ffffff', display: 'block', marginBottom: '2px' }}>Research Field Notes:</strong>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  {selectedSpecies.notes || 'Frequently observed feeding along the coast.'}
-                </span>
-              </div>
-            </div>
-
-            {/* Close Button */}
-            <button 
-              onClick={() => setSelectedSpecies(null)} 
-              className="btn btn-secondary" 
-              style={{ width: '100%', padding: '10px', marginTop: '6px' }}
+      {previewImage && (
+        <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ background: 'rgba(0,0,0,0.92)' }}>
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
+            <img
+              src={previewImage}
+              alt="Full Specimen View"
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid rgba(0, 229, 255, 0.4)' }}
+            />
+            <button
+              onClick={() => setPreviewImage(null)}
+              style={{
+                position: 'absolute',
+                top: '-16px',
+                right: '-16px',
+                background: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+              }}
             >
-              Close Profile
+              <X size={20} />
             </button>
           </div>
         </div>

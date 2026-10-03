@@ -705,6 +705,17 @@ const Reports = () => {
               </button>
             </div>
 
+            {error && (
+              <div style={{ padding: '12px 16px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', borderRadius: '10px', color: '#ef4444', marginBottom: '16px', fontSize: '0.85rem', fontWeight: 600 }}>
+                ⚠️ {error}
+              </div>
+            )}
+            {success && (
+              <div style={{ padding: '12px 16px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', borderRadius: '10px', color: '#10b981', marginBottom: '16px', fontSize: '0.85rem', fontWeight: 600 }}>
+                ✓ {success}
+              </div>
+            )}
+
             {/* Split 2 Column Layout: Form (Left) & Interactive Map Location Picker (Right) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
               {/* Form */}
