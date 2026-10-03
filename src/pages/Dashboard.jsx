@@ -654,7 +654,29 @@ const Dashboard = () => {
                               Details
                             </button>
 
-                            {isJoined ? (
+                            {camp.registration_status === 'Pending' ? (
+                              <button 
+                                disabled
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.72rem',
+                                  borderRadius: '6px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  background: 'rgba(255, 183, 3, 0.15)',
+                                  color: '#ffb703',
+                                  border: '1px solid rgba(255, 183, 3, 0.4)',
+                                  fontWeight: '700',
+                                  cursor: 'default',
+                                  width: '100%',
+                                  maxWidth: '75px',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Clock size={12} /> Pending
+                              </button>
+                            ) : (isJoined || camp.registration_status === 'Approved') ? (
                               <button 
                                 disabled
                                 style={{

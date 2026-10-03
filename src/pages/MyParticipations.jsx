@@ -238,7 +238,10 @@ const MyParticipations = () => {
                       <td>
                         {item.certificate_status ? (
                           <button
-                            onClick={() => setSelectedCert(item)}
+                            onClick={() => setSelectedCert({
+                              ...item,
+                              volunteer_name: item.volunteer_name || user?.full_name || 'Valued Coastal Volunteer'
+                            })}
                             className="btn btn-primary"
                             style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284c7 0%, #00e5ff 100%)', color: '#041126', fontWeight: '700' }}
                           >

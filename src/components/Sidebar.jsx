@@ -44,23 +44,31 @@ const Sidebar = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
+  const [pendingSpeciesCount, setPendingSpeciesCount] = useState(0);
 
   useEffect(() => {
     if (user && ['Authority', 'Admin'].includes(user.role)) {
-      const checkPendingReports = async () => {
+      const checkPendingCounts = async () => {
         try {
-          const res = await authFetch('/reports');
-          if (res.ok) {
-            const data = await res.json();
+          const [reportsRes, speciesRes] = await Promise.all([
+            authFetch('/reports'),
+            authFetch('/species/submissions')
+          ]);
+          if (reportsRes.ok) {
+            const data = await reportsRes.json();
             const pendingCount = (data.reports || []).filter(r => r.status === 'Pending').length;
             setPendingReportsCount(pendingCount);
+          }
+          if (speciesRes.ok) {
+            const sData = await speciesRes.json();
+            setPendingSpeciesCount(sData.stats?.pending || 0);
           }
         } catch (e) {
           // Silent catch
         }
       };
-      checkPendingReports();
-      const interval = setInterval(checkPendingReports, 5000);
+      checkPendingCounts();
+      const interval = setInterval(checkPendingCounts, 5000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -240,7 +248,6 @@ const Sidebar = () => {
         { to: '/dashboard?tab=biodiversity-hotspots', tabKey: 'biodiversity-hotspots', label: 'Biodiversity', icon: <Layers size={18} /> },
         { to: '/dashboard?tab=pollution-analysis', tabKey: 'pollution-analysis', label: 'Pollution Analysis', icon: <BarChart3 size={18} /> },
         { to: '/dashboard?tab=water-quality', tabKey: 'water-quality', label: 'Water Quality', icon: <Sliders size={18} /> },
-        { to: '/dashboard?tab=my-observations', tabKey: 'my-observations', label: 'My Observations', icon: <Camera size={18} /> },
         { to: '/dashboard?tab=research-reports', tabKey: 'research-reports', label: 'Research Reports', icon: <FileText size={18} /> },
         { to: '/dashboard?tab=research-assistant', tabKey: 'research-assistant', label: 'Octo AI Assistant', icon: <MessageSquare size={18} /> }
       ];
@@ -282,7 +289,7 @@ const Sidebar = () => {
 
     if (user.role === 'Authority') {
       links.push({ to: '/user-approval', label: 'User Approvals', icon: <Shield size={18} /> });
-      links.push({ to: '/species-management', label: 'Marine Species Registry', icon: <Compass size={18} /> });
+      links.push({ to: '/species-management', label: 'Species Approvals', icon: <ShieldCheck size={18} /> });
     }
 
     links.push({ to: '/notifications', isNotification: true, label: 'Notifications', icon: <Bell size={18} /> });
@@ -415,6 +422,34 @@ const Sidebar = () => {
                     boxShadow: '0 0 8px #10b981'
                   }} />
                   {pendingReportsCount}
+                </span>
+              )}
+              {link.to === '/species-management' && pendingSpeciesCount > 0 && ['Authority', 'Admin'].includes(user?.role) && (
+                <span 
+                  title={`${pendingSpeciesCount} new species submission(s) awaiting approval`}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.35) 100%)',
+                    border: '1px solid #f59e0b',
+                    color: '#fbbf24',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    boxShadow: '0 0 10px rgba(245, 158, 11, 0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    flexShrink: 0
+                  }}
+                >
+                  <span style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#f59e0b',
+                    boxShadow: '0 0 8px #f59e0b'
+                  }} />
+                  {pendingSpeciesCount}
                 </span>
               )}
             </Link>

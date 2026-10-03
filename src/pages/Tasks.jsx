@@ -543,7 +543,6 @@ const Tasks = () => {
 
   // Filtered tasks computation
   const filteredTasks = tasks.filter((t) => {
-    if (t.status === 'Verified') return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const titleMatch = t.report_title?.toLowerCase().includes(q);
@@ -554,7 +553,20 @@ const Tasks = () => {
     }
 
     if (statusFilter === 'Active') {
-      return t.status !== 'Verified' && t.status !== 'Completed';
+      // Active tasks: include Pending, In Progress, and Completed (Proofs awaiting verification); only hide already Verified cleanups
+      return t.status !== 'Verified';
+    }
+
+    if (statusFilter === 'Completed') {
+      return t.status === 'Completed' || (Boolean(t.after_image) && t.status !== 'Verified');
+    }
+
+    if (statusFilter === 'Pending') {
+      return t.status === 'Pending' || t.status === 'In Progress';
+    }
+
+    if (statusFilter === 'Verified') {
+      return t.status === 'Verified';
     }
 
     if (statusFilter !== 'All' && t.status !== statusFilter) {
@@ -647,14 +659,22 @@ const Tasks = () => {
         </div>
       )}
 
-      {/* Overview Stats Cards */}
+      {/* Overview Stats Cards (Clickable Filter Cards) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '20px', marginBottom: '32px' }}>
         {/* Card 1: Total Tasks (RED THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
-          border: '1px solid rgba(255, 77, 77, 0.35)',
-          boxShadow: '0 8px 24px rgba(255, 77, 77, 0.12)'
-        }}>
+        <div 
+          onClick={() => setStatusFilter('All')}
+          className="stat-card-marine" 
+          title="Click to view all tasks"
+          style={{
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, rgba(28, 20, 36, 0.85) 0%, rgba(14, 25, 48, 0.95) 100%)',
+            border: statusFilter === 'All' ? '2px solid #ff4d4d' : '1px solid rgba(255, 77, 77, 0.35)',
+            boxShadow: statusFilter === 'All' ? '0 0 20px rgba(255, 77, 77, 0.35)' : '0 8px 24px rgba(255, 77, 77, 0.12)',
+            transform: statusFilter === 'All' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.25s ease'
+          }}
+        >
           <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 77, 77, 0.2)', border: '1px solid rgba(255, 77, 77, 0.4)' }}>
             <CheckSquare size={24} color="#ff4d4d" />
           </div>
@@ -670,11 +690,19 @@ const Tasks = () => {
         </div>
 
         {/* Card 2: Pending Tasks (CYAN BLUE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
-          border: '1px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 229, 255, 0.12)'
-        }}>
+        <div 
+          onClick={() => setStatusFilter('Pending')}
+          className="stat-card-marine" 
+          title="Click to filter pending tasks"
+          style={{
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, rgba(10, 38, 64, 0.85) 0%, rgba(8, 25, 46, 0.95) 100%)',
+            border: statusFilter === 'Pending' ? '2px solid #00e5ff' : '1px solid rgba(0, 229, 255, 0.35)',
+            boxShadow: statusFilter === 'Pending' ? '0 0 20px rgba(0, 229, 255, 0.35)' : '0 8px 24px rgba(0, 229, 255, 0.12)',
+            transform: statusFilter === 'Pending' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.25s ease'
+          }}
+        >
           <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 229, 255, 0.2)', border: '1px solid rgba(0, 229, 255, 0.4)' }}>
             <Clock size={24} color="#00e5ff" />
           </div>
@@ -690,17 +718,25 @@ const Tasks = () => {
         </div>
 
         {/* Card 3: Submitted Proofs (EMERALD TEAL THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
-          border: '1px solid rgba(0, 245, 212, 0.35)',
-          boxShadow: '0 8px 24px rgba(0, 245, 212, 0.12)'
-        }}>
+        <div 
+          onClick={() => setStatusFilter('Completed')}
+          className="stat-card-marine" 
+          title="Click to filter tasks with submitted proofs awaiting verification"
+          style={{
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, rgba(10, 42, 50, 0.85) 0%, rgba(6, 28, 38, 0.95) 100%)',
+            border: statusFilter === 'Completed' ? '2px solid #00f5d4' : '1px solid rgba(0, 245, 212, 0.35)',
+            boxShadow: statusFilter === 'Completed' ? '0 0 20px rgba(0, 245, 212, 0.35)' : '0 8px 24px rgba(0, 245, 212, 0.12)',
+            transform: statusFilter === 'Completed' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.25s ease'
+          }}
+        >
           <div className="stat-icon-wrapper" style={{ background: 'rgba(0, 245, 212, 0.2)', border: '1px solid rgba(0, 245, 212, 0.4)' }}>
             <Camera size={24} color="#00f5d4" />
           </div>
           <div className="stat-content-wrapper">
             <span className="stat-lbl">Submitted Proofs</span>
-            <div className="stat-val">{tasks.filter(t => t.status === 'Completed').length}</div>
+            <div className="stat-val">{tasks.filter(t => t.status === 'Completed' || t.after_image).length}</div>
           </div>
           <img 
             src="/images/green_teal_campaigns_bg.png" 
@@ -710,11 +746,19 @@ const Tasks = () => {
         </div>
 
         {/* Card 4: Verified Cleanups (PURPLE THEME) */}
-        <div className="stat-card-marine" style={{
-          background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
-          border: '1px solid rgba(157, 78, 221, 0.35)',
-          boxShadow: '0 8px 24px rgba(157, 78, 221, 0.12)'
-        }}>
+        <div 
+          onClick={() => setStatusFilter('Verified')}
+          className="stat-card-marine" 
+          title="Click to filter verified cleanup tasks"
+          style={{
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, rgba(28, 20, 56, 0.85) 0%, rgba(16, 14, 40, 0.95) 100%)',
+            border: statusFilter === 'Verified' ? '2px solid #9d4edd' : '1px solid rgba(157, 78, 221, 0.35)',
+            boxShadow: statusFilter === 'Verified' ? '0 0 20px rgba(157, 78, 221, 0.35)' : '0 8px 24px rgba(157, 78, 221, 0.12)',
+            transform: statusFilter === 'Verified' ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.25s ease'
+          }}
+        >
           <div className="stat-icon-wrapper" style={{ background: 'rgba(157, 78, 221, 0.2)', border: '1px solid rgba(157, 78, 221, 0.4)' }}>
             <ShieldCheck size={24} color="#9d4edd" />
           </div>
@@ -791,11 +835,11 @@ const Tasks = () => {
                 fontWeight: '600'
               }}
             >
-              <option value="Active">Active Tasks (Hide Completed)</option>
-              <option value="All">All Statuses Ledger</option>
-              <option value="Pending">Pending</option>
-              <option value="Completed">Completed (Proof Uploaded)</option>
-              <option value="Verified">Verified Tasks</option>
+              <option value="Active">Active Tasks (Pending & Submitted Proofs)</option>
+              <option value="All">All Statuses Ledger ({tasks.length})</option>
+              <option value="Completed">Submitted Proofs ({tasks.filter(t => t.status === 'Completed' || t.after_image).length})</option>
+              <option value="Pending">Pending Tasks ({tasks.filter(t => t.status === 'Pending').length})</option>
+              <option value="Verified">Verified Tasks ({tasks.filter(t => t.status === 'Verified').length})</option>
             </select>
 
             {(searchQuery || statusFilter !== 'Active') && (
@@ -862,9 +906,9 @@ const Tasks = () => {
                     <td>
                       <span className={`badge ${
                         task.status === 'Verified' ? 'badge-completed' :
-                        task.status === 'Completed' ? 'badge-verified' : 'badge-pending'
+                        (task.status === 'Completed' || task.after_image) ? 'badge-verified' : 'badge-pending'
                       }`}>
-                        {task.status}
+                        {task.status === 'Completed' ? 'Proof Uploaded' : task.status}
                       </span>
                     </td>
                     <td>
@@ -910,21 +954,21 @@ const Tasks = () => {
                         {isAssignRole && task.status !== 'Verified' && (
                           <button 
                             onClick={() => handleVerifyTask(task.task_id)}
-                            disabled={!task.after_image}
-                            title={task.after_image ? "Verify cleanup task" : "After Image proof photo required for verification"}
+                            disabled={!task.after_image && task.status !== 'Completed'}
+                            title={(task.after_image || task.status === 'Completed') ? "Verify cleanup task" : "Completion proof photo required for verification"}
                             className="btn btn-primary" 
                             style={{ 
                               padding: '6px 12px', 
                               fontSize: '0.8rem', 
-                              background: task.after_image ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(51, 65, 85, 0.6)', 
-                              color: task.after_image ? '#ffffff' : '#94a3b8',
-                              border: task.after_image ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
-                              cursor: task.after_image ? 'pointer' : 'not-allowed',
-                              opacity: task.after_image ? 1 : 0.6
+                              background: (task.after_image || task.status === 'Completed') ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(51, 65, 85, 0.6)', 
+                              color: (task.after_image || task.status === 'Completed') ? '#ffffff' : '#94a3b8',
+                              border: (task.after_image || task.status === 'Completed') ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                              cursor: (task.after_image || task.status === 'Completed') ? 'pointer' : 'not-allowed',
+                              opacity: (task.after_image || task.status === 'Completed') ? 1 : 0.6
                             }}
                           >
                             <ShieldCheck size={14} />
-                            {task.after_image ? 'Verify Cleanup' : 'Verify (Proof Required)'}
+                            {(task.after_image || task.status === 'Completed') ? 'Verify Cleanup' : 'Verify (Proof Required)'}
                           </button>
                         )}
                       </div>
@@ -1343,6 +1387,24 @@ const Tasks = () => {
                 )}
               </div>
             </div>
+
+            {/* Worker completion notes display */}
+            {activeTaskDetails.completion_notes && (
+              <div style={{
+                marginBottom: '16px',
+                padding: '12px 16px',
+                background: 'rgba(0, 245, 212, 0.08)',
+                border: '1px solid rgba(0, 245, 212, 0.25)',
+                borderRadius: '10px'
+              }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#00f5d4', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>
+                  Worker Completion Notes
+                </span>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: '#e2e8f0', lineHeight: '1.4' }}>
+                  "{activeTaskDetails.completion_notes}"
+                </p>
+              </div>
+            )}
 
             {/* Authority / Admin Verification Action Section */}
             {isAssignRole && (
