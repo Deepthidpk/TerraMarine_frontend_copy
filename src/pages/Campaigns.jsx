@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   Calendar, MapPin, Users, Award, Shield, Check, Info, 
-  PlusCircle, X, Search, Filter, Clock, Sparkles, Compass, CheckCircle2, RotateCcw, AlertCircle
+  PlusCircle, X, Search, Filter, Clock, Sparkles, Compass, CheckCircle2, RotateCcw, AlertCircle,
+  Ban, AlertTriangle
 } from 'lucide-react';
 import LeafletMap from '../components/LeafletMap';
 import CustomTimePicker from '../components/CustomTimePicker';
@@ -55,6 +56,12 @@ const Campaigns = () => {
   const [selectedCert, setSelectedCert] = useState(null);
   const [joinedCampaignIds, setJoinedCampaignIds] = useState(new Set());
   const [certWarning, setCertWarning] = useState('');
+
+  // Cancel Campaign Modal State
+  const [cancelModalCampaign, setCancelModalCampaign] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [modalCancelError, setModalCancelError] = useState('');
 
   const toMinutes = (timeStr) => {
     if (!timeStr) return 0;
@@ -549,7 +556,38 @@ const Campaigns = () => {
     }
   };
 
+  const handleConfirmCancel = async () => {
+    if (!cancelModalCampaign) return;
+    setCancelling(true);
+    setModalCancelError('');
+    setError('');
+    setSuccess('');
+    try {
+      const res = await authFetch(`/campaigns/${cancelModalCampaign.campaign_id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'Cancelled', reason: cancelReason })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(data.message || 'Campaign cancelled successfully. All joined participants have been notified via in-app alert and email.');
+        setCancelModalCampaign(null);
+        setCancelReason('');
+        setShowDetailsModal(false);
+        await fetchCampaigns();
+      } else {
+        setModalCancelError(data.error || 'Failed to cancel campaign.');
+      }
+    } catch (err) {
+      console.error('Cancel campaign error:', err);
+      setModalCancelError('An error occurred while communicating with the server.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const getDynamicStatus = (camp) => {
+    if (camp.status === 'Cancelled') return 'Cancelled';
     if (camp.status === 'Completed') return 'Completed';
     if (!camp.campaign_date) return camp.status || 'Upcoming';
 
@@ -871,6 +909,7 @@ const Campaigns = () => {
               <option value="Upcoming">Upcoming</option>
               <option value="Ongoing">Ongoing</option>
               <option value="Completed">Completed</option>
+              <option value="Cancelled">Cancelled</option>
             </select>
 
             {(searchQuery || statusFilter !== 'All') && (
@@ -939,6 +978,8 @@ const Campaigns = () => {
                   const volCount = parseInt(camp.volunteer_count) || 0;
                   const maxVol = camp.maximum_volunteers || null;
                   const isJoined = (camp.registration_status === 'Approved') || ((Boolean(camp.is_joined) || camp.is_joined === 'true' || camp.is_joined === 't' || camp.is_joined === 1 || joinedCampaignIds.has(camp.campaign_id)) && camp.registration_status !== 'Pending');
+                  const isOrganizer = user.role === 'Admin' || (['NGO', 'Authority'].includes(user.role) && camp.created_by === user.user_id);
+                  const dynamicStatus = getDynamicStatus(camp);
 
                   return (
                     <tr key={camp.campaign_id} style={{ transition: 'background 0.2s ease' }}>
@@ -987,14 +1028,31 @@ const Campaigns = () => {
                       </td>
                       <td style={{ padding: '14px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
                         {(() => {
-                          const displayStatus = getDynamicStatus(camp);
+                          if (dynamicStatus === 'Cancelled') {
+                            return (
+                              <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '3px 8px', 
+                                borderRadius: '20px', 
+                                fontWeight: '700',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                color: '#ff4d4d',
+                                border: '1px solid rgba(239, 68, 68, 0.35)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}>
+                                <Ban size={10} /> Cancelled
+                              </span>
+                            );
+                          }
                           return (
                             <span className={`badge ${
-                              displayStatus === 'Completed' ? 'badge-completed' :
-                              displayStatus === 'Upcoming' ? 'badge-pending' :
-                              displayStatus === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
+                              dynamicStatus === 'Completed' ? 'badge-completed' :
+                              dynamicStatus === 'Upcoming' ? 'badge-pending' :
+                              dynamicStatus === 'Ongoing' ? 'badge-verified' : 'badge-emergency'
                             }`} style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
-                              {displayStatus}
+                              {dynamicStatus}
                             </span>
                           );
                         })()}
@@ -1019,6 +1077,35 @@ const Campaigns = () => {
                             <Info size={12} />
                             Details
                           </button>
+
+                          {/* Cancel Option for Campaign Organizer */}
+                          {isOrganizer && dynamicStatus !== 'Cancelled' && dynamicStatus !== 'Completed' && (
+                            <button
+                              onClick={() => {
+                                setCancelModalCampaign(camp);
+                                setCancelReason('');
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '0.72rem',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(239, 68, 68, 0.4)',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                color: '#ff4d4d',
+                                width: '100%',
+                                maxWidth: '75px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                justifyContent: 'center',
+                                fontWeight: '600'
+                              }}
+                              title="Cancel this cleanup drive"
+                            >
+                              <Ban size={11} /> Cancel
+                            </button>
+                          )}
 
                           {camp.registration_status === 'Pending' ? (
                             <button 
@@ -1068,7 +1155,7 @@ const Campaigns = () => {
                               Joined
                             </button>
                           ) : (
-                            ['Citizen', 'Volunteer'].includes(user.role) && camp.status === 'Upcoming' && (
+                            ['Citizen', 'Volunteer'].includes(user.role) && dynamicStatus === 'Upcoming' && (
                               <button 
                                 onClick={() => handleJoinCampaign(camp.campaign_id)}
                                 className="btn btn-primary" 
@@ -1469,12 +1556,43 @@ const Campaigns = () => {
               <X size={20} />
             </button>
 
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '4px', fontWeight: '800' }}>
-              {activeCampaignDetails.campaign.campaign_name}
-            </h2>
-            <p style={{ color: '#0284c7', fontSize: '0.9rem', marginBottom: '18px', fontWeight: '600' }}>
-              Organized by: {activeCampaignDetails.campaign.organization_name || activeCampaignDetails.campaign.creator_name}
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '4px', fontWeight: '800' }}>
+                  {activeCampaignDetails.campaign.campaign_name}
+                </h2>
+                <p style={{ color: '#0284c7', fontSize: '0.9rem', margin: 0, fontWeight: '600' }}>
+                  Organized by: {activeCampaignDetails.campaign.organization_name || activeCampaignDetails.campaign.creator_name}
+                </p>
+              </div>
+
+              {(user.role === 'Admin' || (['NGO', 'Authority'].includes(user.role) && activeCampaignDetails.campaign.created_by === user.user_id)) && 
+               activeCampaignDetails.campaign.status !== 'Cancelled' && activeCampaignDetails.campaign.status !== 'Completed' && (
+                <button
+                  onClick={() => {
+                    setCancelModalCampaign(activeCampaignDetails.campaign);
+                    setCancelReason('');
+                  }}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    color: '#ff4d4d',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Ban size={15} /> Cancel Campaign
+                </button>
+              )}
+            </div>
 
             <div style={{ padding: '16px', background: 'rgba(15, 23, 42, 0.03)', borderRadius: '10px', border: '1px solid var(--card-border)', marginBottom: '20px' }}>
               <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campaign Description</h4>
@@ -1487,7 +1605,11 @@ const Campaigns = () => {
               <div>
                 <p style={{ margin: '4px 0' }}><strong>Scheduled Date:</strong> {new Date(activeCampaignDetails.campaign.campaign_date).toLocaleDateString()}</p>
                 <p style={{ margin: '4px 0' }}><strong>Timing:</strong> {activeCampaignDetails.campaign.start_time ? `${activeCampaignDetails.campaign.start_time} - ${activeCampaignDetails.campaign.end_time || 'TBD'}` : 'All Day'}</p>
-                <p style={{ margin: '4px 0' }}><strong>Status:</strong> <span className={`badge ${activeCampaignDetails.campaign.status === 'Completed' ? 'badge-completed' : 'badge-pending'}`}>{activeCampaignDetails.campaign.status}</span></p>
+                <p style={{ margin: '4px 0' }}><strong>Status:</strong> 
+                  <span className={`badge ${activeCampaignDetails.campaign.status === 'Completed' ? 'badge-completed' : activeCampaignDetails.campaign.status === 'Cancelled' ? 'badge-emergency' : 'badge-pending'}`} style={{ marginLeft: '6px' }}>
+                    {activeCampaignDetails.campaign.status}
+                  </span>
+                </p>
               </div>
               <div>
                 <p style={{ margin: '4px 0' }}><strong>Beach Location:</strong> {activeCampaignDetails.campaign.location}</p>
@@ -1940,6 +2062,187 @@ const Campaigns = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CANCEL CLEANUP CAMPAIGN CONFIRMATION */}
+      {/* ========================================================================= */}
+      {cancelModalCampaign && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(4, 12, 26, 0.9)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 999999,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '520px',
+            width: '100%',
+            background: 'linear-gradient(135deg, rgba(20, 10, 20, 0.98) 0%, rgba(12, 20, 36, 0.99) 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(239, 68, 68, 0.15)',
+            position: 'relative',
+            padding: '26px'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(239, 68, 68, 0.2)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <AlertTriangle size={20} color="#ff4d4d" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', margin: 0, color: '#ffffff', fontWeight: '800' }}>
+                    Cancel Cleanup Campaign
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: '#ff4d4d', fontWeight: '600' }}>
+                    Irreversible Organizer Action
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setCancelModalCampaign(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* In-Modal Error Alert */}
+            {modalCancelError && (
+              <div style={{
+                padding: '10px 14px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid #ff4d4d',
+                borderRadius: '8px',
+                color: '#ff4d4d',
+                fontSize: '0.84rem',
+                fontWeight: '600',
+                marginBottom: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <AlertCircle size={16} />
+                <span>{modalCancelError}</span>
+              </div>
+            )}
+
+            {/* Campaign Summary & Warning */}
+            <div style={{ marginBottom: '18px', color: '#cbd5e1', fontSize: '0.88rem', lineHeight: '1.5' }}>
+              <p style={{ margin: '0 0 10px 0' }}>
+                Are you sure you want to cancel the cleanup campaign <strong style={{ color: '#ffffff' }}>"{cancelModalCampaign.campaign_name}"</strong> scheduled for <strong style={{ color: '#00e5ff' }}>{new Date(cancelModalCampaign.campaign_date).toLocaleDateString()}</strong> at <strong style={{ color: '#ffffff' }}>{cancelModalCampaign.location}</strong>?
+              </p>
+              
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                fontSize: '0.82rem',
+                color: '#fca5a5',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px'
+              }}>
+                <span style={{ fontSize: '16px', lineHeight: '1' }}>✉️</span>
+                <span>
+                  All registered volunteers and citizens will immediately receive an automated cancellation notification and email update.
+                </span>
+              </div>
+            </div>
+
+            {/* Optional Reason Input */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Reason for Cancellation (Optional)
+              </label>
+              <textarea
+                rows={3}
+                placeholder="e.g. Inclement marine weather warning, logistical rescheduling..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(8, 20, 42, 0.85)',
+                  border: '1px solid rgba(0, 229, 255, 0.25)',
+                  color: '#ffffff',
+                  fontSize: '0.86rem',
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setCancelModalCampaign(null)}
+                disabled={cancelling}
+                style={{
+                  padding: '10px 18px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Keep Campaign
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                disabled={cancelling}
+                style={{
+                  padding: '10px 20px',
+                  background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: '700',
+                  cursor: cancelling ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)',
+                  opacity: cancelling ? 0.8 : 1
+                }}
+              >
+                {cancelling ? (
+                  <>Cancelling & Notifying...</>
+                ) : (
+                  <>
+                    <Ban size={15} /> Yes, Cancel Campaign
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
